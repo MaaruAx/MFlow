@@ -30,7 +30,7 @@
 
 <br>
 
-[![downloads](https://img.shields.io/gitea/downloads/release/USER/mflow?gitea_url=https%3A%2F%2Fcodeberg.org&style=flat-square&label=downloads&color=9ccfd8&labelColor=1a1a2e)](https://codeberg.org/USER/mflow/releases)
+[![downloads](https://img.shields.io/gitea/downloads/release/MaaruAx/Mflow?gitea_url=https%3A%2F%2Fcodeberg.org&style=flat-square&label=downloads&color=9ccfd8&labelColor=1a1a2e)](https://codeberg.org/MaaruAx/Mflow/releases)
 &nbsp;
 [![stars](https://img.shields.io/gitea/stars/USER/mflow?gitea_url=https%3A%2F%2Fcodeberg.org&style=flat-square&label=stars&color=f6c177&labelColor=1a1a2e)](https://codeberg.org/USER/mflow)
 &nbsp;
