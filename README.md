@@ -8,7 +8,7 @@
 &nbsp;
 ![version](https://img.shields.io/badge/version-2.0-c4a7e7?style=for-the-badge&labelColor=1a1a2e)
 &nbsp;
-![free](https://img.shields.io/badge/✓_Works_on_FREE_Resolve-31c48d?style=for-the-badge&labelColor=1a1a2e)
+![free](https://img.shields.io/badge_Works_on_FREE_Resolve-31c48d?style=for-the-badge&labelColor=1a1a2e)
 
 <br>
 
