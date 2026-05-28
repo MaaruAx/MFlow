@@ -30,16 +30,6 @@
 
 <br>
 
-[![downloads](https://img.shields.io/gitea/downloads/release/MaaruAx/Mflow?gitea_url=https%3A%2F%2Fcodeberg.org&style=flat-square&label=downloads&color=9ccfd8&labelColor=1a1a2e)](https://codeberg.org/MaaruAx/Mflow/releases)
-&nbsp;
-[![stars](https://img.shields.io/gitea/stars/USER/mflow?gitea_url=https%3A%2F%2Fcodeberg.org&style=flat-square&label=stars&color=f6c177&labelColor=1a1a2e)](https://codeberg.org/USER/mflow)
-&nbsp;
-[![issues](https://img.shields.io/gitea/issues/open/USER/mflow?gitea_url=https%3A%2F%2Fcodeberg.org&style=flat-square&label=open%20issues&color=ebbcba&labelColor=1a1a2e)](https://codeberg.org/USER/mflow/issues)
-&nbsp;
-[![last commit](https://img.shields.io/gitea/last-commit/USER/mflow?gitea_url=https%3A%2F%2Fcodeberg.org&style=flat-square&label=last%20commit&color=c4a7e7&labelColor=1a1a2e)](https://codeberg.org/USER/mflow/commits/branch/main)
-
-<br>
-
 > ⚠️ **Early access release.** Bugs are expected and features are actively being added. Your feedback directly shapes what gets built next — see how to reach us below.
 
 <br>
