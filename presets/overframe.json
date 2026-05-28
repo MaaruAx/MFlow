@@ -1,0 +1,17 @@
+[
+  {"name":"elastic.out",    "library":"overframe","bake":"elastic_out",    "h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amp":1.0,"period":0.3}},
+  {"name":"elastic.in",     "library":"overframe","bake":"elastic_in",     "h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amp":1.0,"period":0.3}},
+  {"name":"elastic.inOut",  "library":"overframe","bake":"elastic_in_out", "h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amp":1.0,"period":0.3}},
+  {"name":"bounce.out",     "library":"overframe","bake":"bounce_out",     "h1":[0.42,0.0],"h2":[0.58,1.0],"params":{}},
+  {"name":"bounce.in",      "library":"overframe","bake":"bounce_in",      "h1":[0.42,0.0],"h2":[0.58,1.0],"params":{}},
+  {"name":"bounce.inOut",   "library":"overframe","bake":"bounce_in_out",  "h1":[0.42,0.0],"h2":[0.58,1.0],"params":{}},
+  {"name":"steps(4,end)",   "library":"overframe","bake":"steps",          "h1":[0.25,0.0],"h2":[0.75,1.0],"params":{"n":4,"position":"end"}},
+  {"name":"steps(4,start)", "library":"overframe","bake":"steps",          "h1":[0.25,0.0],"h2":[0.75,1.0],"params":{"n":4,"position":"start"}},
+  {"name":"steps(6,end)",   "library":"overframe","bake":"steps",          "h1":[0.17,0.0],"h2":[0.83,1.0],"params":{"n":6,"position":"end"}},
+  {"name":"steps(8,end)",   "library":"overframe","bake":"steps",          "h1":[0.12,0.0],"h2":[0.88,1.0],"params":{"n":8,"position":"end"}},
+  {"name":"steps(12,end)",  "library":"overframe","bake":"steps",          "h1":[0.08,0.0],"h2":[0.92,1.0],"params":{"n":12,"position":"end"}},
+  {"name":"irregular.heavy","library":"overframe","bake":"steps",          "h1":[0.10,0.0],"h2":[0.90,1.0],"params":{"n":3,"position":"end"},
+   "overframe_points":[{"t":0.2,"v":0.4,"lh":[-0.06,0.0],"rh":[0.06,0.0],"tangent":"smooth"},{"t":0.6,"v":0.75,"lh":[-0.08,0.0],"rh":[0.08,0.0],"tangent":"smooth"}]},
+  {"name":"irregular.light","library":"overframe","bake":"steps",          "h1":[0.10,0.0],"h2":[0.90,1.0],"params":{"n":5,"position":"end"},
+   "overframe_points":[{"t":0.3,"v":0.55,"lh":[-0.05,0.0],"rh":[0.05,0.0],"tangent":"smooth"},{"t":0.65,"v":0.8,"lh":[-0.05,0.0],"rh":[0.05,0.0],"tangent":"smooth"}]}
+]

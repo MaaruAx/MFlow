@@ -1,0 +1,7 @@
+[
+  {"name":"gentle",   "library":"spring","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"mass":1,"stiffness":100,"damping":15,"velocity":0}},
+  {"name":"wobbly",   "library":"spring","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"mass":1,"stiffness":180,"damping":12,"velocity":0}},
+  {"name":"stiff",    "library":"spring","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"mass":1,"stiffness":210,"damping":20,"velocity":0}},
+  {"name":"slow",     "library":"spring","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"mass":3,"stiffness":280,"damping":60,"velocity":0}},
+  {"name":"molasses", "library":"spring","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"mass":5,"stiffness":300,"damping":80,"velocity":0}}
+]
