@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<title>MFlow Dock</title>
+<style>
+@font-face{font-family:'Monaspace';src:url('Monaspace_Neon_Var.woff2') format('woff2');font-weight:100 900}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --base:#121217;--surface:#191724;--overlay:#1f1d2e;
+  --muted:#6e6a86;--subtle:#908caa;--text:#e0def4;
+  --love:#eb6f92;--gold:#f6c177;--foam:#9ccfd8;--iris:#c4a7e7;
+  --border:#26233a;--border-hi:#3a3750;--sel-bg:#28253d;
+  --accent:#9ccfd8;--r:3px;
+}
+html,body{width:100%;height:100%;background:var(--surface);color:var(--text);
+  font-family:'Monaspace','JetBrains Mono',monospace;font-size:12px;overflow:hidden}
+#titlebar{display:flex;align-items:center;height:26px;padding:0 8px;gap:6px;
+  background:var(--base);border-bottom:1px solid var(--border);
+  -webkit-app-region:drag;cursor:move}
+#dock-title{font-size:5.5pt;font-weight:700;letter-spacing:.6px;color:var(--muted);flex:1}
+.wctl{width:18px;height:18px;border-radius:2px;border:1px solid var(--border);
+  background:transparent;cursor:pointer;color:var(--muted);font-size:9pt;
+  display:flex;align-items:center;justify-content:center;font-family:inherit;
+  -webkit-app-region:no-drag}
+.wctl:hover{border-color:var(--accent);color:var(--accent)}
+#btn-close{color:var(--love)}
+#btn-close:hover{border-color:var(--love)}
+#content{width:100%;height:calc(100% - 26px);overflow:hidden}
+/* Inherit panel styles from app */
+::-webkit-scrollbar{width:4px} ::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:2px}
+</style>
+</head>
+<body>
+<div id="titlebar">
+  <span id="dock-title">MFLOW DOCK</span>
+  <button class="wctl" id="btn-min" onclick="backend&&backend.minimize_window()">−</button>
+  <button class="wctl" id="btn-close" onclick="window.close()">×</button>
+</div>
+<div id="content">
+  <div style="padding:20px;color:var(--muted);font-size:7pt">Conectando…</div>
+</div>
+<script>
+'use strict';
+const PANEL=new URL(location.href).searchParams.get('p')||'none';
+// QWebChannel connects to the same backend as main window
+if(typeof QWebChannel!=='undefined'){
+  new QWebChannel(qt.webChannelTransport,ch=>{
+    window.backend=ch.objects.backend;
+    backend.get_dock_html(PANEL,function(html){
+      document.getElementById('content').innerHTML=html||'<div style="padding:20px;color:#6e6a86;font-size:7pt">Panel no disponible</div>';
+    });
+    backend.connection_changed.connect((ok,txt)=>{
+      document.getElementById('dock-title').textContent='MFLOW · '+(ok?txt:'No conectado');
+    });
+  });
+}
+</script>
+</body>
+</html>
