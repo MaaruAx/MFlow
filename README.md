@@ -171,7 +171,7 @@ UI — PySide6 + QWebChannel + HTML/CSS.
 &nbsp;
 [![discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dvZ9nvN79Y)
 &nbsp;
-[![releases](https://img.shields.io/badge/Releases-eb6f92?style=for-the-badge)](https://codeberg.org/USER/mflow/releases)
+[![releases](https://img.shields.io/badge/Releases-eb6f92?style=for-the-badge)](https://codeberg.org/MaaruAx/MFlow/releases)
 
 <br>
 <sub>Built for the DaVinci Resolve / Fusion community.</sub>
