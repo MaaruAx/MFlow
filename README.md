@@ -126,7 +126,7 @@ python main.py
 
 ## ✦ Credits
 
-Built on top of [FFlow](https://codeberg.org/) by **Mison** — the open source Bezier curve editor that started it all.
+Built on top of [FFlow](https://github.com/MisonLarp/Fusion-Flow/) by **Mison** — the open source Bezier curve editor that started it all.
 
 Physics bake (spring, oscillator, elastic) — original implementation.
 UI — PySide6 + QWebChannel + HTML/CSS.
