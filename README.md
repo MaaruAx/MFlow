@@ -144,7 +144,7 @@ python main.py
 
 > **Still stuck? The fastest way to get help is Discord.** Since this is an early access release, many issues are already known and solved there. Post your error message, your OS, and your Python version and we'll get it fixed.
 
-[![discord](https://img.shields.io/badge/Join_the_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/YOURLINK)
+[![discord](https://img.shields.io/badge/Join_the_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dvZ9nvN79Y)
 
 <br>
 
@@ -179,7 +179,7 @@ UI — PySide6 + QWebChannel + HTML/CSS.
 
 ![oss](https://img.shields.io/badge/Free_&_Open_Source-26233a?style=for-the-badge)
 &nbsp;
-[![discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/YOURLINK)
+[![discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dvZ9nvN79Y)
 &nbsp;
 [![releases](https://img.shields.io/badge/Releases-eb6f92?style=for-the-badge)](https://codeberg.org/USER/mflow/releases)
 
