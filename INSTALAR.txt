@@ -1,0 +1,16 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  MFlow — Instrucciones de instalacion
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Copia TODA esta carpeta a:
+   C:\Users\maaru\AppData\Local\MFlow
+
+2. Copia MFlow_bridge.py a:
+   %APPDATA%\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Comp\
+
+3. Abre Resolve, ve a la pagina Fusion,
+   y ejecuta:  Scripts > Comp > MFlow_bridge
+
+Si mueves la carpeta de MFlow en el futuro,
+edita mflow_path.txt con la nueva ruta.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
