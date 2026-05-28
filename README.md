@@ -8,7 +8,7 @@
 &nbsp;
 ![version](https://img.shields.io/badge/version-2.0-c4a7e7?style=for-the-badge&labelColor=1a1a2e)
 &nbsp;
-![free](https://img.shields.io/badge_Works_on_FREE_Resolve-31c48d?style=for-the-badge&labelColor=1a1a2e)
+![free](https://img.shields.io/badge/Works_on_FREE_Resolve-31c48d?style=for-the-badge&labelColor=1a1a2e)
 
 <br>
 
@@ -166,7 +166,7 @@ python main.py
 
 ## ![credits](https://img.shields.io/badge/◈_CREDITS-f6c177?style=flat-square&labelColor=1a1a2e)
 
-Built on top of **[FFlow](https://codeberg.org/)** by Mison — the open source Bezier curve editor for Fusion.
+Built on top of **[FFlow](https://github.com/MisonLarp/Fusion-Flow/)** by Mison — the open source Bezier curve editor for Fusion.
 
 Physics bake (spring, elastic, overframe) — original implementation.
 UI — PySide6 + QWebChannel + HTML/CSS.
