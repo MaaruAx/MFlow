@@ -1,1744 +1,690 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
-<title>MFlow</title>
-<style>
-@font-face{font-family:'Monaspace';src:url('Monaspace_Neon_Var.woff2') format('woff2');font-weight:100 900;font-style:normal}
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --base:#121217;--surface:#191724;--overlay:#1f1d2e;
-  --muted:#6e6a86;--subtle:#908caa;--text:#e0def4;
-  --love:#eb6f92;--gold:#f6c177;--rose:#ebbcba;
-  --foam:#9ccfd8;--iris:#c4a7e7;
-  --border:#26233a;--border-hi:#3a3750;--sel-bg:#28253d;
-  --accent:#9ccfd8;--r:3px;
-}
-.theme-dracula{--base:#1e1f29;--surface:#21222c;--overlay:#2d2f3f;--muted:#6272a4;
-  --subtle:#8be9fd;--text:#f8f8f2;--love:#ff5555;--gold:#f1fa8c;
-  --rose:#ffb86c;--foam:#8be9fd;--iris:#bd93f9;
-  --border:#44475a;--border-hi:#6272a4;--sel-bg:#44475a;}
-.theme-catppuccin{--base:#1e1e2e;--surface:#181825;--overlay:#1e1e2e;--muted:#6c7086;
-  --subtle:#9399b2;--text:#cdd6f4;--love:#f38ba8;--gold:#f9e2af;
-  --rose:#eba0ac;--foam:#89dceb;--iris:#cba6f7;
-  --border:#313244;--border-hi:#45475a;--sel-bg:#313244;}
-html,body{width:100%;height:100%;background:var(--base);color:var(--text);
-  font-family:'Monaspace','JetBrains Mono','Courier New',monospace;font-size:12px;overflow:hidden;user-select:none}
-::-webkit-scrollbar{width:4px;height:4px}
-::-webkit-scrollbar-thumb{background:var(--border-hi);border-radius:2px}
-#root{display:flex;flex-direction:column;width:100vw;height:100vh;
-  border:1px solid var(--border);border-radius:5px;overflow:hidden;position:relative}
-/* Title */
-#titlebar{display:flex;align-items:center;gap:7px;height:32px;flex-shrink:0;
-  background:var(--base);border-bottom:1px solid var(--border);padding:0 10px}
-#appname{font-size:11pt;font-weight:800;letter-spacing:.3px;line-height:1}
-#nm{color:var(--accent);transition:color .2s;display:inline}
-#nf{color:var(--text);display:inline}
-.badge{font-size:5.5pt;font-weight:700;letter-spacing:.8px;background:var(--sel-bg);
-  color:var(--foam);border:1px solid rgba(156,207,216,.15);border-radius:var(--r);padding:1px 6px}
-#version{font-size:6pt;color:var(--muted)}
-.spacer{flex:1}
-#conn-row{display:flex;align-items:center;gap:5px}
-#conn-dot{width:6px;height:6px;border-radius:50%;background:var(--border-hi);transition:background .3s}
-#conn-dot.on{background:var(--accent)}
-#conn-text{font-size:6pt;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#btn-conn{font-size:5.5pt;font-weight:700;padding:2px 7px;border-radius:var(--r);cursor:pointer;
-  border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s}
-#btn-conn:hover{border-color:var(--foam);color:var(--foam)}
-.wctl{width:24px;height:22px;border-radius:var(--r);border:1px solid var(--border);background:transparent;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;
-  color:var(--muted);font-size:10pt;transition:all .15s;font-family:inherit}
-.wctl:hover{border-color:var(--border-hi);color:var(--text)}
-#btn-close:hover{border-color:var(--love);color:var(--love)}
-/* Toolbar */
-#toolbar{display:flex;align-items:center;gap:4px;height:32px;flex-shrink:0;
-  background:var(--surface);border-bottom:1px solid var(--border);padding:0 10px}
-.tlabel{font-size:5pt;font-weight:700;letter-spacing:.9px;color:var(--muted);margin-right:3px}
-.mode-btn{font-size:6pt;font-weight:700;letter-spacing:.4px;padding:3px 9px;border-radius:var(--r);
-  cursor:pointer;border:1px solid var(--border);color:var(--muted);background:transparent;
-  transition:all .2s;font-family:inherit}
-.mode-btn:hover{color:var(--accent);border-color:var(--accent)}
-.mode-btn.active{border-color:var(--accent);color:var(--accent);background:var(--sel-bg)}
-.icon-btn{width:26px;height:26px;border-radius:var(--r);border:1px solid rgba(156,207,216,.2);
-  background:var(--overlay);cursor:pointer;display:flex;align-items:center;
-  justify-content:center;transition:all .15s;color:var(--foam)}
-.icon-btn:hover{border-color:var(--accent);background:var(--sel-bg)}
-.icon-btn svg{width:13px;height:13px}
-#aa-wrap{display:flex;align-items:center;gap:4px}
-#aa-lbl{font-size:5.5pt;color:var(--muted)}
-#aa-sw{width:28px;height:15px;background:var(--border);border-radius:8px;cursor:pointer;
-  position:relative;transition:background .2s;flex-shrink:0}
-#aa-sw.on{background:var(--accent)}
-#aa-sw::after{content:'';position:absolute;top:2px;left:2px;width:11px;height:11px;
-  border-radius:50%;background:#fff;transition:left .2s}
-#aa-sw.on::after{left:15px}
-#btn-compact{font-size:5.5pt;font-weight:700;padding:2px 7px;border-radius:var(--r);cursor:pointer;
-  border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s}
-#btn-compact.on{border-color:var(--accent);color:var(--accent)}
-/* Main */
-#main{display:flex;flex:1;min-height:0;position:relative;overflow:hidden}
-body.compact #preset-panel,body.compact #right-panel,body.compact #params-sidebar{display:none!important}
-body.compact #curve-wrap{flex:1}
-/* Params sidebar — CSS */
-#params-sidebar{position:absolute;left:0;top:0;bottom:0;width:0;overflow:hidden;z-index:50;
-  background:var(--surface);border-right:1px solid var(--border);
-  transition:width .2s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column}
-#params-sidebar.open{width:var(--params-w,220px)}
-#params-hdr{font-size:5pt;font-weight:700;letter-spacing:.9px;color:var(--muted);
-  padding:7px 10px 4px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:4px}
-.ph-t{flex:1}
-.hdr-x{width:16px;height:16px;border-radius:2px;border:1px solid var(--border);
-  background:var(--overlay);cursor:pointer;display:flex;align-items:center;
-  justify-content:center;font-size:9pt;color:var(--love);font-family:inherit;line-height:1}
-#params-scroll{flex:1;overflow-y:auto;padding:4px 6px 8px}
-.tool-hdr{font-size:6pt;font-weight:700;letter-spacing:.8px;color:var(--muted);
-  padding:7px 8px 4px;text-transform:uppercase;border-bottom:1px solid var(--border);margin-bottom:2px}
-.inp-row{display:flex;align-items:center;gap:7px;padding:5px 8px;
-  border-radius:3px;cursor:pointer;transition:background .1s;border-left:2px solid transparent}
-.inp-row:hover{background:var(--overlay)}
-.inp-row.sel{background:var(--sel-bg);border-left-color:var(--node-col,var(--accent))}
-.inp-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;
-  background:var(--node-col,var(--border-hi));opacity:.7}
-.inp-row.sel .inp-dot{opacity:1}
-.inp-lbl{font-size:7pt;color:var(--subtle);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.inp-row.sel .inp-lbl{color:var(--node-col,var(--accent));font-weight:700}
-.inp-kf{font-size:5.5pt;color:var(--muted);background:var(--overlay);
-  padding:1px 5px;border-radius:2px;flex-shrink:0}
-#params-ph{font-size:6.5pt;color:var(--muted);padding:12px 10px;text-align:center;line-height:1.6}
-/* Preset panel */
-#preset-panel{width:var(--preset-w,228px);flex-shrink:0;background:var(--surface);
-  border-right:1px solid var(--border);display:flex;flex-direction:column;min-width:140px}
-#profile-row{padding:7px 10px;border-bottom:1px solid var(--border)}
-.slbl{font-size:5pt;font-weight:700;letter-spacing:.9px;color:var(--muted);margin-bottom:4px;display:block}
-.prow{display:flex;gap:4px;align-items:center}
-.sm-btn{width:22px;height:22px;border-radius:var(--r);border:1px solid var(--border);
-  background:var(--overlay);cursor:pointer;display:flex;align-items:center;
-  justify-content:center;font-size:12pt;transition:border-color .15s;font-family:inherit;line-height:1}
-/* Custom profile dropdown */
-#profile-dd{position:relative;flex:1}
-#profile-display{display:flex;align-items:center;justify-content:space-between;
-  background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
-  color:var(--text);font-family:inherit;font-size:7pt;padding:3px 7px;cursor:pointer;
-  transition:border-color .15s}
-#profile-display:hover{border-color:var(--border-hi)}
-#profile-display span:last-child{font-size:5pt;color:var(--muted);margin-left:4px}
-#profile-opts{display:none;position:absolute;top:calc(100% + 3px);left:0;right:0;z-index:200;
-  background:var(--overlay);border:1px solid var(--border-hi);border-radius:var(--r);
-  box-shadow:0 4px 16px rgba(0,0,0,.5);max-height:180px;overflow-y:auto}
-#profile-opts.open{display:block}
-.prof-opt{padding:5px 10px;font-size:7pt;color:var(--subtle);cursor:pointer;transition:background .1s}
-.prof-opt:hover{background:var(--sel-bg);color:var(--text)}
-.prof-opt.active{color:var(--accent)}
-#lib-pills{display:flex;gap:3px;flex-wrap:wrap;margin-top:5px}
-.lib-pill{font-size:5pt;font-weight:700;letter-spacing:.5px;padding:2px 7px;border-radius:2px;
-  cursor:pointer;border:1px solid var(--border);color:var(--muted);background:transparent;
-  transition:all .2s;font-family:inherit}
-.lib-pill.active{border-color:var(--accent);color:var(--accent);background:var(--sel-bg)}
-#search-row{display:flex;align-items:center;gap:5px;padding:6px 10px 4px}
-#params-toggle{width:22px;height:22px;border-radius:var(--r);border:1px solid var(--border);
-  background:var(--overlay);cursor:pointer;display:flex;align-items:center;
-  justify-content:center;color:var(--muted);font-size:11pt;transition:all .15s;font-family:inherit}
-#params-toggle:hover,#params-toggle.active{border-color:var(--accent);color:var(--accent)}
-#preset-search{flex:1;background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
-  color:var(--text);font-family:inherit;font-size:6.5pt;padding:3px 7px}
-#preset-search::placeholder{color:var(--muted)}
-#preset-search:focus{outline:none;border-color:var(--border-hi)}
-#preset-scroll{flex:1;overflow-y:auto}
-#preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;padding:5px 8px}
-.pcard{border-radius:var(--r);border:1px solid var(--border);background:var(--surface);
-  cursor:pointer;overflow:hidden;display:flex;flex-direction:column;aspect-ratio:1;transition:border-color .15s}
-.pcard:hover{border-color:var(--border-hi)}
-.pcard.sel{border-width:1.5px}
-.card-wrap{flex:1;min-height:0;position:relative;overflow:hidden}
-.card-cv{position:absolute;inset:0;width:100%;height:100%}
-.card-sep{height:1px;background:var(--border);flex-shrink:0}
-.card-nm{font-size:5.5pt;text-align:center;padding:3px 4px;flex-shrink:0;
-  color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#preset-bottom{border-top:1px solid var(--border);padding:5px 8px;display:flex;gap:4px}
-.pa-btn{flex:1;background:transparent;border:1px solid var(--border);border-radius:var(--r);
-  color:var(--muted);font-family:inherit;font-size:5.5pt;padding:3px 0;cursor:pointer;transition:all .15s}
-.pa-btn:hover{border-color:var(--border-hi);color:var(--text)}
-/* Drag handles between panels */
-.drag-divider{width:4px;cursor:col-resize;background:transparent;flex-shrink:0;
-  position:relative;z-index:10;transition:background .15s}
-.drag-divider:hover,.drag-divider.dragging{background:var(--accent)}
-/* Curve editor */
-#curve-wrap{flex:1;min-width:120px;background:var(--base);
-  display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
-#curve-canvas{display:block;cursor:crosshair}
-#flip-btn{position:absolute;bottom:6px;right:6px;width:24px;height:24px;
-  border-radius:var(--r);border:1px solid var(--border);background:var(--overlay);
-  cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s}
-#flip-btn:hover{border-color:var(--foam);color:var(--foam)}
-#zoom-hint{display:none;position:absolute;bottom:6px;left:6px;font-size:5.5pt;
-  color:var(--muted);background:var(--overlay);border:1px solid var(--border);
-  border-radius:var(--r);padding:2px 7px;pointer-events:none}
-#ctx-menu{display:none;position:fixed;z-index:500;background:var(--overlay);
-  border:1px solid var(--border);border-radius:var(--r);min-width:160px;
-  padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,.5)}
-#ctx-menu.open{display:block}
-.ctx-item{padding:5px 14px;font-size:7pt;color:var(--subtle);cursor:pointer;transition:background .1s}
-.ctx-item:hover{background:var(--sel-bg);color:var(--text)}
-.ctx-item.active{color:var(--accent)}
-/* Right panel */
-#right-panel{width:var(--right-w,228px);flex-shrink:0;background:var(--surface);
-  border-left:1px solid var(--border);display:flex;flex-direction:column;min-width:140px}
-#rp-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
-.rp-tab{flex:1;font-size:5.5pt;font-weight:700;letter-spacing:.6px;padding:5px 0;
-  background:transparent;border:none;color:var(--muted);cursor:pointer;font-family:inherit;
-  border-bottom:2px solid transparent;transition:all .15s}
-.rp-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
-.rp-tab:hover:not(.active){color:var(--text)}
-#rp-preview{display:flex;flex-direction:column;overflow-y:auto;flex:1}
-#rp-settings{flex:1}
-/* Preview 2x2 */
-#preview-section{border-bottom:1px solid var(--border);padding:7px 10px 8px}
-#preview-hdr{font-size:5pt;font-weight:700;letter-spacing:.9px;color:var(--muted);margin-bottom:6px}
-#preview-2x2{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:4px}
-.prev-mini{background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
-  position:relative;overflow:hidden;aspect-ratio:1;contain:layout style}
-.mini-lbl{position:absolute;top:3px;left:4px;font-size:4.5pt;letter-spacing:.4px;
-  color:var(--muted);text-transform:uppercase;pointer-events:none;z-index:1}
-.mini-cube{position:absolute;background:var(--accent);will-change:transform;
-  width:var(--cs,12px);height:var(--cs,12px);border-radius:var(--shape-r,4px);
-  top:0;left:0;transform-origin:center}
-/* OKF */
-#okf-section{border-bottom:1px solid var(--border);padding:7px 10px 8px}
-.ok-hdr{display:flex;align-items:center;margin-bottom:5px}
-.ok-title{font-size:5pt;font-weight:700;letter-spacing:.9px;color:var(--iris);flex:1}
-.tog{font-size:5.5pt;font-weight:700;padding:1px 7px;border-radius:2px;cursor:pointer;
-  font-family:inherit;border:1px solid var(--border);background:var(--overlay);color:var(--muted);transition:all .15s}
-.tog.on{border-color:var(--iris);color:var(--iris);background:var(--sel-bg)}
-#okf-ctrl{opacity:.3;pointer-events:none;transition:opacity .2s}
-#okf-ctrl.enabled{opacity:1;pointer-events:auto}
-.ok-row{display:flex;gap:4px;margin-bottom:4px}
-.spill{font-size:5.5pt;padding:2px 7px;border-radius:2px;cursor:pointer;font-family:inherit;
-  border:1px solid var(--border);background:var(--overlay);color:var(--muted);transition:all .15s}
-.spill:hover{border-color:var(--border-hi);color:var(--text)}
-.spill.active{border-color:var(--iris);color:var(--iris);background:var(--sel-bg)}
-.tang{flex:1;text-align:center;padding:2px}
-/* Curve params */
-#cp-section{padding:7px 10px 8px;min-width:0;overflow:hidden}
-.cp-title{font-size:5pt;font-weight:700;letter-spacing:.9px;color:var(--muted);margin-bottom:5px}
-.cp-row{display:flex;align-items:center;gap:5px;margin-bottom:4px;min-width:0}
-.cp-lbl{font-size:6pt;color:var(--muted);width:52px;flex-shrink:0}
-.cp-sl{flex:1;min-width:30px;height:3px;-webkit-appearance:none;border-radius:2px;cursor:pointer;
-  background:linear-gradient(to right,var(--accent) 0%,var(--accent) var(--pct,30%),var(--overlay) var(--pct,30%),var(--overlay) 100%)}
-.cp-sl::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:9px;border-radius:50%;
-  background:var(--accent);border:1.5px solid var(--base);cursor:pointer;margin-top:-3px}
-.cp-sl::-webkit-slider-runnable-track{height:3px;border-radius:2px}
-.cp-val{font-size:6pt;color:var(--subtle);width:28px;flex-shrink:0;text-align:right}
-.cp-hint{font-size:5.5pt;color:var(--muted);margin-top:4px;line-height:1.5}
-/* Bottom */
-#bottom-bar{display:flex;align-items:center;gap:6px;height:42px;flex-shrink:0;
-  background:var(--base);border-top:1px solid var(--border);padding:0 10px}
-#status-msg{font-size:6pt;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#btn-aall{font-size:8.5pt;font-weight:700;padding:6px 14px;border:1.5px solid var(--accent);
-  border-radius:var(--r);background:transparent;color:var(--accent);cursor:pointer;font-family:inherit;transition:background .15s}
-#btn-aall:hover{background:var(--sel-bg)}
-#btn-apply{font-size:8.5pt;font-weight:800;padding:6px 16px;border:1.5px solid var(--accent);
-  border-radius:var(--r);background:var(--accent);color:var(--base);cursor:pointer;font-family:inherit;transition:opacity .15s}
-#btn-apply:hover{opacity:.85}
-/* Resize handles */
-.resize-edge{position:fixed;z-index:9998}
-.resize-right{right:0;top:4px;bottom:4px;width:5px;cursor:e-resize}
-.resize-bottom{bottom:0;left:4px;right:4px;height:5px;cursor:s-resize}
-.resize-br{right:0;bottom:0;width:12px;height:12px;cursor:se-resize}
-/* Tooltip */
-#tooltip{position:fixed;z-index:9999;background:var(--overlay);border:1px solid var(--border-hi);
-  border-radius:var(--r);padding:3px 9px;font-size:6pt;color:var(--subtle);
-  pointer-events:none;white-space:nowrap;display:none;font-family:'JetBrains Mono',monospace;
-  box-shadow:0 2px 8px rgba(0,0,0,.4)}
-/* Dialogs */
-.dlg-ov{display:none;position:fixed;inset:0;z-index:600;
-  background:rgba(0,0,0,.55);align-items:center;justify-content:center}
-.dlg-ov.open{display:flex}
-.dlg-box{background:var(--surface);border:1px solid var(--border);border-radius:4px;
-  min-width:300px;padding:16px;display:flex;flex-direction:column;gap:10px}
-.dlg-title{font-size:8pt;font-weight:700;color:var(--text)}
-.dlg-inp{background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
-  color:var(--text);font-family:inherit;font-size:8pt;padding:5px 8px}
-.dlg-inp:focus{outline:none;border-color:var(--border-hi)}
-.dlg-foot{display:flex;gap:6px;justify-content:flex-end}
-.dlg-btn{padding:5px 14px;border-radius:var(--r);cursor:pointer;border:1px solid var(--border);
-  background:var(--overlay);color:var(--subtle);font-family:inherit;font-size:7.5pt;transition:all .15s}
-.dlg-btn:hover{border-color:var(--border-hi);color:var(--text)}
-.dlg-btn.primary{border-color:var(--foam);color:var(--foam);background:var(--sel-bg)}
-.dlg-btn.danger{border-color:var(--love);color:var(--love)}
-/* Settings */
-#s-ov{display:none;position:fixed;inset:0;z-index:500;
-  background:rgba(0,0,0,.55);align-items:center;justify-content:center}
-#s-ov.open{display:flex}
-#s-panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;
-  width:440px;max-height:88vh;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
-.s-title{font-size:5pt;font-weight:700;letter-spacing:.9px;color:var(--muted)}
-.s-sep{height:1px;background:var(--border)}
-.s-row{display:flex;flex-direction:column;gap:4px}
-.s-lbl{font-size:7.5pt;color:var(--text)}
-.s-sub{font-size:5.5pt;color:var(--muted);line-height:1.5}
-.s-inp{background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
-  color:var(--text);font-family:inherit;font-size:7.5pt;padding:5px 8px}
-.s-inp:focus{outline:none;border-color:var(--border-hi)}
-.s-row-h{display:flex;gap:5px;align-items:center}
-.s-btn{padding:5px 10px;border-radius:var(--r);cursor:pointer;border:1px solid var(--border);
-  background:var(--overlay);color:var(--subtle);font-family:inherit;font-size:7pt;transition:all .15s}
-.s-btn:hover{border-color:var(--border-hi);color:var(--text)}
-.s-btn.primary{border-color:var(--foam);color:var(--foam);background:var(--sel-bg)}
-.s-btn.danger{border-color:var(--love);color:var(--love)}
-.s-check{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:7.5pt;color:var(--text)}
-.s-check input{accent-color:var(--accent);width:14px;height:14px;cursor:pointer}
-.col-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.col-row{display:flex;align-items:center;gap:7px;font-size:6.5pt;color:var(--muted)}
-.col-row input[type=color]{width:30px;height:20px;border:1px solid var(--border);
-  border-radius:2px;cursor:pointer;background:transparent;padding:1px}
-.s-sel{background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
-  color:var(--text);font-family:inherit;font-size:7pt;padding:3px 7px;cursor:pointer}
-.s-foot{display:flex;gap:5px;justify-content:flex-end;margin-top:4px}
-/* Debug */
-#dbg-ov{display:none;position:fixed;inset:0;z-index:700;
-  background:rgba(0,0,0,.6);align-items:center;justify-content:center}
-#dbg-ov.open{display:flex}
-#dbg-panel{background:var(--base);border:1px solid var(--border-hi);border-radius:4px;
-  width:680px;max-height:85vh;padding:14px;display:flex;flex-direction:column;gap:8px}
-#dbg-title{font-size:6pt;font-weight:700;letter-spacing:.9px;color:var(--muted)}
-#dbg-content{flex:1;overflow:auto;background:var(--overlay);border-radius:var(--r);
-  padding:10px;font-size:7pt;color:var(--foam);white-space:pre-wrap;word-break:break-all;
-  font-family:'JetBrains Mono',monospace;border:1px solid var(--border);min-height:220px;
-  user-select:text;-webkit-user-select:text;cursor:text}
-/* ── Docks ── */
-.dock-float{position:fixed;z-index:800;background:var(--surface);border:1px solid var(--border);
-  border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,.6);display:flex;flex-direction:column;
-  min-width:180px;min-height:120px;overflow:hidden;resize:both}
-.dock-float.hidden{display:none!important}
-.dock-bar{display:flex;align-items:center;gap:5px;height:26px;padding:0 7px;flex-shrink:0;
-  background:var(--base);border-bottom:1px solid var(--border);cursor:move;user-select:none}
-.dock-bar-title{font-size:5.5pt;font-weight:700;letter-spacing:.5px;color:var(--muted);flex:1}
-.dock-btn{width:18px;height:18px;border-radius:2px;border:none;background:transparent;
-  cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);
-  font-size:9pt;transition:color .15s;font-family:inherit;line-height:1}
-.dock-btn:hover{color:var(--accent)}
-.dock-btn.close-btn:hover{color:var(--love)}
-.dock-body{flex:1;overflow:auto;min-height:0}
-</style>
-</head>
-<body>
-<div id="root">
-<div id="tooltip"></div>
-<div class="resize-edge resize-right"  onmousedown="backend&&backend.start_system_resize('right')"></div>
-<div class="resize-edge resize-bottom" onmousedown="backend&&backend.start_system_resize('bottom')"></div>
-<div class="resize-edge resize-br"     onmousedown="backend&&backend.start_system_resize('br')"></div>
+"""
+Backend — QObject exposed to JavaScript via QWebChannel.
+All Resolve API calls happen here. UI logic stays in app.html.
+"""
+import json, os
+from PySide6.QtCore import QObject, Slot, Signal, QTimer
+from PySide6.QtWidgets import QFileDialog, QApplication
 
-<!-- Titlebar -->
-<div id="titlebar">
-  <span id="appname"><span id="nm">M</span><span id="nf">Flow</span></span>
-  <span class="badge" id="badge-fluid">FLUID</span>
-  <span id="version">v2.0</span>
-  <div class="spacer"></div>
-  <div id="conn-row">
-    <div id="conn-dot"></div>
-    <span id="conn-text">Connecting…</span>
-    <button id="btn-conn" onclick="doReconnect()">Connect</button>
-  </div>
-  <button class="wctl" onclick="backend&&backend.minimize_window()">−</button>
-  <button class="wctl" onclick="toggleMaximize()">□</button>
-  <button class="wctl" id="btn-close" style="color:var(--love)" onclick="backend&&backend.close_window()">×</button>
-</div>
+from core.preset_manager  import (load_profiles, save_profiles, add_preset,
+                                   delete_preset, new_profile, delete_profile,
+                                   switch_profile, load_builtin, active_presets)
+from core.platform_config import settings_file
+from core.curve_engine    import (apply_bezier, apply_baked, apply_steps,
+                                   apply_overframe, bake_oscillator,
+                                   bake_elastic_penner, OverframePoint)
 
-<!-- Toolbar -->
-<div id="toolbar">
-  <span class="tlabel">MODE</span>
-  <button class="mode-btn active" data-mode="easing"  onclick="setMode('easing')">EASING</button>
-  <button class="mode-btn" data-mode="spring"  onclick="setMode('spring')">SPRING</button>
-  <button class="mode-btn" data-mode="elastic" onclick="setMode('elastic')">ELASTIC</button>
-  <div class="spacer"></div>
-  <div id="aa-wrap">
-    <span id="aa-lbl">AUTO</span>
-    <div id="aa-sw" onclick="toggleAA()"></div>
-  </div>
-  <div style="position:relative">
-    <button class="icon-btn" id="btn-panels" onclick="togglePanelMenu()" data-tip="Panels">
-      <svg viewBox="0 0 14 12" fill="none" width="13" height="13">
-        <rect x="1" y="1" width="5" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/>
-        <rect x="8" y="1" width="5" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/>
-      </svg>
-    </button>
-    <div id="panel-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;
-      background:var(--overlay);border:1px solid var(--border-hi);border-radius:var(--r);
-      min-width:180px;z-index:400;box-shadow:0 4px 16px rgba(0,0,0,.5);padding:3px 0">
-      <div class="ctx-item" onclick="toggleSidebar('left');closePanelMenu()">◀ Ocultar Presets</div>
-      <div class="ctx-item" onclick="toggleSidebar('right');closePanelMenu()">▶ Ocultar Preview</div>
-      <div style="height:1px;background:var(--border);margin:3px 0"></div>
-      <div class="ctx-item" onclick="popOut('left');closePanelMenu()">⊞ Separar Presets</div>
-      <div class="ctx-item" onclick="popOut('right');closePanelMenu()">⊞ Separar Preview</div>
-      <div class="ctx-item" onclick="popOut('curve');closePanelMenu()">⊞ Separar Curva</div>
-      <div style="height:1px;background:var(--border);margin:3px 0"></div>
-      <div class="ctx-item" onclick="backend&&backend.open_external_dock('left','Presets');closePanelMenu()">↗ Presets — ventana externa</div>
-      <div class="ctx-item" onclick="backend&&backend.open_external_dock('right','Preview');closePanelMenu()">↗ Preview — ventana externa</div>
-      <div class="ctx-item" onclick="backend&&backend.open_external_dock('curve','Curve');closePanelMenu()">↗ Curva — ventana externa</div>
-    </div>
-  </div>
-  <button id="btn-compact" onclick="toggleCompact()">COMPACT</button>
-  <button class="icon-btn" onclick="openSettings()">
-    <svg viewBox="0 0 14 12" fill="none">
-      <line x1="1" y1="2" x2="13" y2="2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <circle cx="4" cy="2" r="1.5" fill="currentColor"/>
-      <line x1="1" y1="6" x2="13" y2="6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <circle cx="10" cy="6" r="1.5" fill="currentColor"/>
-      <line x1="1" y1="10" x2="13" y2="10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <circle cx="6" cy="10" r="1.5" fill="currentColor"/>
-    </svg>
-  </button>
-</div>
 
-<!-- Main -->
-<div id="main">
-  <div id="params-sidebar">
-    <div id="params-hdr">
-      <span class="ph-t">PARAMETERS</span>
-      <button class="hdr-x" onclick="toggleParams()">×</button>
-    </div>
-    <div id="params-scroll">
-      <div id="params-ph">No tool selected<br>in Resolve</div>
-      <div id="params-tree"></div>
-    </div>
-  </div>
+def _rj(path):
+    try:
+        with open(path, "r", encoding="utf-8") as f: return json.load(f)
+    except Exception: return {}
 
-  <div id="preset-panel">
-    <div id="profile-row">
-      <span class="slbl">PROFILE</span>
-      <div class="prow">
-        <div id="profile-dd">
-          <div id="profile-display" onclick="toggleProfileDrop(event)">
-            <span id="profile-name">Default</span><span>▾</span>
-          </div>
-          <div id="profile-opts"></div>
-        </div>
-        <button class="sm-btn" style="color:var(--foam)" onclick="promptNewProfile()">+</button>
-        <button class="sm-btn" style="color:var(--love)" onclick="deleteProfile()">×</button>
-      </div>
-      <div id="lib-pills">
-        <button class="lib-pill active" data-lib="easing"    onclick="setLibrary('easing')">EASING</button>
-        <button class="lib-pill" data-lib="spring"   onclick="setLibrary('spring')">SPRING</button>
-        <button class="lib-pill" data-lib="elastic"  onclick="setLibrary('elastic')">ELASTIC</button>
-        <button class="lib-pill" data-lib="overframe" onclick="setLibrary('overframe')">OKF</button>
-      </div>
-    </div>
-    <div id="search-row">
-      <button id="params-toggle" onclick="toggleParams()">≡</button>
-      <input id="preset-search" type="text" placeholder="Search…" oninput="filterPresets(this.value)">
-    </div>
-    <div id="preset-scroll"><div id="preset-grid"></div></div>
-    <div id="preset-bottom">
-      <button class="pa-btn" onclick="saveCurrentPreset()">Save curve</button>
-      <button class="pa-btn" onclick="deleteSelectedPreset()">Delete</button>
-    </div>
-  </div>
+def _wj(path, data):
+    try:
+        with open(path, "w", encoding="utf-8") as f: json.dump(data, f, indent=2)
+    except Exception: pass
 
-  <div class="drag-divider" id="dh-left" onmousedown="startResize('left',event)"></div>
 
-  <div id="curve-wrap">
-    <canvas id="curve-canvas"></canvas>
-    <div id="zoom-hint">scroll = zoom</div>
-    <button id="flip-btn" onclick="flipCurve()">
-      <svg width="12" height="13" viewBox="0 0 12 13" fill="none">
-        <path d="M1.5 3.5L5.5 1L9.5 3.5M1.5 9.5L5.5 12L9.5 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-        <line x1="1" y1="6.5" x2="11" y2="6.5" stroke="currentColor" stroke-width="1" stroke-dasharray="2,2"/>
-      </svg>
-    </button>
-  </div>
+class Backend(QObject):
+    # ── Python → JavaScript signals ───────────────────────────────────────────
+    presets_updated    = Signal(str)   # JSON list
+    profiles_updated   = Signal(str)   # JSON {names, active}
+    tool_updated       = Signal(str)   # JSON {name, inputs: {id: {label, kf_count}}}
+    connection_changed = Signal(bool, str)   # connected, detail text
+    status_changed     = Signal(str, str)    # message, hex color
+    apply_done         = Signal(bool, str)   # success, message
+    settings_signal    = Signal(str)         # JSON settings dict
 
-  <div class="drag-divider" id="dh-right" onmousedown="startResize('right',event)"></div>
+    def __init__(self, window, comp=None, fusion_app=None, parent=None):
+        super().__init__(parent)
+        self._fusion_app = fusion_app
+        self._win      = window
+        self._comp     = comp
+        self._watcher  = None
+        self._profiles = load_profiles()
+        self._settings = _rj(settings_file())
+        self._mode     = "easing"
+        self._phys_zeta    = 0.3
+        self._phys_omega_n = 8.0
+        self._el_amplitude = 1.0
+        self._el_period    = 0.3
+        self._auto_apply = False
+        self._auto_timer = QTimer(self)
+        self._auto_timer.setSingleShot(True)
+        self._auto_timer.timeout.connect(lambda: self._do_apply(False))
+        self._h1       = [0.42, 0.0]
+        self._h2       = [0.58, 1.0]
+        self._of_points = []          # list of dicts from JS
+        self._sel_inp  = None         # (tool_name, inp_id)
+        self._fps      = float(self._settings.get("bake_fps", 24))
 
-  <div id="right-panel">
-    <!-- Tab bar -->
-    <div id="rp-tabs">
-      <button class="rp-tab active" id="tab-preview" onclick="setRPTab('preview')">PREVIEW</button>
-      <button class="rp-tab" id="tab-settings" onclick="setRPTab('settings')">PARAMS</button>
-    </div>
+        # Start watcher if we already have a comp
+        if comp:
+            self._start_watcher()
+            QTimer.singleShot(200, self._announce_connection)
 
-    <!-- Preview tab -->
-    <div id="rp-preview">
-      <div id="preview-section">
-        <div id="preview-hdr">PREVIEW</div>
-        <canvas id="prev-canvas" style="width:100%;aspect-ratio:1;display:block;border-radius:3px;background:var(--overlay)"></canvas>
-      </div>
-      <div id="okf-section">
-        <div class="ok-hdr">
-          <span class="ok-title">OVERKEYFRAME</span>
-          <button class="tog" id="okf-toggle" onclick="toggleOKF()">OFF</button>
-        </div>
-        <div id="okf-ctrl">
-          <div class="ok-row">
-            <button class="spill" onclick="addOKFPoint()">+ point</button>
-            <button class="spill" onclick="removeOKFPoint()">− point</button>
-          </div>
-          <div class="ok-row">
-            <button class="spill tang active" id="tang-smooth" onclick="setTangent('smooth')">smooth</button>
-            <button class="spill tang" id="tang-broken" onclick="setTangent('broken')">broken</button>
-            <button class="spill tang" id="tang-sym"    onclick="setTangent('sym')">sym</button>
-          </div>
-        </div>
-      </div>
-      <div id="cp-section">
-        <div class="cp-title">CURVE PARAMS</div>
-        <div id="cp-spring" style="display:none">
-          <div class="cp-hint">↕ vertical handle = bounce  ·  ↔ horizontal = duration</div>
-          <div class="cp-row" style="margin-top:6px">
-            <span class="cp-lbl">bounce</span>
-            <input class="cp-sl" id="sl-zeta"  type="range" min="5" max="95" value="30" oninput="onSpringSlider()">
-            <span class="cp-val" id="vl-zeta">0.30</span>
-          </div>
-          <div class="cp-row">
-            <span class="cp-lbl">duration</span>
-            <input class="cp-sl" id="sl-omega" type="range" min="4" max="120" value="32" oninput="onSpringSlider()">
-            <span class="cp-val" id="vl-omega">8.0</span>
-          </div>
-        </div>
-        <div id="cp-elastic" style="display:none">
-          <div class="cp-hint">↕ vertical handle = amplitude  ·  ↔ horizontal = period</div>
-          <div class="cp-row" style="margin-top:6px">
-            <span class="cp-lbl">amplitude</span>
-            <input class="cp-sl" id="sl-elamp"    type="range" min="10" max="30" value="10" oninput="onElasticSlider()">
-            <span class="cp-val" id="vl-elamp">1.0</span>
-          </div>
-          <div class="cp-row">
-            <span class="cp-lbl">period</span>
-            <input class="cp-sl" id="sl-elperiod" type="range" min="5" max="80" value="30" oninput="onElasticSlider()">
-            <span class="cp-val" id="vl-elperiod">0.30</span>
-          </div>
-        </div>
-        <div id="cp-none" style="font-size:6pt;color:var(--muted)">No extra params for EASING / OKF.</div>
-      </div>
-    </div>
+    # ── Window control ────────────────────────────────────────────────────────
 
-    <!-- Settings tab -->
-    <div id="rp-settings" style="display:none;padding:7px 10px;overflow-y:auto;flex:1">
-      <div class="cp-title" style="margin-bottom:6px">INPUTS ANIMADOS</div>
-      <div id="inp-list" style="display:flex;flex-direction:column;gap:3px"></div>
-    </div>
-  </div>
-</div>
+    @Slot()
+    def start_system_move(self):
+        try: self._win.windowHandle().startSystemMove()
+        except Exception: pass
 
-<div id="bottom-bar">
-  <span id="status-msg">Ready</span>
-  <button id="btn-aall" onclick="backend&&backend.apply_curve_all()">APPLY ALL</button>
-  <button id="btn-apply" onclick="backend&&backend.apply_curve()">▶ APPLY</button>
-</div>
+    @Slot(str, result=str)
+    def get_dock_html(self, panel_id: str) -> str:
+        """Return styled HTML snippet for the requested panel."""
+        label = {'left': 'Presets', 'right': 'Preview / Params', 'curve': 'Curve Editor'}.get(panel_id, panel_id)
+        return (
+            f'<div style="padding:20px;color:#908caa;font-family:Monaspace,monospace;font-size:7pt;line-height:1.8">'
+            f'<div style="color:#9ccfd8;font-weight:700;font-size:8pt;margin-bottom:8px">{label}</div>'
+            f'Panel externo conectado al mismo backend.<br>'
+            f'El contenido nativo de este panel (presets, preview, etc.)<br>'
+            f'se integrará en una próxima versión.<br><br>'
+            f'<span style="color:#6e6a86">El backend está compartido — Apply y toda la lógica funcionan desde aquí.</span>'
+            f'</div>'
+        )
 
-<div id="ctx-menu">
-  <div class="ctx-item" id="ctx-os" onclick="toggleOvershoot()">Overshoot: OFF</div>
-  <div class="ctx-item" id="ctx-mag" onclick="toggleMagnet()">Magnet: OFF</div>
-  <div class="ctx-item" onclick="flipCurve();closeCtx()">Flip vertical</div>
-  <div class="ctx-item" onclick="flipH();closeCtx()">Flip horizontal</div>
-  <div class="ctx-item" onclick="resetCurve();closeCtx()">Reset curve</div>
-</div>
+    @Slot(str, str)
+    def open_external_dock(self, panel_id: str, title: str):
+        """Open a panel in a separate PySide6 window loading dock.html."""
+        from PySide6.QtWidgets import QDialog, QVBoxLayout
+        from PySide6.QtWebEngineWidgets import QWebEngineView
+        from PySide6.QtWebEngineCore import QWebEngineSettings
+        from PySide6.QtWebChannel import QWebChannel
+        from PySide6.QtCore import QUrl, Qt
+        import os
 
-<div class="dlg-ov" id="name-dlg">
-  <div class="dlg-box">
-    <div class="dlg-title" id="dlg-title">Enter name</div>
-    <input class="dlg-inp" id="dlg-inp" type="text"
-      onkeydown="if(event.key==='Enter')dlgOK();if(event.key==='Escape')dlgCancel()">
-    <div class="dlg-foot">
-      <button class="dlg-btn" onclick="dlgCancel()">Cancel</button>
-      <button class="dlg-btn primary" onclick="dlgOK()">OK</button>
-    </div>
-  </div>
-</div>
+        if not hasattr(self, '_dock_windows'):
+            self._dock_windows = {}
 
-<div id="s-ov">
-  <div id="s-panel">
-    <div class="s-title">SETTINGS</div>
-    <div class="s-sep"></div>
-    <div class="s-row">
-      <div class="s-lbl">Theme</div>
-      <select class="s-sel" id="s-theme" onchange="applyTheme(this.value)">
-        <option value="">Rosé Pine</option>
-        <option value="theme-dracula">Dracula</option>
-        <option value="theme-catppuccin">Catppuccin Mocha</option>
-      </select>
-    </div>
-    <div class="s-row">
-      <div class="s-lbl">DaVinci Resolve scripting modules path</div>
-      <input class="s-inp" id="s-dvr" type="text" placeholder="Auto-detect">
-      <div class="s-sub">Win default: C:\ProgramData\Blackmagic Design\DaVinci Resolve\Support\Developer\Scripting\Modules</div>
-    </div>
-    <div class="s-row">
-      <div class="s-lbl">Python</div>
-      <div class="s-row-h">
-        <select class="s-sel" id="s-py-sel" style="flex:1" onchange="document.getElementById('s-py').value=this.value"></select>
-        <button class="s-btn" onclick="rescanPython()">Rescan</button>
-      </div>
-      <input class="s-inp" id="s-py" type="text" placeholder="Auto" style="margin-top:3px">
-    </div>
-    <div class="s-row">
-      <div class="s-lbl">Forma del preview</div>
-      <select class="s-sel" id="s-shape" onchange="setPreviewShape(this.value)">
-        <option value="square">Cuadrado</option>
-        <option value="circle">Círculo</option>
-        <option value="diamond">Diamante</option>
-        <option value="pill">Pill</option>
-      </select>
-    </div>
-    <div class="s-row">
-      <div class="s-lbl">Radio de bordes</div>
-      <div class="cp-row" style="margin:0">
-        <input class="cp-sl" type="range" min="0" max="50" value="4"
-          oninput="document.querySelectorAll('.mini-cube').forEach(e=>e.style.borderRadius=this.value+'%');document.getElementById('s-shape-r-val').textContent=this.value+'%'">
-        <span class="cp-val" id="s-shape-r-val">4%</span>
-      </div>
-    </div>
-    <div class="s-row">
-      <div class="s-lbl">FPS for baking (spring / elastic)</div>
-      <input class="s-inp" id="s-fps" type="number" value="24" min="1" max="240" style="width:80px">
-    </div>
-    <div class="s-sep"></div>
-    <div class="s-row" style="gap:8px">
-      <label class="s-check"><input type="checkbox" id="s-aot" onchange="backend&&backend.set_always_on_top(this.checked)"> Always on top</label>
-      <label class="s-check"><input type="checkbox" id="s-aa2" onchange="applyAA(this.checked)"> Auto-apply on curve change</label>
-      <label class="s-check"><input type="checkbox" id="s-mag2" onchange="magnetEnabled=this.checked"> Grid magnet</label>
-    </div>
-    <div class="s-row">
-      <div class="s-lbl">Mode colors</div>
-      <div class="col-grid">
-        <div class="col-row"><span>Easing</span>   <input type="color" id="sc-easing"    value="#9ccfd8" oninput="liveColor('easing',this.value)"></div>
-        <div class="col-row"><span>Spring</span>   <input type="color" id="sc-spring"    value="#f6c177" oninput="liveColor('spring',this.value)"></div>
-        <div class="col-row"><span>Elastic</span>  <input type="color" id="sc-elastic"   value="#eb6f92" oninput="liveColor('elastic',this.value)"></div>
-        <div class="col-row"><span>OKF</span>      <input type="color" id="sc-overframe" value="#c4a7e7" oninput="liveColor('overframe',this.value)"></div>
-      </div>
-    </div>
-    <div class="s-sep"></div>
-    <div class="s-title">COLORES DE INTERFAZ</div>
-    <div class="col-grid">
-      <div class="col-row"><span>Base</span>       <input type="color" id="cc-base"    value="#121217" oninput="liveVar('--base',this.value)"></div>
-      <div class="col-row"><span>Surface</span>    <input type="color" id="cc-surface" value="#191724" oninput="liveVar('--surface',this.value)"></div>
-      <div class="col-row"><span>Overlay</span>    <input type="color" id="cc-overlay" value="#1f1d2e" oninput="liveVar('--overlay',this.value)"></div>
-      <div class="col-row"><span>Borde</span>      <input type="color" id="cc-border"  value="#26233a" oninput="liveVar('--border',this.value)"></div>
-      <div class="col-row"><span>Texto</span>      <input type="color" id="cc-text"    value="#e0def4" oninput="liveVar('--text',this.value)"></div>
-      <div class="col-row"><span>Muted</span>      <input type="color" id="cc-muted"   value="#6e6a86" oninput="liveVar('--muted',this.value)"></div>
-      <div class="col-row"><span>Cuadrícula</span> <input type="color" id="cc-grid"    value="#1c1a28" oninput="GRID_COLOR=this.value;drawCurve()"></div>
-      <div class="col-row"><span>Título M</span>   <input type="color" id="cc-title"   value="#9ccfd8" oninput="document.getElementById('nm').style.color=this.value"></div>
-    </div>
-    <div style="margin-top:6px">
-      <button class="s-btn" onclick="resetColors()">Resetear colores</button>
-    </div>
-    <div class="s-sep"></div>
-    <div class="s-row">
-      <div class="s-row-h">
-        <button class="s-btn" onclick="backend&&backend.export_settings()">Export JSON</button>
-        <button class="s-btn" onclick="backend&&backend.import_settings()">Import JSON</button>
-        <button class="s-btn" onclick="openDebug()">Debug Console</button>
-      </div>
-    </div>
-    <div class="s-foot">
-      <button class="s-btn danger" onclick="resetSettings()">Factory Reset</button>
-      <button class="s-btn" onclick="closeSettings()">Cancel</button>
-      <button class="s-btn primary" onclick="saveSettings()">Save</button>
-    </div>
-  </div>
-</div>
+        # If already open, bring to front
+        existing = self._dock_windows.get(panel_id)
+        if existing and existing.isVisible():
+            existing.raise_()
+            existing.activateWindow()
+            return
 
-<div id="dbg-ov">
-  <div id="dbg-panel">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <div id="dbg-title" style="flex:1">DEBUG CONSOLE</div>
-      <button class="dlg-btn" onclick="refreshDebug()">Refresh</button>
-      <button class="dlg-btn" onclick="copyDebug()">Copy all</button>
-      <button class="dlg-btn" onclick="document.getElementById('dbg-ov').classList.remove('open')">Close</button>
-    </div>
-    <div id="dbg-content">Loading…</div>
-  </div>
-</div>
+        dlg = QDialog(None)  # None parent = truly independent window
+        dlg.setWindowTitle(f"MFlow — {title}")
+        dlg.resize(400, 500)
+        dlg.setWindowFlags(
+            Qt.WindowType.Window |
+            Qt.WindowType.WindowCloseButtonHint |
+            Qt.WindowType.WindowMinimizeButtonHint |
+            Qt.WindowType.WindowMaximizeButtonHint
+        )
 
-<script>
-'use strict';
-/* ── Dock mode: when loaded with ?dock=X, show only that panel ── */
-const _DOCK_MODE = new URL(location.href).searchParams.get('dock') || null;
-if(_DOCK_MODE){
-  document.addEventListener('DOMContentLoaded',()=>{
-    // Hide titlebar, toolbar, bottom-bar
-    ['titlebar','toolbar','bottom-bar'].forEach(id=>{
-      const el=document.getElementById(id); if(el) el.style.display='none';
-    });
-    // Hide panels that aren't the docked one
-    const show = {left:'preset-panel', right:'right-panel', curve:'curve-wrap'};
-    Object.entries(show).forEach(([k,id])=>{
-      const el=document.getElementById(id);
-      if(!el) return;
-      if(k!==_DOCK_MODE){
-        el.style.display='none';
-      } else {
-        el.style.flex='1';
-        el.style.width='100%';
-        el.style.height='100%';
-        el.style.maxWidth='100%';
-        el.style.border='none';
-      }
-    });
-    // Hide dividers
-    ['dh-left','dh-right'].forEach(id=>{
-      const el=document.getElementById(id); if(el) el.style.display='none';
-    });
-    // Make #main fill the window
-    const main=document.getElementById('main');
-    if(main){ main.style.flex='1'; main.style.overflow='auto'; }
-  });
-}
-/* ── Constants ── */
-let CS=380,MG=30,CI=CS-2*MG,CELLS=10,CELLPX=CI/CELLS;
-const SP_Y_MAX=1.5, SP_T_DISPLAY=5.0;
-const SP_OM_MIN=0.5, SP_OM_MAX=30.0; // fixed 5s window for spring display
-const EL_Y_MIN=-1.2,EL_Y_MAX=1.3,EL_Y_RNG=EL_Y_MAX-EL_Y_MIN;
-const LN=256, ANIM_DUR=1400;
-let MODE_COLORS={easing:'#9ccfd8',spring:'#f6c177',elastic:'#eb6f92',overframe:'#c4a7e7'};
-const MODE_PALETTE={
-  easing: {'--surface':'#191724','--overlay':'#1f1d2e','--border':'#26233a','--border-hi':'#3a3750','--sel-bg':'#28253d'},
-  spring: {'--surface':'#1c1a18','--overlay':'#231e19','--border':'#2e2618','--border-hi':'#3d3220','--sel-bg':'#2d2618'},
-  elastic:{'--surface':'#1c1819','--overlay':'#231820','--border':'#2e1e26','--border-hi':'#3d2030','--sel-bg':'#2d1a24'},
-  overframe:{'--surface':'#18181e','--overlay':'#1d1c2a','--border':'#24233a','--border-hi':'#363660','--sel-bg':'#201e38'},
-};
-/* ── State ── */
-let backend=null, mode='easing', library='easing';
-let h1=[0.42,0.0], h2=[0.58,1.0];
-let overshoot=false, viewZoom=1.0, magnetEnabled=false;
-let okfActive=false, okfPoints=[], curTangent='smooth';
-let dragging=null;
-let physZeta=0.3, physOmegaN=8.0;
-let elAmp=1.0, elPeriod=0.3;
-let autoApply=false;
-let allPresets=[], selIdx=-1, selInpId=null;
-let paramsOpen=false, compact=false;
-let lookup=Array.from({length:LN+1},(_,i)=>i/LN);
-let raf=null, rafT0=null;
-let profileNames=[], activeProfile='Default';
+        view = QWebEngineView(dlg)
+        s = view.settings()
+        s.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
 
-/* ── QWebChannel ── */
-document.addEventListener('DOMContentLoaded',()=>{
-  initTooltip();
-  initCanvas();
-  updateLookup();
-  startAnim();
-  setTimeout(_cacheBoxSize, 200);
-  setTimeout(_initPreview, 250);
-  window.addEventListener('resize', _cacheBoxSize);
-  // Defer initial mode apply so canvas has correct dimensions first
-  requestAnimationFrame(()=>{ resizeCanvas(); setMode(mode); });
-  // Prevent ctrl+scroll browser zoom
-  window.addEventListener('wheel',e=>{if(e.ctrlKey)e.preventDefault();},{passive:false});
-  document.addEventListener('click',e=>{
-    if(!e.target.closest('#profile-dd')) closeProfileDrop();
-    if(!e.target.closest('#btn-panels')&&!e.target.closest('#panel-menu')) closePanelMenu();
-    closeCtx();
-  });
-  if(typeof QWebChannel!=='undefined'){
-    new QWebChannel(qt.webChannelTransport,ch=>{
-      backend=ch.objects.backend;
-      backend.presets_updated.connect( s=>renderPresets(JSON.parse(s)));
-      backend.profiles_updated.connect(s=>renderProfiles(JSON.parse(s)));
-      backend.tool_updated.connect(s=>{const d=JSON.parse(s);renderParamsTree(d);renderInputsList(d);});
-      backend.connection_changed.connect((ok,t)=>setConn(ok,t));
-      backend.status_changed.connect(  (m,c)=>setStatus(m,c));
-      backend.apply_done.connect(      (ok,m)=>setStatus(m,ok?'#9ccfd8':'#eb6f92'));
-      backend.settings_signal.connect( s=>applySettingsUI(JSON.parse(s)));
-      document.getElementById('titlebar').addEventListener('mousedown',e=>{
-        if(e.target.closest('button,#profile-dd'))return;
-        if(e.button===0)backend.start_system_move();
-      });
-      backend.load_library('easing');
-    });
-  } else { setConn(false,'Qt not available'); }
-});
-/* ── Tooltip ── */
-const TIP=()=>document.getElementById('tooltip');
-function initTooltip(){
-  document.addEventListener('mouseover',e=>{
-    const el=e.target.closest('[data-tip]');const t=TIP();
-    if(!el){t.style.display='none';return;}
-    t.textContent=el.dataset.tip;t.style.display='block';
-  });
-  document.addEventListener('mousemove',e=>{
-    const t=TIP();if(t.style.display==='none')return;
-    t.style.left=Math.min(e.clientX+8,window.innerWidth-t.offsetWidth-4)+'px';
-    t.style.top=(e.clientY-t.offsetHeight-8)+'px';
-  });
-  document.addEventListener('mouseout',e=>{if(e.target.closest('[data-tip]'))TIP().style.display='none';});
-}
-/* ── Connection ── */
-function setConn(ok,txt){
-  document.getElementById('conn-dot').className=ok?'on':'';
-  const l=document.getElementById('conn-text');l.textContent=txt;
-  l.style.color=ok?'var(--accent)':'var(--muted)';
-}
-function doReconnect(){
-  setConn(false,'Connecting…');
-  const p=document.getElementById('s-dvr');
-  if(backend)backend.reconnect(p?p.value.trim():'');
-}
-/* ── Status ── */
-function setStatus(m,c){const el=document.getElementById('status-msg');el.textContent=m;el.style.color=c||'var(--muted)';}
-function updateStatus(){
-  const ph=isSpring()?` ζ=${physZeta.toFixed(2)} ω=${physOmegaN.toFixed(1)}`
-    :isElastic()?` amp=${elAmp.toFixed(1)} per=${elPeriod.toFixed(2)}`
-    :` h1(${h1[0].toFixed(2)},${h1[1].toFixed(2)}) h2(${h2[0].toFixed(2)},${h2[1].toFixed(2)})`;
-  setStatus(`${mode}${ph}`+(selInpId?` · ${selInpId}`:''),'var(--muted)');
-}
-/* ── Mode helpers ── */
-function isSpring(){return mode==='spring';}
-function isElastic(){return mode==='elastic';}
-function isPhysics(){return isSpring()||isElastic();}
-/* ── Mode (full palette swap) ── */
-function setMode(m){
-  mode=m;
-  const col=MODE_COLORS[m]||'#9ccfd8';
-  document.documentElement.style.setProperty('--accent',col);
-  const _nm=document.getElementById('nm'); if(_nm) _nm.style.color=col;
-  document.querySelectorAll('.icon-btn,#btn-hide-left,#btn-hide-right').forEach(b=>{
-    b.style.color=col;
-    b.style.borderColor='rgba('+hexToRgb(col)+',0.3)';
-  });
-  const _bf=document.getElementById('badge-fluid'); if(_bf) _bf.style.color=col;
-  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));
-  document.querySelectorAll('.lib-pill').forEach(b=>{
-    if(b.classList.contains('active')){b.style.borderColor=col;b.style.color=col;}
-    else{b.style.borderColor='';b.style.color='';}
-  });
-  const spr=document.getElementById('cp-spring');
-  const ela=document.getElementById('cp-elastic');
-  const non=document.getElementById('cp-none');
-  if(spr) spr.style.display=isSpring()?'':'none';
-  if(ela) ela.style.display=isElastic()?'':'none';
-  if(non) non.style.display=isPhysics()?'none':'';
-  drawCurve();updateLookup();pushState();
-}
-function hexToRgb(hex){
-  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  return `${r},${g},${b}`;
-}
-function setLibrary(lib){
-  library=lib;
-  document.querySelectorAll('.lib-pill').forEach(b=>b.classList.toggle('active',b.dataset.lib===lib));
-  if(lib==='overframe')setMode('overframe');
-  else if(['easing','spring','elastic'].includes(lib))setMode(lib);
-  if(backend)backend.load_library(lib==='overframe'?'overframe':lib);
-}
-function applyTheme(cls){document.body.className=(compact?'compact ':'')+cls;}
-/* ── Auto-apply ── */
-function toggleAA(){autoApply=!autoApply;document.getElementById('aa-sw').classList.toggle('on',autoApply);if(backend)backend.set_auto_apply(autoApply);}
-function applyAA(v){autoApply=v;document.getElementById('aa-sw').classList.toggle('on',v);if(backend)backend.set_auto_apply(v);}
-/* ── Compact ── */
-function toggleCompact(){
-  compact=!compact;
-  document.getElementById('btn-compact').classList.toggle('on',compact);
-  const th=document.getElementById('s-theme')?document.getElementById('s-theme').value:'';
-  document.body.className=(compact?'compact ':'')+th;
-  if(backend)backend.resize_window(compact?460:940,compact?480:580);
-}
-/* ── Push state ── */
-let _pushTimer=null;
-function pushState(){
-  updateStatus();
-  if(_pushTimer) clearTimeout(_pushTimer);
-  _pushTimer=setTimeout(()=>{
-    if(!backend) return;
-    backend.set_curve_state(JSON.stringify({h1,h2,mode,of_points:okfPoints,
-      phys_zeta:physZeta,phys_omega_n:physOmegaN,el_amplitude:elAmp,el_period:elPeriod}));
-  }, 80);
-}
-/* ── Sidebar resize ── */
-let resizeTarget=null,resizeStartX=0,resizePanelW=0;
-function startResize(which,e){
-  resizeTarget=which;resizeStartX=e.clientX;
-  const id=which==='left'?'preset-panel':'right-panel';
-  resizePanelW=document.getElementById(id).offsetWidth;
-  document.getElementById('dh-'+which).classList.add('dragging');
-  const mv=ev=>{
-    const dx=ev.clientX-resizeStartX;
-    if(resizeTarget==='left'){
-      const w=Math.max(140,Math.min(380,resizePanelW+dx));
-      document.documentElement.style.setProperty('--preset-w',w+'px');
-    } else {
-      const w=Math.max(140,Math.min(380,resizePanelW-dx));
-      document.documentElement.style.setProperty('--right-w',w+'px');
-    }
-    _cacheBoxSize();
-  };
-  const up=()=>{
-    resizeTarget=null;
-    document.getElementById('dh-left').classList.remove('dragging');
-    document.getElementById('dh-right').classList.remove('dragging');
-    document.removeEventListener('mousemove',mv);
-    document.removeEventListener('mouseup',up);
-  };
-  document.addEventListener('mousemove',mv);
-  document.addEventListener('mouseup',up);
-  e.preventDefault();
-}
-/* ── Canvas ── */
-let ctx,canvas,DPR=1;
-let _resizeTimer=null;
-function resizeCanvas(){
-  const wrap=document.getElementById('curve-wrap');
-  const W=wrap.clientWidth,H=wrap.clientHeight;
-  const size=Math.max(60,Math.min(W,H));
-  CS=size; MG=Math.max(10,Math.round(size*30/380)); CI=CS-2*MG;
-  DPR=window.devicePixelRatio||1;
-  canvas.width=Math.round(CS*DPR); canvas.height=Math.round(CS*DPR);
-  canvas.style.width=CS+'px'; canvas.style.height=CS+'px';
-  ctx.setTransform(DPR,0,0,DPR,0,0);
-  drawCurve();
-}
-function _debouncedResize(){
-  if(_resizeTimer) clearTimeout(_resizeTimer);
-  _resizeTimer=setTimeout(resizeCanvas, 30);
-}
-function initCanvas(){
-  canvas=document.getElementById('curve-canvas');
-  ctx=canvas.getContext('2d');
-  canvas.addEventListener('mousedown',onDown);
-  canvas.addEventListener('mousemove',onMove);
-  canvas.addEventListener('mouseup',  onUp);
-  canvas.addEventListener('mouseleave',()=>{dragging=null;canvas.style.cursor='crosshair';});
-  canvas.addEventListener('contextmenu',onCtx);
-  canvas.addEventListener('wheel',onWheel,{passive:true});
-  new ResizeObserver(()=>{
-    clearTimeout(canvas._resizeTimer);
-    canvas._resizeTimer = setTimeout(resizeCanvas, 80);
-  }).observe(document.getElementById('curve-wrap'));
-  resizeCanvas();
-}
-/* ── Coord ── */
-function toPx(t,v){
-  const tz=(t-.5)/viewZoom+.5,vz=(v-.5)/viewZoom+.5;
-  return{x:MG+tz*CI,y:(MG+CI)-vz*CI};
-}
-function fromPx(px,py){
-  const t=(px-MG)/CI,v=((MG+CI)-py)/CI;
-  const tz=(t-.5)*viewZoom+.5,vz=(v-.5)*viewZoom+.5;
-  if(!overshoot)return[Math.max(0,Math.min(1,tz)),Math.max(0,Math.min(1,vz))];
-  return[tz,vz];
-}
-// Spring: center value=1 at mid-canvas. Range fills ~80% of height
-const SP_CENTER=1.0, SP_HALF=0.75;
-function spToPx(tn,xv){return{x:MG+tn*CI,y:(MG+CI/2)-((xv-SP_CENTER)/SP_HALF)*(CI/2)};}
-function elToPx(tn,xv){return{x:MG+tn*CI,y:(MG+CI)-((xv-EL_Y_MIN)/EL_Y_RNG)*CI};}
-function d2(a,b){return(a.x-b.x)**2+(a.y-b.y)**2;}
-const HR2=196;
-function snapToGrid(t){
-  if(!magnetEnabled)return t;
-  const step=1/(CELLS);
-  return Math.round(t/step)*step;
-}
-/* ── Spring handle positions (fixed time window) ── */
-function spBouncePos(){
-  // Y-locked: top=low ζ=more bounce, bottom=high ζ=less bounce
-  const cy=MG+CI*(physZeta-0.05)/0.9;
-  return{x:MG+CI*0.25,y:Math.max(MG+10,Math.min(MG+CI-10,cy))};
-}
-function spDurPos(){
-  const cx=MG+((physOmegaN-SP_OM_MIN)/(SP_OM_MAX-SP_OM_MIN))*CI;
-  const targetY=(MG+CI/2)-((1.0-SP_CENTER)/SP_HALF)*(CI/2); // y=center (value=1)
-  return{x:Math.max(MG+10,Math.min(MG+CI-10,cx)),y:targetY};
-}
-/* ── Elastic handle positions ── */
-function elAmpPos(){
-  // Y-locked: INVERTED — bottom=more amplitude, top=less amplitude
-  const cy=MG+CI*(elAmp-1)/2;  // amp=1→cy=MG(top), amp=3→cy=MG+CI(bottom)
-  return{x:MG+CI*0.12,y:Math.max(MG+10,Math.min(MG+CI-10,cy))};
-}
-function elPerPos(){
-  const cx=MG+CI*(elPeriod-0.1)/0.7;
-  const zeroY=(MG+CI)-((0-EL_Y_MIN)/EL_Y_RNG)*CI;
-  return{x:Math.max(MG+10,Math.min(MG+CI-10,cx)),y:zeroY};
-}
-/* ── Physics math ── */
-function evalSpring(t,z,w){
-  if(t<=0)return 0;const zz=Math.max(1e-4,z),ww=Math.max(1e-4,w);
-  if(zz>=1)return 1-Math.exp(-zz*ww*t)*(1+zz*ww*t);
-  const wd=ww*Math.sqrt(1-zz*zz);
-  return 1-Math.exp(-zz*ww*t)*(Math.cos(wd*t)+(zz*ww/wd)*Math.sin(wd*t));
-}
-function evalElastic(t,a,p){
-  if(t<=0)return 0;if(t>=1)return 1;
-  const pp=Math.max(0.01,p),aa=Math.max(1.0,a);
-  const s=(pp/(2*Math.PI))*Math.asin(1/aa);
-  return -(aa*(2**(10*(t-1)))*Math.sin(((t-1)-s)*2*Math.PI/pp));
-}
-/* ── Bezier ── */
-function evalBz(x,x1,y1,x2,y2){
-  if(x<=0)return 0;if(x>=1)return 1;
-  let lo=0,hi=1;
-  for(let k=0;k<54;k++){const m=(lo+hi)/2,u=1-m,bx=3*u*u*m*x1+3*u*m*m*x2+m**3;
-    if(Math.abs(bx-x)<1e-5){lo=m;break;}bx<x?lo=m:hi=m;}
-  const s=(lo+hi)/2,u=1-s;return 3*u*u*s*y1+3*u*s*s*y2+s**3;
-}
-/* ── Lookup ── */
-function updateLookup(){
-  if(isSpring()){
-    const tS=4.6/(Math.max(0.01,physZeta)*Math.max(0.1,physOmegaN));
-    for(let i=0;i<=LN;i++)lookup[i]=Math.max(0,evalSpring(i/LN*tS,physZeta,physOmegaN));
-  } else if(isElastic()){
-    for(let i=0;i<=LN;i++)lookup[i]=evalElastic(i/LN,elAmp,elPeriod);
-  } else {
-    for(let i=0;i<=LN;i++)lookup[i]=okfActive?evalOKF(i/LN):evalBz(i/LN,h1[0],h1[1],h2[0],h2[1]);
-  }
-}
-function evalOKF(x){
-  if(!okfActive||!okfPoints.length)return evalBz(x,h1[0],h1[1],h2[0],h2[1]);
-  const sorted=[...okfPoints].sort((a,b)=>a.t-b.t);
-  const all=[{t:0,v:0,hi:null,ho:h1},...sorted.map(p=>({t:p.t,v:p.v,hi:p.lh,ho:p.rh})),{t:1,v:1,hi:h2,ho:null}];
-  for(let i=0;i<all.length-1;i++){
-    const a=all[i],b=all[i+1];if(x<a.t||x>b.t)continue;
-    const sL=b.t-a.t;if(!sL)continue;const segT=(x-a.t)/sL;
-    const nv=evalBz(segT,a.ho?a.ho[0]:0,a.ho?a.ho[1]:0,1+(b.hi?b.hi[0]:0),1+(b.hi?b.hi[1]:0));
-    return a.v+nv*(b.v-a.v);
-  }
-  return evalBz(x,h1[0],h1[1],h2[0],h2[1]);
-}
-/* ── Draw grid (shared) ── */
-function drawGrid(){
-  // Dynamic grid that adapts to overshoot zoom
-  const zCells=Math.round(CELLS/viewZoom)||10;
-  const cellPx=CI/zCells;
-  ctx.strokeStyle=GRID_COLOR;ctx.lineWidth=0.6;ctx.beginPath();
-  for(let i=-zCells;i<=zCells*2;i++){
-    const x=MG+i*cellPx,y=MG+i*cellPx;
-    ctx.moveTo(x,MG);ctx.lineTo(x,MG+CI);ctx.moveTo(MG,y);ctx.lineTo(MG+CI,y);
-  }
-  ctx.stroke();
-  ctx.strokeStyle='#1e1c2e';ctx.lineWidth=1;ctx.strokeRect(MG,MG,CI,CI);
-  const cx=MG+CI/2,cy=MG+CI/2;
-  ctx.strokeStyle='#22203a';ctx.lineWidth=2;
-  ctx.beginPath();ctx.moveTo(cx,MG);ctx.lineTo(cx,MG+CI);ctx.moveTo(MG,cy);ctx.lineTo(MG+CI,cy);ctx.stroke();
-}
-/* ── Capsule handle ── */
-function drawCapsule(cx,cy,axis,color,label){
-  const w=axis==='y'?11:26,h=axis==='y'?24:11,r=5;
-  ctx.save();
-  ctx.fillStyle=MODE_COLORS[mode]+'22';ctx.strokeStyle=color;ctx.lineWidth=1.5;
-  ctx.beginPath();
-  ctx.moveTo(cx-w/2+r,cy-h/2);ctx.lineTo(cx+w/2-r,cy-h/2);ctx.arc(cx+w/2-r,cy-h/2+r,r,-Math.PI/2,0);
-  ctx.lineTo(cx+w/2,cy+h/2-r);ctx.arc(cx+w/2-r,cy+h/2-r,r,0,Math.PI/2);
-  ctx.lineTo(cx-w/2+r,cy+h/2);ctx.arc(cx-w/2+r,cy+h/2-r,r,Math.PI/2,Math.PI);
-  ctx.lineTo(cx-w/2,cy-h/2+r);ctx.arc(cx-w/2+r,cy-h/2+r,r,Math.PI,-Math.PI/2);
-  ctx.closePath();ctx.fill();ctx.stroke();
-  ctx.fillStyle=color;ctx.font='700 7px JetBrains Mono';ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText(axis==='y'?'↕':'↔',cx,cy);
-  ctx.font='6px JetBrains Mono';ctx.textAlign='left';ctx.textBaseline='top';ctx.fillStyle=color+'99';
-  if(axis==='y')ctx.fillText(label,cx+w/2+3,cy-4);
-  else ctx.fillText(label,cx-label.length*3.5,cy+h/2+4);
-  ctx.restore();
-}
-/* ── Guide line perpendicular to capsule movement ── */
-function drawHandleGuide(x,y,axis,color){
-  ctx.save();ctx.strokeStyle=color+'33';ctx.lineWidth=1;ctx.setLineDash([4,4]);ctx.beginPath();
-  if(axis==='y'){ctx.moveTo(MG,y);ctx.lineTo(MG+CI,y);}  // vertical capsule → horizontal guide
-  else{ctx.moveTo(x,MG);ctx.lineTo(x,MG+CI);}            // horizontal capsule → vertical guide
-  ctx.stroke();ctx.setLineDash([]);ctx.restore();
-}
-/* ── Main draw ── */
-function drawCurve(){
-  if(!ctx)return;
-  const col=MODE_COLORS[mode]||'#9ccfd8';
-  ctx.clearRect(0,0,CS,CS);
-  ctx.fillStyle=getComputedStyle(document.documentElement).getPropertyValue('--base').trim()||'#121217';
-  ctx.fillRect(0,0,CS,CS);
-  drawGrid();
-  if(isSpring())drawSpringCurve(col);
-  else if(isElastic())drawElasticCurve(col);
-  else drawBezierCurve(col);
-}
-/* ── Spring curve ── */
-function drawSpringCurve(col){
-  const N=200;
-  // Curve
-  ctx.strokeStyle=col;ctx.lineWidth=2.2;ctx.beginPath();
-  for(let i=0;i<=N;i++){
-    const t_real=i/N*SP_T_DISPLAY;
-    const p=spToPx(i/N,evalSpring(t_real,physZeta,physOmegaN));
-    i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);
-  }
-  ctx.stroke();
-  // Handles only
-  const bh=spBouncePos(),dh=spDurPos();
-  drawHandleGuide(bh.x,bh.y,'y',col);
-  drawHandleGuide(dh.x,dh.y,'x',col);
-  drawCapsule(bh.x,bh.y,'y',col,'bounce');
-  drawCapsule(dh.x,dh.y,'x',col,'duration');
-}
-/* ── Elastic curve ── */
-function drawElasticCurve(col){
-  const N=200;
-  ctx.strokeStyle=col;ctx.lineWidth=2.2;ctx.beginPath();
-  for(let i=0;i<=N;i++){
-    const p=elToPx(i/N,evalElastic(i/N,elAmp,elPeriod));
-    i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y);
-  }
-  ctx.stroke();
-  const ah=elAmpPos(),ph=elPerPos();
-  drawHandleGuide(ah.x,ah.y,'y',col);
-  drawHandleGuide(ph.x,ph.y,'x',col);
-  drawCapsule(ah.x,ah.y,'y',col,'amplitude');
-  drawCapsule(ph.x,ph.y,'x',col,'period');
-}
-/* ── Bezier curve ── */
-function drawBezierCurve(col){
-  const p0=toPx(0,0),p1=toPx(1,1),h1p=toPx(...h1),h2p=toPx(...h2);
-  ctx.strokeStyle='#1a1828';ctx.lineWidth=1;ctx.setLineDash([5,5]);
-  ctx.beginPath();ctx.moveTo(p0.x,p0.y);ctx.lineTo(p1.x,p1.y);ctx.stroke();ctx.setLineDash([]);
-  ctx.strokeStyle=col;ctx.lineWidth=2.2;
-  ctx.beginPath();ctx.moveTo(p0.x,p0.y);
-  if(okfActive&&okfPoints.length)drawOKFPath();
-  else ctx.bezierCurveTo(h1p.x,h1p.y,h2p.x,h2p.y,p1.x,p1.y);
-  ctx.stroke();
-  ctx.strokeStyle=col+'55';ctx.lineWidth=1;ctx.setLineDash([4,3]);
-  ctx.beginPath();ctx.moveTo(p0.x,p0.y);ctx.lineTo(h1p.x,h1p.y);
-  ctx.moveTo(p1.x,p1.y);ctx.lineTo(h2p.x,h2p.y);ctx.stroke();ctx.setLineDash([]);
-  ctx.fillStyle=col;
-  ctx.beginPath();ctx.arc(p0.x,p0.y,5,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(p1.x,p1.y,5,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#121217';ctx.strokeStyle=col;ctx.lineWidth=1.5;
-  ctx.beginPath();ctx.arc(h1p.x,h1p.y,7,0,Math.PI*2);ctx.fill();ctx.stroke();
-  ctx.beginPath();ctx.arc(h2p.x,h2p.y,7,0,Math.PI*2);ctx.fill();ctx.stroke();
-  ctx.save();ctx.fillStyle=col+'99';ctx.font='600 7px "JetBrains Mono"';
-  ctx.fillText(`h1 (${h1[0].toFixed(2)}, ${h1[1].toFixed(2)})`,h1p.x+10,h1p.y+11);
-  ctx.fillText(`h2 (${h2[0].toFixed(2)}, ${h2[1].toFixed(2)})`,h2p.x+10,h2p.y-6);
-  ctx.restore();
-  if(okfActive)drawOKFHandles(col);
-}
-function drawOKFPath(){
-  const sorted=[...okfPoints].sort((a,b)=>a.t-b.t);
-  const all=[{t:0,v:0,lh:null,rh:h1},...sorted.map(p=>({t:p.t,v:p.v,lh:p.lh,rh:p.rh})),{t:1,v:1,lh:h2,rh:null}];
-  ctx.moveTo(...Object.values(toPx(0,0)));
-  for(let i=0;i<all.length-1;i++){
-    const a=all[i],b=all[i+1],sdt=b.t-a.t,sdv=b.v-a.v;
-    const c1=toPx(a.t+(a.rh?a.rh[0]:0)*sdt,a.v+(a.rh?a.rh[1]:0)*sdv);
-    const c2=toPx(b.t+(b.lh?b.lh[0]:0)*sdt,b.v+(b.lh?b.lh[1]:0)*sdv);
-    ctx.bezierCurveTo(c1.x,c1.y,c2.x,c2.y,...Object.values(toPx(b.t,b.v)));
-  }
-}
-function drawOKFHandles(col){
-  okfPoints.forEach(pt=>{
-    const pp=toPx(pt.t,pt.v),lhp=toPx(pt.t+pt.lh[0],pt.v+pt.lh[1]),rhp=toPx(pt.t+pt.rh[0],pt.v+pt.rh[1]);
-    ctx.strokeStyle='#c4a7e766';ctx.lineWidth=1;ctx.setLineDash([3,3]);
-    ctx.beginPath();ctx.moveTo(lhp.x,lhp.y);ctx.lineTo(pp.x,pp.y);ctx.lineTo(rhp.x,rhp.y);ctx.stroke();
-    ctx.setLineDash([]);ctx.fillStyle='#121217';ctx.strokeStyle='#c4a7e7';ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.arc(pp.x,pp.y,7,0,Math.PI*2);ctx.fill();ctx.stroke();
-    ctx.beginPath();ctx.arc(lhp.x,lhp.y,5,0,Math.PI*2);ctx.fill();ctx.stroke();
-    ctx.beginPath();ctx.arc(rhp.x,rhp.y,5,0,Math.PI*2);ctx.fill();ctx.stroke();
-  });
-}
-/* ── Hit test ── */
-function hitTest(px,py){
-  const p={x:px,y:py};
-  if(isSpring()){
-    const bh=spBouncePos(),dh=spDurPos();
-    if(d2(p,bh)<HR2*1.8)return'sp_bounce';
-    if(d2(p,dh)<HR2*1.8)return'sp_dur';
-    return null;
-  }
-  if(isElastic()){
-    const ah=elAmpPos(),ph=elPerPos();
-    if(d2(p,ah)<HR2*1.8)return'el_amp';
-    if(d2(p,ph)<HR2*1.8)return'el_per';
-    return null;
-  }
-  const h1p=toPx(...h1),h2p=toPx(...h2);
-  if(d2(p,h1p)<HR2)return'h1';
-  if(d2(p,h2p)<HR2)return'h2';
-  if(okfActive)for(let i=0;i<okfPoints.length;i++){
-    const pt=okfPoints[i];
-    if(d2(p,toPx(pt.t,pt.v))<HR2)return`of:${i}`;
-    if(d2(p,toPx(pt.t+pt.lh[0],pt.v+pt.lh[1]))<HR2)return`oflh:${i}`;
-    if(d2(p,toPx(pt.t+pt.rh[0],pt.v+pt.rh[1]))<HR2)return`ofrh:${i}`;
-  }
-  return null;
-}
-function getXY(e){const r=canvas.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];}
-function onDown(e){if(e.button!==0)return;const[px,py]=getXY(e);dragging=hitTest(px,py);if(dragging)canvas.style.cursor='grabbing';}
-function onMove(e){
-  const[px,py]=getXY(e);
-  if(!dragging){canvas.style.cursor=hitTest(px,py)?'grab':'crosshair';return;}
-  // Spring: bounce = Y-locked, duration = X-locked
-  if(dragging==='sp_bounce'){
-    physZeta=Math.max(0.05,Math.min(0.95,0.05+(py-MG)/CI*0.9));
-    syncSpringSliders();
-  } else if(dragging==='sp_dur'){
-    // X position maps directly to physOmegaN — independent of physZeta
-    physOmegaN=Math.max(SP_OM_MIN,Math.min(SP_OM_MAX,SP_OM_MIN+((px-MG)/CI)*(SP_OM_MAX-SP_OM_MIN)));
-    syncSpringSliders();
-  // Elastic: amplitude = Y-locked (INVERTED: bottom=more amp), period = X-locked
-  } else if(dragging==='el_amp'){
-    elAmp=Math.max(1.0,Math.min(3.0,1+(py-MG)/CI*2)); // bottom=3, top=1
-    syncElasticSliders();
-  } else if(dragging==='el_per'){
-    elPeriod=Math.max(0.1,Math.min(0.8,0.1+(px-MG)/CI*0.7));
-    syncElasticSliders();
-  } else {
-    let[t,v]=fromPx(px,py);
-    if(magnetEnabled&&mode==='easing'){t=snapToGrid(t);v=snapToGrid(v);}
-    if(dragging==='h1')h1=[t,v];
-    else if(dragging==='h2')h2=[t,v];
-    else if(dragging.startsWith('of:')){const i=+dragging.split(':')[1];okfPoints[i].t=Math.max(0.01,Math.min(0.99,t));okfPoints[i].v=v;}
-    else if(dragging.startsWith('oflh:')){
-      const i=+dragging.split(':')[1],pt=okfPoints[i];pt.lh=[t-pt.t,v-pt.v];
-      if(pt.tangent==='smooth')pt.rh=[-pt.lh[0],-pt.lh[1]];
-    } else if(dragging.startsWith('ofrh:')){
-      const i=+dragging.split(':')[1],pt=okfPoints[i];pt.rh=[t-pt.t,v-pt.v];
-      if(pt.tangent==='smooth')pt.lh=[-pt.rh[0],-pt.rh[1]];
-    }
-  }
-  drawCurve();updateLookup();pushState();
-}
-function onUp(){dragging=null;canvas.style.cursor='crosshair';}
-function onWheel(e){
-  if(!overshoot)return;
-  viewZoom=Math.max(0.3,Math.min(3.0,viewZoom+(e.deltaY>0?.1:-.1)));
-  document.getElementById('zoom-hint').textContent=`zoom ${viewZoom.toFixed(1)}×`;
-  drawCurve();
-}
-/* ── Sliders ── */
-function onSpringSlider(){
-  physZeta=document.getElementById('sl-zeta').value/100;
-  physOmegaN=document.getElementById('sl-omega').value/4;
-  syncSpringSliders();drawCurve();updateLookup();pushState();
-}
-function _updateSliderFill(id, min, max, val){
-  const el=document.getElementById(id); if(!el)return;
-  const pct=((val-min)/(max-min)*100).toFixed(1)+'%';
-  el.style.setProperty('--pct',pct);
-}
-function syncSpringSliders(){
-  document.getElementById('sl-zeta').value=Math.round(physZeta*100);
-  document.getElementById('sl-omega').value=Math.round(physOmegaN*4);
-  document.getElementById('vl-zeta').textContent=physZeta.toFixed(2);
-  document.getElementById('vl-omega').textContent=physOmegaN.toFixed(1);
-  _updateSliderFill('sl-zeta',5,95,Math.round(physZeta*100));
-  _updateSliderFill('sl-omega',4,120,Math.round(physOmegaN*4));
-}
-function onElasticSlider(){
-  elAmp=document.getElementById('sl-elamp').value/10;
-  elPeriod=document.getElementById('sl-elperiod').value/100;
-  syncElasticSliders();drawCurve();updateLookup();pushState();
-}
-function syncElasticSliders(){
-  document.getElementById('sl-elamp').value=Math.round(elAmp*10);
-  document.getElementById('sl-elperiod').value=Math.round(elPeriod*100);
-  document.getElementById('vl-elamp').textContent=elAmp.toFixed(1);
-  document.getElementById('vl-elperiod').textContent=elPeriod.toFixed(2);
-  _updateSliderFill('sl-elamp',10,30,Math.round(elAmp*10));
-  _updateSliderFill('sl-elperiod',5,80,Math.round(elPeriod*100));
-}
-/* ── Context menu ── */
-function onCtx(e){
-  e.preventDefault();e.stopPropagation();
-  const m=document.getElementById('ctx-menu');
-  m.style.left=e.clientX+'px';m.style.top=e.clientY+'px';m.classList.add('open');
-  document.getElementById('ctx-os').textContent=`Overshoot: ${overshoot?'ON':'OFF'}`;
-  document.getElementById('ctx-os').classList.toggle('active',overshoot);
-  document.getElementById('ctx-mag').textContent=`Magnet: ${magnetEnabled?'ON':'OFF'}`;
-  document.getElementById('ctx-mag').classList.toggle('active',magnetEnabled);
-}
-function closeCtx(){document.getElementById('ctx-menu').classList.remove('open');}
-function toggleOvershoot(){
-  overshoot=!overshoot;
-  document.getElementById('zoom-hint').style.display=overshoot?'block':'none';
-  if(!overshoot)viewZoom=1.0;
-  closeCtx();drawCurve();
-}
-function toggleMagnet(){magnetEnabled=!magnetEnabled;closeCtx();}
-function flipCurve(){h1=[h1[0],1-h1[1]];h2=[h2[0],1-h2[1]];drawCurve();updateLookup();pushState();}
-function flipH(){[h1,h2]=[[1-h2[0],h2[1]],[1-h1[0],h1[1]]];drawCurve();updateLookup();pushState();}
-function resetCurve(){h1=[0.42,0.0];h2=[0.58,1.0];physZeta=0.3;physOmegaN=8.0;elAmp=1.0;elPeriod=0.3;
-  syncSpringSliders();syncElasticSliders();okfPoints=[];drawCurve();updateLookup();pushState();}
-/* ── Preview (24fps setTimeout — no rAF loop hammering the engine) ── */
-let _animTimer=null, _animVisible=true;
-function startAnim(){
-  if(_animTimer) clearInterval(_animTimer);
-  rafT0=null;
-  _animTimer=setInterval(_animTick, 42); // ~24fps
-}
-function _animTick(){
-  if(!_animVisible) return;
-  const now=performance.now();
-  if(!rafT0) rafT0=now;
-  const el=(now-rafT0)%(ANIM_DUR*2);
-  const t=el<ANIM_DUR?el/ANIM_DUR:(ANIM_DUR*2-el)/ANIM_DUR;
-  const idx=Math.min(Math.floor(Math.max(0,Math.min(1,t))*LN),LN);
-  setCubes(lookup[idx]);
-}
-// Pause animation when preview tab not active
-function _setAnimVisible(v){ _animVisible=v; if(v&&!rafT0) rafT0=performance.now(); }
-let _pvCtx=null, _pvShape='square';
-function _initPreview(){
-  const cv=document.getElementById('prev-canvas'); if(!cv) return;
-  const dpr=window.devicePixelRatio||1;
-  const W=cv.offsetWidth||200;
-  cv.width=Math.round(W*dpr); cv.height=Math.round(W*dpr);
-  cv.style.height=W+'px';
-  _pvCtx=cv.getContext('2d');
-  _pvCtx.scale(dpr,dpr);
-}
-function _cacheBoxSize(){
-  // Re-init preview canvas on size change
-  const cv=document.getElementById('prev-canvas');
-  if(cv&&cv.offsetWidth>0) _initPreview();
-}
-function setCubes(v){
-  if(!_pvCtx) return;
-  const cv=document.getElementById('prev-canvas'); if(!cv) return;
-  const W=cv.offsetWidth||200, H=W;
-  const col=MODE_COLORS[mode]||'#9ccfd8';
-  const vc=Math.max(-.6,Math.min(1.5,v));
-  const bg=getComputedStyle(document.documentElement).getPropertyValue('--overlay').trim()||'#1f1d2e';
-  _pvCtx.clearRect(0,0,W,H); _pvCtx.fillStyle=bg; _pvCtx.fillRect(0,0,W,H);
-  const half=W/2, cs=Math.max(5,Math.round(W*0.08)), pad=8;
-  const range=half-2*pad-cs;
-  const fz=Math.max(5,Math.round(W*0.042));
-  _pvCtx.font=`500 ${fz}px Monaspace,monospace`;
-  _pvCtx.textBaseline='top'; _pvCtx.fillStyle=col+'66';
-  // Labels — small, right side of each quadrant
-  _pvCtx.textAlign='right';
-  _pvCtx.fillText('Position X', half-4, 4);
-  _pvCtx.fillText('Position Y', W-4,    4);
-  _pvCtx.fillText('Rotation',   half-4, half+4);
-  _pvCtx.fillText('Scale',      W-4,    half+4);
-  // Shape helper
-  const shape=(cx,cy,sz,rot=0)=>{
-    _pvCtx.save(); _pvCtx.translate(cx,cy); _pvCtx.rotate(rot);
-    _pvCtx.fillStyle=col;
-    _pvCtx.beginPath();
-    if(_pvShape==='circle'){
-      _pvCtx.arc(0,0,sz/2,0,Math.PI*2);
-    } else if(_pvShape==='diamond'){
-      _pvCtx.moveTo(0,-sz/2);_pvCtx.lineTo(sz/2,0);_pvCtx.lineTo(0,sz/2);_pvCtx.lineTo(-sz/2,0);_pvCtx.closePath();
-    } else {
-      const r=_pvShape==='pill'?sz/2:Math.round(sz*0.2);
-      _pvCtx.roundRect(-sz/2,-sz/2,sz,sz,r);
-    }
-    _pvCtx.fill(); _pvCtx.restore();
-  };
-  shape(pad+cs/2+vc*range,  half/2,       cs);                          // X
-  shape(half+half/2,         half-pad-cs/2-vc*range, cs);               // Y
-  shape(half/2,              half+half/2,  cs, vc*Math.PI*2);           // Rotation
-  shape(half+half/2,         half+half/2,  cs*Math.max(0.08,0.25+vc*0.55)); // Scale — smaller multiplier
-  _pvCtx.strokeStyle=col+'18'; _pvCtx.lineWidth=1;
-  _pvCtx.beginPath();
-  _pvCtx.moveTo(half,0);_pvCtx.lineTo(half,H);
-  _pvCtx.moveTo(0,half);_pvCtx.lineTo(W,half);
-  _pvCtx.stroke();
-}
-/* ── Presets ── */
-function renderPresets(p){allPresets=p;filterPresets(document.getElementById('preset-search').value);}
-function filterPresets(q){
-  q=q.toLowerCase();const g=document.getElementById('preset-grid');g.innerHTML='';selIdx=-1;
-  allPresets.forEach((p,i)=>{if(q&&!p.name.toLowerCase().includes(q))return;g.appendChild(makeCard(p,i));});
-}
-function makeCard(preset,idx){
-  const card=document.createElement('div');card.className='pcard';card.dataset.idx=idx;
-  const col=MODE_COLORS[preset.library]||'#26233a';card.style.borderColor=col+'66';
-  const wrap=document.createElement('div');wrap.className='card-wrap';
-  const cv=document.createElement('canvas');cv.className='card-cv';wrap.appendChild(cv);
-  const sep=document.createElement('div');sep.className='card-sep';sep.style.background=col+'33';
-  const nm=document.createElement('div');nm.className='card-nm';nm.textContent=preset.name;nm.style.color=col+'cc';
-  card.appendChild(wrap);card.appendChild(sep);card.appendChild(nm);
-  card.addEventListener('click',()=>selectPreset(idx));
-  requestAnimationFrame(()=>drawCard(cv,preset));
-  return card;
-}
-function drawCard(cv,preset){
-  const w=cv.offsetWidth||90,h=cv.offsetHeight||70,dpr=window.devicePixelRatio||1;
-  cv.width=w*dpr;cv.height=h*dpr;const x=cv.getContext('2d');if(!x)return;
-  x.scale(dpr,dpr);
-  const mg=4,cw=w-2*mg,ch=h-2*mg,col=MODE_COLORS[preset.library]||'#9ccfd8';
-  x.fillStyle='#191724';x.fillRect(0,0,w,h);
-  x.strokeStyle='#1c1a28';x.lineWidth=0.5;
-  for(let i=0;i<=4;i++){x.beginPath();x.moveTo(mg+i*cw/4,mg);x.lineTo(mg+i*cw/4,mg+ch);x.stroke();
-    x.beginPath();x.moveTo(mg,mg+i*ch/4);x.lineTo(mg+cw,mg+i*ch/4);x.stroke();}
-  x.strokeStyle='#22203a';x.lineWidth=1.2;
-  x.beginPath();x.moveTo(mg+cw/2,mg);x.lineTo(mg+cw/2,mg+ch);x.stroke();
-  x.beginPath();x.moveTo(mg,mg+ch/2);x.lineTo(mg+cw,mg+ch/2);x.stroke();
-  x.strokeStyle=col+'33';x.lineWidth=0.8;x.strokeRect(mg,mg,cw,ch);
-  // Draw oscillator shape for spring/elastic presets
-  if(['spring','elastic'].includes(preset.library)){
-    const params=preset.params||{};
-    const N=60;x.strokeStyle=col;x.lineWidth=1.8;x.beginPath();
-    if(preset.library==='spring'){
-      const z=params.zeta||0.3,w=params.omega_n||8.0;
-      const tS=4.6/(Math.max(0.01,z)*Math.max(0.1,w));
-      const yMax=1.5;
-      for(let i=0;i<=N;i++){
-        const tr=i/N*tS,val=evalSpring(tr,z,w);
-        const px=mg+i/N*cw,py=(mg+ch)-(val/yMax)*ch;
-        i===0?x.moveTo(px,py):x.lineTo(px,py);
-      }
-    } else {
-      const a=params.amplitude||1.0,p=params.period||0.3;
-      const yMin=-1.2,yRng=2.5;
-      for(let i=0;i<=N;i++){
-        const val=evalElastic(i/N,a,p);
-        const px=mg+i/N*cw,py=(mg+ch)-((val-yMin)/yRng)*ch;
-        i===0?x.moveTo(px,py):x.lineTo(px,py);
-      }
-    }
-    x.stroke();
-    return;
-  }
-  const ph1=preset.h1||[0.42,0],ph2=preset.h2||[0.58,1];
-  function tp(t,v){return{x:mg+t*cw,y:(mg+ch)-v*ch};}
-  const s=tp(0,0),e=tp(1,1),c1=tp(...ph1),c2=tp(...ph2);
-  x.strokeStyle=col;x.lineWidth=1.8;
-  x.beginPath();x.moveTo(s.x,s.y);x.bezierCurveTo(c1.x,c1.y,c2.x,c2.y,e.x,e.y);x.stroke();
-}
-function selectPreset(idx){
-  selIdx=idx;const p=allPresets[idx];if(!p)return;
-  h1=[...(p.h1||[0.42,0])];h2=[...(p.h2||[0.58,1])];
-  if(isSpring()&&p.params){if(p.params.zeta!=null)physZeta=p.params.zeta;if(p.params.omega_n!=null)physOmegaN=p.params.omega_n;syncSpringSliders();}
-  if(isElastic()&&p.params){if(p.params.amplitude!=null)elAmp=p.params.amplitude;if(p.params.period!=null)elPeriod=p.params.period;syncElasticSliders();}
-  setLibrary(p.library||'easing');drawCurve();updateLookup();pushState();
-  document.querySelectorAll('.pcard').forEach(c=>{
-    const ci=+c.dataset.idx,active=ci===idx,pc=MODE_COLORS[(allPresets[ci]||{}).library]||'#26233a';
-    c.classList.toggle('sel',active);c.style.borderColor=active?pc:pc+'66';
-    c.querySelector('.card-nm').style.color=active?pc:pc+'cc';
-  });
-}
-function saveCurrentPreset(){showDlg('Preset name:','',(n)=>{
-  if(!backend)return;const p={name:n,library:mode,h1:[...h1],h2:[...h2]};
-  if(isSpring())p.params={zeta:physZeta,omega_n:physOmegaN};
-  if(isElastic())p.params={amplitude:elAmp,period:elPeriod};
-  backend.save_preset(JSON.stringify(p));
-});}
-function deleteSelectedPreset(){if(selIdx>=0&&backend)backend.delete_preset(selIdx);}
-/* ── Profiles (custom dropdown, no white flash) ── */
-function renderProfiles(d){
-  profileNames=d.names||[];activeProfile=d.active||'Default';
-  document.getElementById('profile-name').textContent=activeProfile;
-  renderProfileOptions();
-}
-function renderProfileOptions(){
-  const opts=document.getElementById('profile-opts');opts.innerHTML='';
-  profileNames.forEach(n=>{
-    const div=document.createElement('div');div.className='prof-opt'+(n===activeProfile?' active':'');
-    div.textContent=n;
-    div.onclick=e=>{e.stopPropagation();activeProfile=n;document.getElementById('profile-name').textContent=n;closeProfileDrop();if(backend)backend.switch_profile(n);};
-    opts.appendChild(div);
-  });
-}
-function toggleProfileDrop(e){e.stopPropagation();document.getElementById('profile-opts').classList.toggle('open');}
-function closeProfileDrop(){document.getElementById('profile-opts').classList.remove('open');}
-function promptNewProfile(){showDlg('New profile name:','',(n)=>backend&&backend.new_profile(n));}
-function deleteProfile(){if(activeProfile&&backend)backend.delete_profile(activeProfile);}
-function toggleMaximize(){if(backend)backend.toggle_maximize();}
-function setPreviewShape(s){ _pvShape=s; }
-function togglePanelMenu(){
-  const m=document.getElementById('panel-menu');
-  m.style.display=m.style.display==='none'?'block':'none';
-}
-function closePanelMenu(){
-  const m=document.getElementById('panel-menu');
-  if(m) m.style.display='none';
-}
-/* ── Sidebar hide toggles ── */
-let leftHidden=false, rightHidden=false;
-function toggleSidebar(side){
-  if(side==='left'){
-    leftHidden=!leftHidden;
-    document.getElementById('preset-panel').style.display=leftHidden?'none':'';
-    document.getElementById('dh-left').style.display=leftHidden?'none':'';
-    document.getElementById('btn-hide-left').textContent=leftHidden?'▶':'◀';
-  } else {
-    rightHidden=!rightHidden;
-    document.getElementById('right-panel').style.display=rightHidden?'none':'';
-    document.getElementById('dh-right').style.display=rightHidden?'none':'';
-    document.getElementById('btn-hide-right').textContent=rightHidden?'◀':'▶';
-  }
-}
+        channel = QWebChannel(view.page())
+        channel.registerObject("backend", self)
+        view.page().setWebChannel(channel)
 
-/* ── Right panel tabs ── */
-function setRPTab(tab){
-  document.getElementById('rp-preview').style.display=tab==='preview'?'flex':'none';
-  document.getElementById('rp-settings').style.display=tab==='settings'?'flex':'none';
-  document.getElementById('tab-preview').classList.toggle('active',tab==='preview');
-  document.getElementById('tab-settings').classList.toggle('active',tab==='settings');
-  _setAnimVisible(tab==='preview');
-}
+        dock_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.html")
+        url = QUrl.fromLocalFile(dock_path)
+        url.setQuery(f"dock={panel_id}")
+        view.load(url)
 
-/* ── Dock system ── */
-const DOCK_CFG = {
-  left:  { panelId:'preset-panel', dhId:'dh-left',  hideBtn:'btn-hide-left',  title:'PRESETS',  floatId:'dock-left'  },
-  right: { panelId:'right-panel',  dhId:'dh-right', hideBtn:'btn-hide-right', title:'PREVIEW',  floatId:'dock-right' },
-  curve: { panelId:'curve-wrap',   dhId:null,        hideBtn:null,             title:'CURVE',    floatId:'dock-curve' },
-};
-const _docked = { left:true, right:true };
+        lay = QVBoxLayout(dlg)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(view)
 
-function popOut(side){
-  const cfg = DOCK_CFG[side];
-  const panel = document.getElementById(cfg.panelId);
-  if(!panel) return;
+        dlg.show()
+        self._dock_windows[panel_id] = dlg
 
-  if(!_docked[side]){
-    // Already floating — re-dock
-    dockBack(side); return;
-  }
+    @Slot()
+    def toggle_maximize(self):
+        if self._win.isMaximized():
+            self._win.showNormal()
+        else:
+            self._win.showMaximized()
 
-  // Create float wrapper
-  let floater = document.getElementById(cfg.floatId);
-  if(!floater){
-    floater = document.createElement('div');
-    floater.id = cfg.floatId;
-    floater.className = 'dock-float';
+    @Slot()
+    def minimize_window(self):
+        self._win.showMinimized()
 
-    // Bar
-    const bar = document.createElement('div');
-    bar.className = 'dock-bar';
-    bar.innerHTML = `
-      <span class="dock-bar-title">${cfg.title}</span>
-      <button class="dock-btn" onclick="dockBack('${side}')" title="Re-dock">⊟</button>
-      <button class="dock-btn close-btn" onclick="closeDock('${side}')" title="Cerrar">×</button>`;
-    _makeDraggable(bar, floater);
+    @Slot()
+    def close_window(self):
+        self._win.close()
 
-    const body = document.createElement('div');
-    body.className = 'dock-body';
-    body.id = cfg.floatId + '-body';
+    # ── Resolve connection ────────────────────────────────────────────────────
 
-    floater.appendChild(bar);
-    floater.appendChild(body);
-    document.body.appendChild(floater);
-    _watchDockResize(floater);
-  }
+    def set_comp(self, comp):
+        self._comp = comp
+        if self._watcher:
+            self._watcher.stop()
+            self._watcher = None
+        self._start_watcher()
+        self._announce_connection()
 
-  // Move panel into float body
-  const body = document.getElementById(cfg.floatId + '-body');
-  body.appendChild(panel);
+    @Slot(str)
+    def reconnect(self, custom_path=""):
+        from core.resolve_connection import get_resolve, get_comp
+        self.connection_changed.emit(False, "Connecting…")
+        try:
+            s = json.loads(self.get_settings())
+            cp = custom_path.strip() or s.get("dvr_path", "")
+        except Exception:
+            cp = custom_path.strip()
+        resolve = get_resolve(cp)
+        if resolve:
+            from core.resolve_connection import get_comp as _gc
+            self.set_comp(_gc(resolve))
+        else:
+            self.connection_changed.emit(False, "Not connected — check Preferences > External Scripting")
 
-  // Size and position
-  const rect = panel.getBoundingClientRect();
-  const W = side==='curve' ? 420 : Math.max(200, rect.width);
-  const H = side==='curve' ? 420 : Math.max(300, rect.height + 30);
-  floater.style.width  = W + 'px';
-  floater.style.height = H + 'px';
-  floater.style.left   = (side==='left' ? 60 : side==='curve' ? (window.innerWidth-W)/2 : window.innerWidth-W-60) + 'px';
-  floater.style.top    = '60px';
-  floater.classList.remove('hidden');
-  if(side==='curve') requestAnimationFrame(resizeCanvas);
+    def _announce_connection(self):
+        if self._comp:
+            try:
+                comp_name = self._comp.GetAttrs().get("COMPS_Name", "Fusion")
+                edition = "Free"
+                ver_str = ""
+                try:
+                    fu = (self._comp.GetFusion() if hasattr(self._comp, "GetFusion")
+                          else getattr(self._comp, "Fusion", None))
+                    if fu:
+                        # Version number
+                        v = getattr(fu, "Version", None)
+                        if callable(v): v = v()
+                        if isinstance(v, dict):
+                            maj = v.get("VersionMajor") or v.get("Major", "")
+                            ver_str = f"v{maj}" if maj else ""
+                        elif v:
+                            ver_str = f"v{str(v)[:4]}"
+                        # Studio detection: IsRegistered exists and returns True only in Studio
+                        is_reg = getattr(fu, "IsRegistered", None)
+                        if callable(is_reg) and is_reg():
+                            edition = "Studio"
+                        # Fallback: try accessing Resolve object — only works in Studio
+                        elif hasattr(fu, "GetResolve"):
+                            try:
+                                r = fu.GetResolve()
+                                if r: edition = "Studio"
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+                label = f"Connected · DaVinci {edition}"
+                if ver_str: label += f" {ver_str}"
+                self.connection_changed.emit(True, label)
+            except Exception:
+                self.connection_changed.emit(True, "Connected")
+        else:
+            self.connection_changed.emit(False, "Not connected")
 
-  // Collapse original slot
-  const dh = document.getElementById(cfg.dhId);
-  if(dh) dh.style.display = 'none';
+    @Slot(int, int)
+    def resize_window(self, w: int, h: int):
+        self._win.resize(w, h)
 
-  _docked[side] = false;
-}
+    @Slot(str)
+    def start_system_resize(self, edge: str):
+        from PySide6.QtCore import Qt
+        edges = {
+            'right':  Qt.Edge.RightEdge,
+            'left':   Qt.Edge.LeftEdge,
+            'bottom': Qt.Edge.BottomEdge,
+            'br': Qt.Edge.RightEdge | Qt.Edge.BottomEdge,
+            'bl': Qt.Edge.LeftEdge  | Qt.Edge.BottomEdge,
+        }.get(edge, Qt.Edge.RightEdge | Qt.Edge.BottomEdge)
+        try:
+            self._win.windowHandle().startSystemResize(edges)
+        except Exception:
+            pass
 
-function dockBack(side){
-  const cfg = DOCK_CFG[side];
-  const floater = document.getElementById(cfg.floatId);
-  const panel   = document.getElementById(cfg.panelId);
-  if(!floater || !panel) return;
+    @Slot(bool)
+    def set_always_on_top(self, enabled: bool):
+        from PySide6.QtCore import Qt
+        flag = Qt.WindowType.WindowStaysOnTopHint
+        # Main window
+        flags = self._win.windowFlags()
+        if enabled: flags |= flag
+        else: flags &= ~flag
+        self._win.setWindowFlags(flags)
+        self._win.show()
+        # All dock windows
+        for dlg in getattr(self, '_dock_windows', {}).values():
+            if dlg and dlg.isVisible():
+                f = dlg.windowFlags()
+                if enabled: f |= flag
+                else: f &= ~flag
+                dlg.setWindowFlags(f)
+                dlg.show()
 
-  const main = document.getElementById('main');
-  if(side === 'left'){
-    main.insertBefore(panel, main.firstChild);
-  } else if(side === 'right'){
-    main.appendChild(panel);
-  } else if(side === 'curve'){
-    // Re-insert curve-wrap between dh-left and dh-right
-    const dhRight = document.getElementById('dh-right');
-    main.insertBefore(panel, dhRight);
-    panel.style.flex = '1';
-    requestAnimationFrame(resizeCanvas);
-  }
-  panel.style.display = '';
+    @Slot(bool)
+    def set_auto_apply(self, enabled: bool):
+        self._auto_apply = enabled
+        if not enabled:
+            self._auto_timer.stop()
 
-  if(cfg.dhId){ const dh=document.getElementById(cfg.dhId); if(dh) dh.style.display=''; }
-  floater.classList.add('hidden');
-  _docked[side] = true;
-}
+    @Slot(result=str)
+    def get_debug_info(self) -> str:
+        import platform as _pl, sys as _sys
+        lines = []
+        lines.append(f"=== MFlow Debug ===")
+        lines.append(f"Python:    {_sys.version}")
+        lines.append(f"Platform:  {_pl.platform()}")
+        lines.append(f"Mode:      {self._mode}  zeta={self._phys_zeta:.3f}  omega={self._phys_omega_n:.2f}")
+        lines.append(f"Connected: {self._comp is not None}  watcher={bool(self._watcher and self._watcher._timer.isActive())}")
 
-function closeDock(side){
-  // Always return panel to original layout, never just hide
-  dockBack(side);
-}
+        if self._comp:
+            try:
+                ca = self._comp.GetAttrs()
+                lines.append(f"Comp:      {ca.get('COMPS_Name','?')}  fps={ca.get('COMPN_FPS','?')}  frame={ca.get('COMPN_CurrentTime','?')}")
+            except Exception as e:
+                lines.append(f"Comp:      error reading attrs ({e})")
 
-function _makeDraggable(handle, el){
-  let ox=0,oy=0,ex=0,ey=0;
-  handle.addEventListener('mousedown',e=>{
-    if(e.target.closest('button'))return;
-    e.preventDefault();
-    ex=e.clientX;ey=e.clientY;ox=el.offsetLeft;oy=el.offsetTop;
-    const mv=e2=>{
-      el.style.left=Math.max(0,ox+e2.clientX-ex)+'px';
-      el.style.top=Math.max(0,oy+e2.clientY-ey)+'px';
-      // Trigger canvas resize if curve dock is being moved
-      if(el.id==='dock-curve') resizeCanvas();
-    };
-    const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);};
-    document.addEventListener('mousemove',mv);
-    document.addEventListener('mouseup',up);
-  });
-}
+            tool = None
+            try:
+                tool = self._comp.ActiveTool
+                if tool:
+                    ta = tool.GetAttrs()
+                    lines.append(f"ActiveTool: {ta.get('TOOLS_Name','?')} ({ta.get('TOOLS_RegID','?')})")
+                else:
+                    lines.append("ActiveTool: None")
+            except Exception as e:
+                lines.append(f"ActiveTool: error ({e})")
 
-function _watchDockResize(floater){
-  if(floater.id==='dock-curve'){
-    new ResizeObserver(()=>{clearTimeout(floater._rt);floater._rt=setTimeout(resizeCanvas,60);}).observe(floater);
-  }
-}
-let GRID_COLOR='#1c1a28';
-function liveVar(v,c){document.documentElement.style.setProperty(v,c);}
-function liveColor(m,c){MODE_COLORS[m]=c;if(mode===m)setMode(m);}
-function resetColors(){
-  const defs={base:'#121217',surface:'#191724',overlay:'#1f1d2e',
-    border:'#26233a',text:'#e0def4',muted:'#6e6a86'};
-  GRID_COLOR='#1c1a28';
-  for(const[k,v] of Object.entries(defs)){
-    liveVar('--'+k,v);
-    const el=document.getElementById('cc-'+k);if(el)el.value=v;
-  }
-  const gc=document.getElementById('cc-grid');if(gc)gc.value='#1c1a28';
-  drawCurve();
-}
+            if tool:
+                lines.append("--- Inputs ---")
+                try:
+                    for inp in (tool.GetInputList() or {}).values():
+                        try:
+                            ia = inp.GetAttrs()
+                            iid = ia.get("INPS_ID", "?")
+                            if not iid or iid == "?":
+                                continue
+                            # Try GetKeyFrames on input directly
+                            kf_count = "?"
+                            kf_range = "?"
+                            obj_used = "inp"
+                            try:
+                                sd = inp.GetKeyFrames()
+                                if isinstance(sd, dict):
+                                    kf_count = len(sd)
+                                    if kf_count >= 2:
+                                        times = sorted(sd.keys(), key=float)
+                                        kf_range = f"{float(times[0]):.0f}→{float(times[-1]):.0f}"
+                            except Exception:
+                                pass
+                            # Try connected tool if input returned nothing
+                            if kf_count in ("?", 0, 1):
+                                try:
+                                    out = inp.GetConnectedOutput()
+                                    if out:
+                                        ct = out.GetTool()
+                                        if ct:
+                                            sd2 = ct.GetKeyFrames()
+                                            if isinstance(sd2, dict):
+                                                kf_count = len(sd2)
+                                                obj_used = f"tool({ct.GetAttrs().get('TOOLS_RegID','?')})"
+                                                if kf_count >= 2:
+                                                    times = sorted(sd2.keys(), key=float)
+                                                    kf_range = f"{float(times[0]):.0f}→{float(times[-1]):.0f}"
+                                except Exception:
+                                    pass
+                            lines.append(f"  {iid}: kf={kf_count} range={kf_range} via={obj_used}")
+                        except Exception as e:
+                            lines.append(f"  (input error: {e})")
+                except Exception as e:
+                    lines.append(f"  GetInputList error: {e}")
 
-/* ── Python list in PARAMS tab ── */
-let detectedPythons=[], activePython='';
-function renderPythonList(list, active){
-  detectedPythons=list; activePython=active||list[0]||'';
-  const sel=document.getElementById('s-py-sel'); if(!sel)return;
-  sel.innerHTML='';
-  list.forEach(p=>{
-    const opt=document.createElement('option');
-    opt.value=p; opt.textContent=p; opt.selected=(p===activePython);
-    sel.appendChild(opt);
-  });
-  const inp=document.getElementById('s-py');
-  if(inp&&!inp.value) inp.value=activePython;
-}
-function rescanPython(){
-  if(backend) backend.scan_pythons(function(res){
-    try{const d=JSON.parse(res); renderPythonList(d.pythons,d.active);}catch(e){}
-  });
-}
+        return "\n".join(lines)
 
-/* ── Inputs list in PARAMS tab (reuse tool_updated signal) ── */
-function renderInputsList(data){
-  const c=document.getElementById('inp-list'); if(!c)return; c.innerHTML='';
-  if(!data||!Object.keys(data.inputs||{}).length){
-    const ph=document.createElement('div');
-    ph.textContent='No hay inputs animados'; ph.style.cssText='font-size:6pt;color:var(--muted);padding:4px';
-    c.appendChild(ph); return;
-  }
-  const col=_nodeColor(data.name||'');
-  Object.entries(data.inputs).forEach(([id,meta])=>{
-    const row=document.createElement('div');
-    row.className='inp-row'+(id===selInpId?' sel':'');
-    row.style.setProperty('--node-col',col);
-    row.innerHTML=`<div class="inp-dot"></div><div class="inp-lbl">${meta.label}</div><div class="inp-kf">${meta.kf_count} kf</div>`;
-    row.onclick=()=>{selInpId=id;document.querySelectorAll('.inp-row').forEach(r=>r.classList.remove('sel'));row.classList.add('sel');if(backend)backend.select_input(data.name,id);updateStatus();};
-    c.appendChild(row);
-  });
-}
-function toggleParams(){
-  paramsOpen=!paramsOpen;
-  document.getElementById('params-sidebar').classList.toggle('open',paramsOpen);
-  document.getElementById('params-toggle').classList.toggle('active',paramsOpen);
-}
-// Rose Pine node colors — ordered so adjacent tools never share adjacent palette entries
-const NODE_PALETTE=['#9ccfd8','#c4a7e7','#f6c177','#ebbcba','#eb6f92','#31748f','#907aa9'];
-const _nodeColors={};
-let _lastNodeColorIdx=-1;
-function _nodeColor(name){
-  if(_nodeColors[name]) return _nodeColors[name];
-  // Pick next color that isn't adjacent to last used
-  let idx=(_lastNodeColorIdx+2)%NODE_PALETTE.length; // skip 1 to avoid adjacency
-  _nodeColors[name]=NODE_PALETTE[idx];
-  _lastNodeColorIdx=idx;
-  return _nodeColors[name];
-}
+    def _start_watcher(self):
+        if self._comp is None:
+            return
+        from core.resolve_connection import ResolveWatcher
+        self._watcher = ResolveWatcher(self._comp, self)
+        self._watcher.tool_changed.connect(self._on_tool_changed)
+        self._watcher.disconnected.connect(self._on_disconnected)
+        self._watcher.start()
 
-function renderParamsTree(data){
-  const tree=document.getElementById('params-tree'),ph=document.getElementById('params-ph');
-  tree.innerHTML='';
-  if(!data.name||!Object.keys(data.inputs||{}).length){ph.style.display='';return;}
-  ph.style.display='none';
-  const col=_nodeColor(data.name);
-  const hdr=document.createElement('div');
-  hdr.className='tool-hdr';
-  hdr.style.cssText=`color:${col};border-bottom-color:${col}22`;
-  hdr.textContent=data.name;
-  tree.appendChild(hdr);
-  Object.entries(data.inputs).forEach(([id,meta])=>{
-    const row=document.createElement('div');
-    row.className='inp-row'+(id===selInpId?' sel':'');
-    row.style.setProperty('--node-col',col);
-    row.innerHTML=`<div class="inp-dot"></div><div class="inp-lbl">${meta.label}</div><div class="inp-kf">${meta.kf_count} kf</div>`;
-    row.onclick=()=>{
-      selInpId=id;
-      document.querySelectorAll('.inp-row').forEach(r=>r.classList.remove('sel'));
-      row.classList.add('sel');
-      if(backend)backend.select_input(data.name,id);
-      updateStatus();
-    };
-    tree.appendChild(row);
-  });
-}
-/* ── OKF ── */
-function toggleOKF(){
-  okfActive=!okfActive;const btn=document.getElementById('okf-toggle');
-  btn.textContent=okfActive?'ON':'OFF';btn.classList.toggle('on',okfActive);
-  document.getElementById('okf-ctrl').classList.toggle('enabled',okfActive);
-  drawCurve();updateLookup();pushState();
-}
-function addOKFPoint(){
-  const ts=[0,...okfPoints.map(p=>p.t),1];let maxG=0,bestMid=0.5;
-  for(let i=0;i<ts.length-1;i++){const g=ts[i+1]-ts[i];if(g>maxG){maxG=g;bestMid=(ts[i]+ts[i+1])/2;}}
-  okfPoints.push({t:bestMid,v:evalBz(bestMid,h1[0],h1[1],h2[0],h2[1]),lh:[-0.08,0],rh:[0.08,0],tangent:curTangent});
-  okfPoints.sort((a,b)=>a.t-b.t);drawCurve();updateLookup();pushState();
-}
-function removeOKFPoint(){if(okfPoints.length){okfPoints.pop();drawCurve();updateLookup();pushState();}}
-function setTangent(t){
-  curTangent=t;okfPoints.forEach(p=>p.tangent=t);
-  ['smooth','broken','sym'].forEach(m=>document.getElementById('tang-'+m).classList.toggle('active',m===t));
-  drawCurve();pushState();
-}
-/* ── Dialog ── */
-let dlgCb=null;
-function showDlg(title,def,cb){dlgCb=cb;document.getElementById('dlg-title').textContent=title;
-  document.getElementById('dlg-inp').value=def||'';document.getElementById('name-dlg').classList.add('open');
-  setTimeout(()=>document.getElementById('dlg-inp').focus(),80);}
-function dlgOK(){const v=document.getElementById('dlg-inp').value.trim();document.getElementById('name-dlg').classList.remove('open');if(dlgCb&&v)dlgCb(v);dlgCb=null;}
-function dlgCancel(){document.getElementById('name-dlg').classList.remove('open');dlgCb=null;}
-/* ── Settings ── */
-function openSettings(){document.getElementById('s-ov').classList.add('open');}
-function closeSettings(){document.getElementById('s-ov').classList.remove('open');}
-function saveSettings(){
-  const s={dvr_path:document.getElementById('s-dvr').value,python_path:document.getElementById('s-py').value,
-    bake_fps:+document.getElementById('s-fps').value,always_on_top:document.getElementById('s-aot').checked,
-    auto_apply:document.getElementById('s-aa2').checked,theme:document.getElementById('s-theme').value,
-    mode_colors:{easing:document.getElementById('sc-easing').value,spring:document.getElementById('sc-spring').value,
-      elastic:document.getElementById('sc-elastic').value,overframe:document.getElementById('sc-overframe').value}};
-  if(backend){backend.save_settings(JSON.stringify(s));backend.set_always_on_top(s.always_on_top);}
-  applySettingsUI(s);closeSettings();
-}
-function resetSettings(){if(confirm('Reset all settings?')){if(backend)backend.save_settings('{}');closeSettings();}}
-function applySettingsUI(s){
-  if(s.mode_colors)Object.assign(MODE_COLORS,s.mode_colors);
-  if(s.theme)applyTheme(s.theme);if(s.auto_apply!=null)applyAA(s.auto_apply);setMode(mode);}
-function applyTheme(cls){document.body.className=(compact?'compact ':'')+cls;}
-/* ── Debug (callback-based — no [object Promise]) ── */
-function openDebug(){document.getElementById('dbg-ov').classList.add('open');refreshDebug();}
-function refreshDebug(){
-  const el=document.getElementById('dbg-content');
-  el.textContent='Fetching…';
-  if(!backend){el.textContent='Backend not connected.';return;}
-  try{
-    backend.get_debug_info(function(result){
-      el.textContent=result||'(empty)';
-    });
-  }catch(e){el.textContent='Error: '+e;}
-}
-function copyDebug(){
-  const text=document.getElementById('dbg-content').textContent;
-  if(navigator.clipboard){navigator.clipboard.writeText(text);}
-  else{const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
-  setStatus('Debug info copied to clipboard','var(--foam)');
-}
-</script>
-</body>
-</html>
+    def _on_tool_changed(self, name, inputs):
+        payload = {
+            "name": name,
+            "inputs": {
+                k: {"label": v["label"], "kf_count": v["kf_count"]}
+                for k, v in inputs.items()
+            }
+        }
+        self.tool_updated.emit(json.dumps(payload))
+
+    def _on_disconnected(self):
+        self.connection_changed.emit(False, "Disconnected")
+
+    # ── State from JS ─────────────────────────────────────────────────────────
+
+    @Slot(str)
+    def set_curve_state(self, data_json):
+        """JS calls this whenever h1/h2/mode/overframe_points change."""
+        d = json.loads(data_json)
+        self._h1       = d.get("h1", self._h1)
+        self._h2       = d.get("h2", self._h2)
+        self._mode     = d.get("mode", self._mode)
+        self._of_points    = d.get("of_points", [])
+        self._phys_zeta    = float(d.get("phys_zeta",    self._phys_zeta))
+        self._phys_omega_n = float(d.get("phys_omega_n", self._phys_omega_n))
+        self._el_amplitude = float(d.get("el_amplitude", self._el_amplitude))
+        self._el_period    = float(d.get("el_period",    self._el_period))
+        if self._auto_apply and self._comp:
+            self._auto_timer.start(280)   # debounce 280 ms
+
+    @Slot(str, str)
+    def select_input(self, tool_name, inp_id):
+        self._sel_inp = (tool_name, inp_id)
+
+    # ── Presets ───────────────────────────────────────────────────────────────
+
+    @Slot(str)
+    def load_library(self, library):
+        builtin = load_builtin(library)
+        user    = [p for p in active_presets(self._profiles)
+                   if p.get("library") == library]
+        self.presets_updated.emit(json.dumps(builtin + user))
+
+    @Slot(str)
+    def save_preset(self, preset_json):
+        p = json.loads(preset_json)
+        self._profiles = add_preset(self._profiles, p)
+        self.load_library(p.get("library", "easing"))
+
+    @Slot(int)
+    def delete_preset(self, idx):
+        self._profiles = delete_preset(self._profiles, idx)
+        self.load_library(self._mode)
+
+    @Slot(str)
+    def new_profile(self, name):
+        self._profiles = new_profile(self._profiles, name.strip())
+        self._emit_profiles()
+
+    @Slot(str)
+    def delete_profile(self, name):
+        self._profiles = delete_profile(self._profiles, name)
+        self._emit_profiles()
+
+    @Slot(str)
+    def switch_profile(self, name):
+        self._profiles = switch_profile(self._profiles, name)
+        self.load_library(self._mode)
+
+    def _emit_profiles(self):
+        self.profiles_updated.emit(json.dumps({
+            "names":  list(self._profiles["profiles"].keys()),
+            "active": self._profiles["active"],
+        }))
+
+    # ── Apply ─────────────────────────────────────────────────────────────────
+
+    @Slot()
+    def apply_curve(self):
+        self._do_apply(all_inputs=False)
+
+    @Slot()
+    def apply_curve_all(self):
+        self._do_apply(all_inputs=True)
+
+    def _do_apply(self, all_inputs):
+        if self._comp is None:
+            self.apply_done.emit(False, "Not connected to Resolve")
+            return
+        try:
+            tool = self._comp.ActiveTool
+        except Exception:
+            self.apply_done.emit(False, "Could not read active tool")
+            return
+        if not tool:
+            self.apply_done.emit(False, "No tool selected in Fusion")
+            return
+
+        fps = self._fps
+        try:
+            fps = float(self._comp.GetAttrs().get("COMPN_FPS", fps))
+        except Exception:
+            pass
+
+        if self._watcher is None:
+            self.apply_done.emit(False, "Watcher not running")
+            return
+
+        all_inp = self._watcher._animated_inputs(tool)
+        if not all_inp:
+            self.apply_done.emit(False, "No animated inputs found on this tool")
+            return
+
+        if all_inputs:
+            targets = all_inp
+        elif self._sel_inp:
+            _, sel_id = self._sel_inp
+            targets = {sel_id: all_inp[sel_id]} if sel_id in all_inp else all_inp
+        else:
+            targets = all_inp
+
+        applied = 0
+        no_spline = 0
+        failed = 0
+        try:
+            self._comp.StartUndo("MFlow: Apply")
+            self._comp.Lock()
+            for inp_id, meta in targets.items():
+                spline = self._get_spline(meta["input_obj"])
+                if spline is None:
+                    no_spline += 1
+                    print(f"[MFlow] _do_apply: no BezierSpline for input '{inp_id}'")
+                    continue
+                if self._apply_one(spline, fps):
+                    applied += 1
+                else:
+                    failed += 1
+            self._comp.Unlock()
+            self._comp.EndUndo(True)
+        except Exception as e:
+            try: self._comp.Unlock(); self._comp.EndUndo(True)
+            except Exception: pass
+            self.apply_done.emit(False, f"Exception: {e}")
+            return
+
+        if applied:
+            self.apply_done.emit(True, f"Applied to {applied} input(s) on '{tool.Name}'")
+        elif no_spline > 0 and failed == 0:
+            self.apply_done.emit(False,
+                f"No BezierSpline found on {no_spline} input(s). "
+                f"Right-click the parameter in Fusion > Animate to create keyframes first.")
+        elif failed > 0:
+            self.apply_done.emit(False,
+                f"Apply failed on {failed} input(s). "
+                f"Check the terminal for [MFlow] lines.")
+        else:
+            self.apply_done.emit(False, "No animated inputs found on active tool.")
+
+    def _get_spline(self, inp):
+        """
+        Return the object on which GetKeyFrames/SetKeyFrames should be called.
+        For scalar inputs: return the connected BezierSpline tool.
+        For Point2D inputs (Center, Pivot): return the first scalar sub-input
+        that has >= 2 keyframes (e.g. X channel).
+        """
+        # 1. Connected BezierSpline tool — for scalar inputs
+        try:
+            out = inp.GetConnectedOutput()
+            if out:
+                tool = out.GetTool()
+                if tool:
+                    get_kf = getattr(tool, "GetKeyFrames", None)
+                    set_kf = getattr(tool, "SetKeyFrames", None)
+                    if callable(get_kf) and callable(set_kf):
+                        sd = get_kf()
+                        if isinstance(sd, dict) and len(sd) >= 2:
+                            # Verify values are scalar (not Point2D dicts with sub-keys)
+                            vals = list(sd.values())
+                            first = vals[0]
+                            if not isinstance(first, dict) or 2 not in first:
+                                return tool
+        except Exception:
+            pass
+
+        # 2. Try sub-inputs for Point2D types (Center.X, Center.Y etc.)
+        try:
+            sub_list = inp.GetSubInputList() if hasattr(inp, "GetSubInputList") else None
+            if sub_list:
+                for sub in sub_list.values():
+                    try:
+                        sub_out = sub.GetConnectedOutput()
+                        if sub_out:
+                            tool = sub_out.GetTool()
+                            if tool:
+                                get_kf = getattr(tool, "GetKeyFrames", None)
+                                set_kf = getattr(tool, "SetKeyFrames", None)
+                                if callable(get_kf) and callable(set_kf):
+                                    sd = get_kf()
+                                    if isinstance(sd, dict) and len(sd) >= 2:
+                                        return tool
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
+        # 3. Input directly — last resort for compound inputs
+        try:
+            get_kf = getattr(inp, "GetKeyFrames", None)
+            set_kf = getattr(inp, "SetKeyFrames", None)
+            if callable(get_kf) and callable(set_kf):
+                sd = get_kf()
+                if isinstance(sd, dict) and len(sd) >= 2:
+                    return inp
+        except Exception:
+            pass
+
+        return None
+
+    def _apply_one(self, spline, fps):
+        mode = self._mode
+        h1, h2 = self._h1, self._h2
+        if mode == "easing":
+            return apply_bezier(spline, h1, h2)
+        if mode == "overframe":
+            pts = [OverframePoint(
+                t=p["t"], v=p["v"],
+                lh=p.get("lh", [-0.1, 0.0]),
+                rh=p.get("rh", [0.1, 0.0]),
+                tangent=p.get("tangent", "smooth"),
+            ) for p in self._of_points]
+            return apply_overframe(spline, h1, h2, pts) if pts else apply_bezier(spline, h1, h2)
+        r = self._kf_range(spline)
+        if mode == "elastic":
+            if not r: return False
+            t0, v0, t1, v1 = r
+            frames = bake_elastic_penner(t0, v0, t1, v1, fps,
+                                         amplitude=self._el_amplitude,
+                                         period=self._el_period)
+            return apply_baked(spline, frames)
+        if mode in ("spring", "bounce"):
+            if not r: return False
+            t0, v0, t1, v1 = r
+            frames = bake_oscillator(t0, v0, t1, v1, fps,
+                                     zeta=self._phys_zeta,
+                                     omega_n=self._phys_omega_n)
+            return apply_baked(spline, frames)
+        return apply_bezier(spline, h1, h2)
+
+    def _kf_range(self, spline):
+        """Read t0,v0,t1,v1 from the spline object (PlainInput or BezierSpline tool)."""
+        try:
+            get_kf = getattr(spline, "GetKeyFrames", None)
+            if not callable(get_kf): return None
+            sd = get_kf()
+            if not isinstance(sd, dict) or len(sd) < 2: return None
+            times = sorted(sd.keys(), key=lambda x: float(x))
+            k0, k1 = times[0], times[-1]
+            def _v(k):
+                e = sd[k]
+                if isinstance(e, dict):
+                    for key in (1, 1.0, "Value"):
+                        if key in e and isinstance(e[key], (int, float)):
+                            return float(e[key])
+                    return 0.0
+                return float(e) if isinstance(e, (int, float)) else 0.0
+            return float(k0), _v(k0), float(k1), _v(k1)
+        except Exception:
+            return None
+
+    # ── Overframe baked presets ───────────────────────────────────────────────
+
+    # ── Settings ──────────────────────────────────────────────────────────────
+
+    @Slot(result=str)
+    def get_settings(self):
+        return json.dumps(self._settings)
+
+    @Slot(str)
+    def save_settings(self, s_json):
+        self._settings = json.loads(s_json)
+        self._fps = float(self._settings.get("bake_fps", 24))
+        _wj(settings_file(), self._settings)
+        self.settings_signal.emit(s_json)
+
+    @Slot(result=str)
+    def scan_pythons(self) -> str:
+        import glob, subprocess as sp
+        found = {}
+        def _probe(exe):
+            try:
+                r = sp.run([exe, "--version"], capture_output=True, text=True, timeout=5)
+                ver = (r.stdout+r.stderr).strip().replace("Python ","")
+                if ver and "3." in ver:
+                    found[exe] = ver
+            except Exception: pass
+        _probe(sys.executable)
+        import platform
+        if platform.system() == "Windows":
+            base = os.path.expandvars(r"%LOCALAPPDATA%\Programs\Python")
+            for exe in glob.glob(os.path.join(base,"Python3*","python.exe")):
+                _probe(exe)
+            for ver in ("3.12","3.11","3.10","3.9"):
+                try:
+                    r = sp.run(["py",f"-{ver}","-c","import sys;print(sys.executable)"],
+                               capture_output=True,text=True,timeout=5)
+                    exe=r.stdout.strip()
+                    if exe and os.path.isfile(exe): _probe(exe)
+                except Exception: pass
+        else:
+            import shutil
+            for name in ("python3","python3.12","python3.11","python3.10","python3.9"):
+                exe=shutil.which(name)
+                if exe: _probe(exe)
+        clean={k:v for k,v in found.items()
+               if "WindowsApps" not in k and "PythonSoftwareFoundation" not in k}
+        active=self._settings.get("python_path","") or sys.executable
+        return json.dumps({"pythons": list(clean.keys()), "active": active,
+                           "versions": clean})
+
+    @Slot(str)
+    def set_python_path(self, path: str):
+        self._settings["python_path"] = path
+        _wj(settings_file(), self._settings)
+
+    @Slot()
+    def export_settings(self):
+        path, _ = QFileDialog.getSaveFileName(
+            None, "Export Settings", "fusionflow-settings.json", "JSON (*.json)")
+        if path:
+            _wj(path, self._settings)
+            self.status_changed.emit("Settings exported", "#9ccfd8")
+
+    @Slot()
+    def import_settings(self):
+        path, _ = QFileDialog.getOpenFileName(
+            None, "Import Settings", "", "JSON (*.json)")
+        if path:
+            d = _rj(path)
+            if d:
+                self._settings = d
+                _wj(settings_file(), d)
+                self.settings_signal.emit(json.dumps(d))
+                self.status_changed.emit("Settings imported", "#9ccfd8")
+
+
