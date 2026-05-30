@@ -11,8 +11,22 @@ def app_data_dir() -> str:
         base = os.path.expanduser("~/Library/Application Support")
     else:
         base = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
-    p = os.path.join(base, "FusionFlow")
+    p = os.path.join(base, "MFlow")
     os.makedirs(p, exist_ok=True)
+    # Migrate data from old FusionFlow directory if it exists and MFlow is empty
+    old = os.path.join(base, "FusionFlow")
+    if os.path.isdir(old) and not any(
+        f.endswith((".json",)) for f in os.listdir(p)
+    ):
+        import shutil
+        for fname in os.listdir(old):
+            src = os.path.join(old, fname)
+            dst = os.path.join(p, fname)
+            if not os.path.exists(dst):
+                try:
+                    shutil.copy2(src, dst)
+                except Exception:
+                    pass
     return p
 
 def settings_file()       -> str: return os.path.join(app_data_dir(), "settings.json")

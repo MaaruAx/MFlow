@@ -190,7 +190,6 @@ def bake_elastic_penner(t0, v0, t1, v1, fps, amplitude=1.0, period=0.3):
         val = eval_elastic_penner(tn, amplitude, period)
         result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
     return result
-    return result
 
 
 # ── Resolve spline writing ────────────────────────────────────────────────────
@@ -230,7 +229,7 @@ def _write_handle(spline, frame, side, time, value):
 
 
 def _kf_scalar(entry):
-    """Extract float value from a keyframe entry (dict or scalar)."""
+    """Extract float value from a scalar keyframe entry."""
     if not isinstance(entry, dict):
         try: return float(entry)
         except Exception: return None
@@ -240,16 +239,37 @@ def _kf_scalar(entry):
     return None
 
 
+def _path_point(entry):
+    """Return [x,y] if entry is a Point2D keyframe, else None."""
+    if not isinstance(entry, dict): return None
+    raw = entry.get(1, entry.get(1.0))
+    if raw is None: return None
+    if isinstance(raw, (list, tuple)) and len(raw) >= 2:
+        return [float(raw[0]), float(raw[1])]
+    if isinstance(raw, dict):
+        x = raw.get(1, raw.get("x")); y = raw.get(2, raw.get("y"))
+        if x is not None and y is not None:
+            return [float(x), float(y)]
+    return None
+
+
+def _call_set_kf(obj, tbl) -> bool:
+    fn = getattr(obj, "SetKeyFrames", None)
+    if not callable(fn): return False
+    for args in ((tbl, True), (tbl,)):
+        try: fn(*args); return True
+        except Exception: continue
+    return False
+
+
 def apply_bezier(spline, h1: list, h2: list) -> bool:
     """
-    Apply cubic-bezier handles to a BezierSpline.
-    Uses GetKeyFrames + SetKeyFrames — works correctly when launched
-    via the bridge script inside Resolve's Python context.
+    Apply cubic-bezier handles to a BezierSpline or Point2D input.
+    Handles both scalar inputs and compound (Point2D) inputs like Center.
     """
     get_kf = getattr(spline, "GetKeyFrames", None)
-    set_kf = getattr(spline, "SetKeyFrames", None)
-    if not callable(get_kf) or not callable(set_kf):
-        print("[MFlow] apply_bezier: spline missing GetKeyFrames/SetKeyFrames")
+    if not callable(get_kf):
+        print("[MFlow] apply_bezier: no GetKeyFrames on object")
         return False
     try:
         sd = get_kf()
@@ -258,45 +278,46 @@ def apply_bezier(spline, h1: list, h2: list) -> bool:
         return False
 
     if not isinstance(sd, dict) or len(sd) < 2:
-        print(f"[MFlow] apply_bezier: empty or < 2 keys (got {type(sd).__name__}, len={len(sd) if isinstance(sd, dict) else '?'})")
+        print(f"[MFlow] apply_bezier: < 2 keyframes")
         return False
 
     all_times = sorted(sd.keys(), key=lambda x: float(x))
     k0, k1 = all_times[0], all_times[-1]
     e0, e1 = sd[k0], sd[k1]
     dt = float(k1) - float(k0)
-    if abs(dt) < 1e-12:
-        print("[MFlow] apply_bezier: dt == 0, skipping")
-        return False
+    if abs(dt) < 1e-12: return False
 
-    v0 = _kf_scalar(e0); v1 = _kf_scalar(e1)
-    if v0 is None or v1 is None:
-        print(f"[MFlow] apply_bezier: could not read v0/v1 from entries")
-        return False
-
-    dv = v1 - v0
-    rh = {1: h1[0] * dt,        2: h1[1] * dv}
-    lh = {1: (h2[0] - 1.0) * dt, 2: (h2[1] - 1.0) * dv}
-
-    # Patch a shallow copy
-    tbl = {k: (dict(v) if isinstance(v, dict) else v) for k, v in sd.items()}
+    # Shallow copy to avoid mutating Fusion's internal dict
+    tbl = {k: dict(v) if isinstance(v, dict) else v for k, v in sd.items()}
     if not isinstance(tbl[k0], dict): tbl[k0] = {1: tbl[k0]}
     if not isinstance(tbl[k1], dict): tbl[k1] = {1: tbl[k1]}
-    tbl[k0]["RH"] = rh
-    tbl[k1]["LH"] = lh
 
-    # Try SetKeyFrames with both signatures
-    for args in ((tbl, True), (tbl,)):
-        try:
-            set_kf(*args)
-            name = getattr(spline, "Name", "?")
-            print(f"[MFlow] apply_bezier: OK on '{name}' t={float(k0):.1f}→{float(k1):.1f}")
-            return True
-        except Exception:
-            continue
+    name = getattr(spline, "Name", "?")
 
-    print("[MFlow] apply_bezier: SetKeyFrames failed both signatures")
-    return False
+    # ── Point2D path input (Center, Pivot, etc.) ──────────────────────────
+    p0, p1 = _path_point(e0), _path_point(e1)
+    if p0 is not None and p1 is not None:
+        dx, dy = p1[0]-p0[0], p1[1]-p0[1]
+        # Use the dominant axis for value delta
+        dv = dx if abs(dx) >= abs(dy) else dy
+        tbl[k0]["RH"] = {1: h1[0]*dt,       2: h1[1]*dv}
+        tbl[k1]["LH"] = {1: (h2[0]-1.0)*dt, 2: (h2[1]-1.0)*dv}
+        ok = _call_set_kf(spline, tbl)
+        print(f"[MFlow] apply_bezier: Point2D {'OK' if ok else 'FAILED'} on '{name}'")
+        return ok
+
+    # ── Scalar input ──────────────────────────────────────────────────────
+    v0 = _kf_scalar(e0); v1 = _kf_scalar(e1)
+    if v0 is None or v1 is None:
+        print(f"[MFlow] apply_bezier: cannot read scalar values")
+        return False
+    dv = v1 - v0
+    tbl[k0]["RH"] = {1: h1[0]*dt,       2: h1[1]*dv}
+    tbl[k1]["LH"] = {1: (h2[0]-1.0)*dt, 2: (h2[1]-1.0)*dv}
+    ok = _call_set_kf(spline, tbl)
+    print(f"[MFlow] apply_bezier: scalar {'OK' if ok else 'FAILED'} on '{name}' t={float(k0):.1f}→{float(k1):.1f}")
+    return ok
+
 
 
 

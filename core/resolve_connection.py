@@ -35,6 +35,12 @@ def get_resolve(custom_path: str = ""):
                 break
 
     # Remove stale cached imports from a previous/wrong-version attempt
+    # OrderedDict shim: fusionscript DLL needs this in builtins on Python 3.10+
+    import builtins
+    from collections import OrderedDict as _OD
+    if not hasattr(builtins, "OrderedDict"):
+        builtins.OrderedDict = _OD
+
     for _k in ("DaVinciResolveScript", "fusionscript"):
         sys.modules.pop(_k, None)
 
@@ -97,13 +103,12 @@ class ResolveWatcher(QObject):
     tool_changed  = Signal(str, dict)   # tool_name, {inp_id: {label, kf_count, input_obj}}
     disconnected  = Signal()
 
-    POLL_MS = 350
-
     def __init__(self, comp, parent=None):
         super().__init__(parent)
         self._comp        = comp
         self._last_name   = ""
         self._last_undo   = 0
+        self._cached_inputs = {}
         self._selected_input = None   # (tool_name, inp_id) chosen by user
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
@@ -158,17 +163,26 @@ class ResolveWatcher(QObject):
         except Exception:
             return self._last_undo
 
+    POLL_MS = 500  # slower poll reduces CPU
+
     def _poll(self):
         try:
             active = self._comp.ActiveTool
             name   = active.Name if active else ""
             undo   = self._undo_len()
-            if name != self._last_name or undo != self._last_undo:
+            name_changed = (name != self._last_name)
+            undo_changed = (undo != self._last_undo)
+            if name_changed or undo_changed:
                 self._last_name = name
                 self._last_undo = undo
                 if active:
-                    self._emit(active)
+                    # Only re-scan inputs when tool changes — expensive operation
+                    # On undo-only change, reuse cached inputs
+                    if name_changed or not self._cached_inputs:
+                        self._cached_inputs = self._animated_inputs(active)
+                    self.tool_changed.emit(name, self._cached_inputs)
                 else:
+                    self._cached_inputs = {}
                     self.tool_changed.emit("", {})
         except Exception:
             self.disconnected.emit()
