@@ -42,9 +42,17 @@ SCRIPTS_COMP = {
 }
 
 def _get_install_dir():
-    """Return the platform-appropriate app data directory for MFlow."""
+    """Return platform-appropriate app data dir, using platformdirs if available."""
+    try:
+        from platformdirs import user_data_dir
+        return user_data_dir("MFlow", appauthor=False)
+    except ImportError:
+        pass
+    # Manual fallback
     if PLAT == "Windows":
-        base = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local")
+        base = os.environ.get("LOCALAPPDATA") or os.path.join(
+            os.environ.get("USERPROFILE", os.path.expanduser("~")), "AppData", "Local"
+        )
         return os.path.join(base, "MFlow")
     elif PLAT == "Darwin":
         return os.path.expanduser("~/Library/Application Support/MFlow")
@@ -207,7 +215,8 @@ def main():
     print()
     sep("=")
     print("  MFlow - Installer")
-    print(f"  Platform: {PLAT} {ARCH}   Python: {PY_VER}")
+    _plat_display = {"Windows": "Windows", "Darwin": "macOS", "Linux": "Linux"}.get(PLAT, PLAT)
+    print(f"  Platform: {_plat_display} ({ARCH})   Python: {PY_VER}")
     print(f"  Install target: {INSTALL_DIR}")
     sep("=")
 
@@ -255,6 +264,15 @@ def main():
         if r2 and r2.returncode != 0:
             log("QtWebEngineWidgets not found - trying PySide6[WebEngine]", "WARN")
             pip_install(python_exe, "PySide6[WebEngine]")
+
+    # platformdirs: clean cross-platform path resolution
+    r_pd, _ = safe(subprocess.run,
+        [python_exe, "-c", "import platformdirs"],
+        capture_output=True, text=True, timeout=8)
+    if r_pd and r_pd.returncode == 0:
+        print("    platformdirs already installed  OK")
+    else:
+        pip_install(python_exe, "platformdirs")
 
     # -- Step 3: Copy MFlow to install dir ---------------------------------
     sep()
