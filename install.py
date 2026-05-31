@@ -27,6 +27,20 @@ SCRIPTS_UTILITY = {
     ],
 }
 
+SCRIPTS_COMP = {
+    "Windows": [
+        os.path.expandvars(r"%APPDATA%\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Comp"),
+        r"C:\ProgramData\Blackmagic Design\DaVinci Resolve\Fusion\Scripts\Comp",
+    ],
+    "Darwin": [
+        os.path.expanduser("~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Comp"),
+    ],
+    "Linux": [
+        os.path.expanduser("~/.local/share/DaVinciResolve/Fusion/Scripts/Comp"),
+        "/opt/resolve/Fusion/Scripts/Comp",
+    ],
+}
+
 def _get_install_dir():
     """Return the platform-appropriate app data directory for MFlow."""
     if PLAT == "Windows":
@@ -159,6 +173,16 @@ def find_scripts_dir():
         if not err: return first
     return None
 
+def find_scripts_comp():
+    dirs = SCRIPTS_COMP.get(PLAT, [])
+    for d in dirs:
+        if os.path.isdir(d): return d
+    first = dirs[0] if dirs else None
+    if first:
+        _, err = safe(os.makedirs, first, exist_ok=True)
+        if not err: return first
+    return None
+
 def write_python_path(python_exe, location):
     try:
         path = os.path.join(location, "python_path.txt")
@@ -231,45 +255,80 @@ def main():
         install_dir = HERE
     else:
         install_dir = INSTALL_DIR
-        errs = copy_tree(HERE, install_dir)
-        if errs:
-            for e in errs: log(e, "WARN")
-        else:
-            log(f"OK - copied to {install_dir}")
+        # Clean stale files from previous versions (preserve configs and presets)
+    KEEP_PATTERNS = {"settings.json", "profiles.json", "presets", "mflow_path.txt", "python_path.txt"}
+    if os.path.isdir(install_dir) and install_dir != HERE:
+        for item in os.listdir(install_dir):
+            if item in KEEP_PATTERNS or item.startswith("."):
+                continue
+            target = os.path.join(install_dir, item)
+            src_equiv = os.path.join(HERE, item)
+            # Only remove if NOT in current source (truly stale)
+            if not os.path.exists(src_equiv):
+                try:
+                    if os.path.isdir(target): shutil.rmtree(target)
+                    else: os.remove(target)
+                    log(f"  Removed stale: {item}")
+                except Exception as e:
+                    log(f"  Could not remove {item}: {e}", "WARN")
+
+    errs = copy_tree(HERE, install_dir)
+    if errs:
+        for e in errs: log(e, "WARN")
+    else:
+        log(f"OK - copied to {install_dir}")
 
     # Write python path into install dir
     write_python_path(python_exe, install_dir)
 
-    # -- Step 4: Install Resolve launcher ----------------------------------
+    # -- Step 4: Install Resolve launchers ---------------------------------
     sep()
-    print("\n[4/4] Installing Resolve launcher...\n")
-    scripts_dir = find_scripts_dir()
+    print("\n[4/4] Installing Resolve launchers...\n")
 
-    if scripts_dir:
-        log(f"Scripts directory: {scripts_dir}")
+    # 4a. Studio version — Scripts/Utility/ (any page, uses Lua + external process)
+    scripts_utility = find_scripts_dir()
+    if scripts_utility:
+        log(f"Studio launcher (Scripts/Utility): {scripts_utility}")
         for fname in ("MFlow.lua", "mflow_path.txt", "python_path.txt"):
             src = os.path.join(install_dir, fname)
-            if not os.path.isfile(src):
-                src = os.path.join(HERE, fname)
+            if not os.path.isfile(src): src = os.path.join(HERE, fname)
             if os.path.isfile(src):
-                dst = os.path.join(scripts_dir, fname)
-                _, err = safe(shutil.copy2, src, dst)
-                if err: log(f"Cannot copy {fname}: {err}", "WARN")
-                else: log(f"OK  {dst}")
+                _, err = safe(shutil.copy2, src, os.path.join(scripts_utility, fname))
+                if err: log(f"  Cannot copy {fname}: {err}", "WARN")
+                else:   log(f"  OK  {fname}")
             else:
-                log(f"Source not found: {fname}", "WARN")
+                log(f"  Not found: {fname}", "WARN")
     else:
-        log("DaVinci Resolve Scripts directory not found", "WARN")
-        log("Copy MFlow.lua + mflow_path.txt + python_path.txt manually to:", "WARN")
+        log("Scripts/Utility not found - copy MFlow.lua manually", "WARN")
         for d in SCRIPTS_UTILITY.get(PLAT, []):
+            log(f"  {d}", "")
+
+    # 4b. Free version — Scripts/Comp/ (Fusion page only, uses injected 'app')
+    scripts_comp = find_scripts_comp()
+    if scripts_comp:
+        log(f"\nFree launcher (Scripts/Comp):    {scripts_comp}")
+        for fname in ("MFlow_Free.py", "mflow_path.txt"):
+            src = os.path.join(install_dir, fname)
+            if not os.path.isfile(src): src = os.path.join(HERE, fname)
+            if os.path.isfile(src):
+                _, err = safe(shutil.copy2, src, os.path.join(scripts_comp, fname))
+                if err: log(f"  Cannot copy {fname}: {err}", "WARN")
+                else:   log(f"  OK  {fname}")
+            else:
+                log(f"  Not found: {fname}", "WARN")
+    else:
+        log("\nScripts/Comp not found - copy MFlow_Free.py manually", "WARN")
+        for d in SCRIPTS_COMP.get(PLAT, []):
             log(f"  {d}", "")
 
     # -- Summary ------------------------------------------------------------
     sep("=")
     print(f"\n  Python:   {python_exe}")
     print(f"  MFlow:    {install_dir}")
-    if scripts_dir:
-        print(f"  Resolve:  Workspace > Scripts > MFlow  (Fusion page)")
+    print()
+    print("  Studio (any page):  Workspace > Scripts > MFlow")
+    print("  Free   (Fusion pg): Scripts > Comp > MFlow_Free")
+    print()
     print(f"  Log:      {os.path.join(os.path.expanduser('~'), '.mflow', 'mflow.log')}")
     print()
     print("  Run standalone:  python main.py")
