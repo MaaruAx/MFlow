@@ -201,6 +201,10 @@ class ResolveWatcher(QObject):
                     label  = attrs.get("INPS_Name", inp_id)
                     if not inp_id:
                         continue
+                    # Skip Image-type inputs (media connections, not animation splines)
+                    # e.g. OFX tools connected to the image Input of another node
+                    if attrs.get("INPS_DataType") == "Image":
+                        continue
                     # Skip expressions — they're not editable splines
                     try:
                         if inp.GetExpression():
