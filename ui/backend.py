@@ -2,8 +2,8 @@
 Backend — QObject exposed to JavaScript via QWebChannel.
 All Resolve API calls happen here. UI logic stays in app.html.
 """
-import json, os
-from PySide6.QtCore import QObject, Slot, Signal, QTimer
+import json, os, sys
+from PySide6.QtCore import QObject, Slot, Signal, QTimer, QRunnable, QThreadPool
 from PySide6.QtWidgets import QFileDialog, QApplication
 
 from core.preset_manager  import (load_profiles, save_profiles, add_preset,
@@ -35,6 +35,7 @@ class Backend(QObject):
     status_changed     = Signal(str, str)    # message, hex color
     apply_done         = Signal(bool, str)   # success, message
     settings_signal    = Signal(str)         # JSON settings dict
+    pythons_scanned    = Signal(str)         # JSON {pythons, active, versions} — async result
 
     def __init__(self, window, comp=None, fusion_app=None, parent=None):
         super().__init__(parent)
@@ -58,6 +59,9 @@ class Backend(QObject):
         self._of_points = []          # list of dicts from JS
         self._sel_inp  = None         # (tool_name, inp_id)
         self._fps      = float(self._settings.get("bake_fps", 24))
+        self._js_ready = False        # True once JS signals it's fully initialised
+        self._python_scan_cache = None  # cached result of scan_pythons()
+        self._python_scan_time  = 0.0   # epoch when cache was last filled
 
         # Start watcher if we already have a comp
         if comp:
@@ -65,6 +69,30 @@ class Backend(QObject):
             QTimer.singleShot(200, self._announce_connection)
 
     # ── Window control ────────────────────────────────────────────────────────
+
+    @Slot()
+    def js_ready(self):
+        """Called by JS once QWebChannel is fully initialised. Replaces the
+        old 600 ms blind timer — connection is announced exactly when JS can
+        handle it."""
+        self._js_ready = True
+        self._announce_connection()
+        # Also push presets & profiles so the UI is fully populated immediately
+        self.load_library(self._mode)
+        self._emit_profiles()
+        # Push saved settings so JS restores theme/auto-apply/etc on startup
+        self.settings_signal.emit(json.dumps(self._settings))
+
+    @Slot(float)
+    def set_zoom_factor(self, factor: float):
+        """Scale the entire WebEngine view using Qt's native zoom.
+        Qt remaps mouse coordinates automatically — no resize_window needed."""
+        try:
+            view = getattr(self._win, '_view', None)
+            if view:
+                view.setZoomFactor(max(0.5, min(2.5, float(factor))))
+        except Exception:
+            pass
 
     @Slot()
     def start_system_move(self):
@@ -503,56 +531,64 @@ class Backend(QObject):
 
     def _get_spline(self, inp):
         """
-        Return the object on which GetKeyFrames/SetKeyFrames should be called.
-        For scalar inputs: return the connected BezierSpline tool.
-        For Point2D inputs (Center, Pivot): return the first scalar sub-input
-        that has >= 2 keyframes (e.g. X channel).
+        Return the BezierSpline object for GetKeyFrames/SetKeyFrames.
+
+        Architecture for animated Point2D params (Center, Pivot):
+          Center inp → PolyPath tool
+                           └── Displacement input → BezierSpline (timing/easing)
+
+        The PolyPath stores path geometry (PolyLine XY points).
+        The Displacement BezierSpline controls timing along the path and has
+        proper RH/LH handles — it's what we apply bezier easing to.
+
+        For scalar params (Size, Angle, etc.): directly connected BezierSpline.
         """
-        # 1. Connected BezierSpline tool — for scalar inputs
         try:
             out = inp.GetConnectedOutput()
             if out:
                 tool = out.GetTool()
                 if tool:
-                    get_kf = getattr(tool, "GetKeyFrames", None)
-                    set_kf = getattr(tool, "SetKeyFrames", None)
-                    if callable(get_kf) and callable(set_kf):
-                        sd = get_kf()
-                        if isinstance(sd, dict) and len(sd) >= 2:
-                            # Verify values are scalar (not Point2D dicts with sub-keys)
-                            vals = list(sd.values())
-                            first = vals[0]
-                            if not isinstance(first, dict) or 2 not in first:
-                                return tool
-        except Exception:
-            pass
+                    reg = ""
+                    try: reg = str(tool.GetAttrs().get("TOOLS_RegID", ""))
+                    except Exception: pass
 
-        # 2. Try sub-inputs for Point2D types (Center.X, Center.Y etc.)
-        try:
-            sub_list = inp.GetSubInputList() if hasattr(inp, "GetSubInputList") else None
-            if sub_list:
-                for sub in sub_list.values():
-                    try:
-                        sub_out = sub.GetConnectedOutput()
-                        if sub_out:
-                            tool = sub_out.GetTool()
-                            if tool:
-                                get_kf = getattr(tool, "GetKeyFrames", None)
-                                set_kf = getattr(tool, "SetKeyFrames", None)
-                                if callable(get_kf) and callable(set_kf):
+                    if "BezierSpline" in reg:
+                        # Standard scalar case — BezierSpline has handles in GetKeyFrames
+                        get_kf = getattr(tool, "GetKeyFrames", None)
+                        if callable(get_kf):
+                            sd = get_kf()
+                            if isinstance(sd, dict) and len(sd) >= 2:
+                                return tool
+
+                    elif "PolyPath" in reg:
+                        # Point2D motion path: navigate into PolyPath's inputs to
+                        # find the Displacement BezierSpline (controls easing/timing).
+                        try:
+                            for sub_inp in tool.GetInputList().values():
+                                try:
+                                    sub_out = sub_inp.GetConnectedOutput()
+                                    if not sub_out: continue
+                                    sub_tool = sub_out.GetTool()
+                                    if not sub_tool: continue
+                                    sub_reg = str(sub_tool.GetAttrs().get("TOOLS_RegID", ""))
+                                    if "BezierSpline" not in sub_reg: continue
+                                    get_kf = getattr(sub_tool, "GetKeyFrames", None)
+                                    if not callable(get_kf): continue
                                     sd = get_kf()
                                     if isinstance(sd, dict) and len(sd) >= 2:
-                                        return tool
-                    except Exception:
-                        continue
+                                        print(f"[MFlow] _get_spline: PolyPath → Displacement BezierSpline '{sub_tool.Name}'")
+                                        return sub_tool
+                                except Exception:
+                                    continue
+                        except Exception:
+                            pass
         except Exception:
             pass
 
-        # 3. Input directly — last resort for compound inputs
+        # Fallback: input directly (sub-inputs, compound types, no connected tool)
         try:
             get_kf = getattr(inp, "GetKeyFrames", None)
-            set_kf = getattr(inp, "SetKeyFrames", None)
-            if callable(get_kf) and callable(set_kf):
+            if callable(get_kf):
                 sd = get_kf()
                 if isinstance(sd, dict) and len(sd) >= 2:
                     return inp
@@ -629,36 +665,71 @@ class Backend(QObject):
 
     @Slot(result=str)
     def scan_pythons(self) -> str:
-        import glob, subprocess as sp
+        """Start an async Python-binary scan. Returns cache immediately if
+        available (< 120 s old); otherwise kicks off a QRunnable worker that
+        emits ``pythons_scanned`` when done, and returns a sentinel so the UI
+        can show a spinner."""
+        import time
+        now = time.monotonic()
+        if self._python_scan_cache and (now - self._python_scan_time) < 120:
+            return self._python_scan_cache
+
+        # Kick off background scan — result arrives via pythons_scanned signal
+        backend_ref = self
+
+        class _ScanWorker(QRunnable):
+            def run(self):
+                result = backend_ref._do_scan_pythons()
+                backend_ref._python_scan_cache = result
+                backend_ref._python_scan_time  = time.monotonic()
+                # Signal must be emitted on the Qt thread; use a zero-delay timer
+                QTimer.singleShot(0, lambda: backend_ref.pythons_scanned.emit(result))
+
+        QThreadPool.globalInstance().start(_ScanWorker())
+        # Return stale cache or scanning placeholder
+        if self._python_scan_cache:
+            return self._python_scan_cache
+        return json.dumps({"pythons": [], "active": sys.executable,
+                           "versions": {}, "scanning": True})
+
+    def _do_scan_pythons(self) -> str:
+        """Blocking scan — runs in a thread pool worker, never on the Qt main thread."""
+        import glob, subprocess as sp, platform
         found = {}
+
         def _probe(exe):
             try:
                 r = sp.run([exe, "--version"], capture_output=True, text=True, timeout=5)
-                ver = (r.stdout+r.stderr).strip().replace("Python ","")
+                ver = (r.stdout + r.stderr).strip().replace("Python ", "")
                 if ver and "3." in ver:
                     found[exe] = ver
-            except Exception: pass
+            except Exception:
+                pass
+
         _probe(sys.executable)
-        import platform
         if platform.system() == "Windows":
             base = os.path.expandvars(r"%LOCALAPPDATA%\Programs\Python")
-            for exe in glob.glob(os.path.join(base,"Python3*","python.exe")):
+            for exe in glob.glob(os.path.join(base, "Python3*", "python.exe")):
                 _probe(exe)
-            for ver in ("3.12","3.11","3.10","3.9"):
+            for ver in ("3.12", "3.11", "3.10", "3.9"):
                 try:
-                    r = sp.run(["py",f"-{ver}","-c","import sys;print(sys.executable)"],
-                               capture_output=True,text=True,timeout=5)
-                    exe=r.stdout.strip()
-                    if exe and os.path.isfile(exe): _probe(exe)
-                except Exception: pass
+                    r = sp.run(["py", f"-{ver}", "-c", "import sys;print(sys.executable)"],
+                               capture_output=True, text=True, timeout=5)
+                    exe = r.stdout.strip()
+                    if exe and os.path.isfile(exe):
+                        _probe(exe)
+                except Exception:
+                    pass
         else:
             import shutil
-            for name in ("python3","python3.12","python3.11","python3.10","python3.9"):
-                exe=shutil.which(name)
-                if exe: _probe(exe)
-        clean={k:v for k,v in found.items()
-               if "WindowsApps" not in k and "PythonSoftwareFoundation" not in k}
-        active=self._settings.get("python_path","") or sys.executable
+            for name in ("python3", "python3.13", "python3.12", "python3.11", "python3.10", "python3.9"):
+                exe = shutil.which(name)
+                if exe:
+                    _probe(exe)
+
+        clean = {k: v for k, v in found.items()
+                 if "WindowsApps" not in k and "PythonSoftwareFoundation" not in k}
+        active = self._settings.get("python_path", "") or sys.executable
         return json.dumps({"pythons": list(clean.keys()), "active": active,
                            "versions": clean})
 
