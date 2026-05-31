@@ -253,10 +253,26 @@ def _path_point(entry):
     return None
 
 
+def _strip_locks(tbl) -> None:
+    """Remove LockedY/Locked flags from a copied keyframe dict before SetKeyFrames.
+    Fusion sets LockedY=True on Displacement spline keyframes — stripping it
+    from the COPY (not the original) allows handle writes to succeed."""
+    for entry in tbl.values():
+        if not isinstance(entry, dict): continue
+        flags = entry.get("Flags")
+        if not isinstance(flags, dict): continue
+        new_flags = {k: v for k, v in flags.items()
+                     if k not in ("LockedY", "LockedX", "Locked")}
+        if new_flags: entry["Flags"] = new_flags
+        else: del entry["Flags"]
+
+
 def _call_set_kf(obj, tbl) -> bool:
     fn = getattr(obj, "SetKeyFrames", None)
     if not callable(fn): return False
-    for args in ((tbl, True), (tbl,)):
+    # Three signatures: True=force-create, False=update-existing, no arg=default.
+    # PolyPath Displacement splines only accept (tbl, False) — not True.
+    for args in ((tbl, True), (tbl, False), (tbl,)):
         try: fn(*args); return True
         except Exception: continue
     return False
@@ -293,6 +309,9 @@ def apply_bezier(spline, h1: list, h2: list) -> bool:
     if not isinstance(tbl[k1], dict): tbl[k1] = {1: tbl[k1]}
 
     name = getattr(spline, "Name", "?")
+
+    # Strip LockedY from the copy so SetKeyFrames can write handles
+    _strip_locks(tbl)
 
     # ── Point2D path input (Center, Pivot, etc.) ──────────────────────────
     p0, p1 = _path_point(e0), _path_point(e1)
