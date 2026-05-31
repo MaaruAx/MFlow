@@ -191,6 +191,17 @@ def write_python_path(python_exe, location):
     except Exception as e:
         log(f"Could not write python_path.txt: {e}", "WARN")
 
+def write_mflow_path(install_dir, location):
+    """Write mflow_path.txt with the fully-expanded real path (no env vars)."""
+    try:
+        real = os.path.realpath(os.path.abspath(install_dir))
+        path = os.path.join(location, "mflow_path.txt")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(real)
+        log(f"  mflow_path.txt -> {real}")
+    except Exception as e:
+        log(f"Could not write mflow_path.txt: {e}", "WARN")
+
 # -- Main ----------------------------------------------------------------------
 def main():
     print()
@@ -278,8 +289,9 @@ def main():
     else:
         log(f"OK - copied to {install_dir}")
 
-    # Write python path into install dir
+    # Write path files with fully expanded real paths
     write_python_path(python_exe, install_dir)
+    write_mflow_path(install_dir, install_dir)
 
     # -- Step 4: Install Resolve launchers ---------------------------------
     sep()
@@ -289,15 +301,14 @@ def main():
     scripts_utility = find_scripts_dir()
     if scripts_utility:
         log(f"Studio launcher (Scripts/Utility): {scripts_utility}")
-        for fname in ("MFlow.lua", "mflow_path.txt", "python_path.txt"):
+        for fname in ("MFlow.lua", "python_path.txt"):
             src = os.path.join(install_dir, fname)
             if not os.path.isfile(src): src = os.path.join(HERE, fname)
             if os.path.isfile(src):
                 _, err = safe(shutil.copy2, src, os.path.join(scripts_utility, fname))
                 if err: log(f"  Cannot copy {fname}: {err}", "WARN")
                 else:   log(f"  OK  {fname}")
-            else:
-                log(f"  Not found: {fname}", "WARN")
+        write_mflow_path(install_dir, scripts_utility)
     else:
         log("Scripts/Utility not found - copy MFlow.lua manually", "WARN")
         for d in SCRIPTS_UTILITY.get(PLAT, []):
@@ -307,7 +318,7 @@ def main():
     scripts_comp = find_scripts_comp()
     if scripts_comp:
         log(f"\nFree launcher (Scripts/Comp):    {scripts_comp}")
-        for fname in ("MFlow_Free.py", "mflow_path.txt"):
+        for fname in ("MFlow_Free.py",):
             src = os.path.join(install_dir, fname)
             if not os.path.isfile(src): src = os.path.join(HERE, fname)
             if os.path.isfile(src):
@@ -316,6 +327,7 @@ def main():
                 else:   log(f"  OK  {fname}")
             else:
                 log(f"  Not found: {fname}", "WARN")
+        write_mflow_path(install_dir, scripts_comp)
     else:
         log("\nScripts/Comp not found - copy MFlow_Free.py manually", "WARN")
         for d in SCRIPTS_COMP.get(PLAT, []):
