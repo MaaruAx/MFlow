@@ -1,0 +1,31 @@
+================================================
+  MFlow — Manual Installation Guide
+================================================
+
+AUTOMATIC (recommended):
+  Run install.py with Python 3.9+
+
+MANUAL:
+
+1. Copy the MFlow folder to:
+   Windows: %LOCALAPPDATA%\MFlow
+   Mac:     ~/Library/Application Support/MFlow
+   Linux:   ~/.local/share/MFlow
+
+2. Install dependencies:
+   pip install PySide6
+
+3a. Studio launcher (any Resolve page):
+    Copy MFlow.lua + python_path.txt to:
+    %APPDATA%\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility\
+    Then in Resolve: Workspace > Scripts > MFlow
+
+3b. Free launcher (Fusion page only):
+    Copy MFlow_Free.py + mflow_path.txt to:
+    %APPDATA%\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Comp\
+    Then in Resolve (Fusion page): Scripts > Comp > MFlow_Free
+
+4. python_path.txt: path to your python.exe
+   mflow_path.txt:  path to your MFlow install folder
+
+================================================
