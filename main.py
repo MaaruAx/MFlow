@@ -128,8 +128,7 @@ class MFlowWindow(QMainWindow):
         if not ok:
             log.error("app.html failed to load")
             return
-        log.info("UI loaded")
-        QTimer.singleShot(600, self._backend._announce_connection)
+        log.info("UI loaded — waiting for JS js_ready() signal")
 
     def closeEvent(self, event):
         log.info("Closing MFlow")
