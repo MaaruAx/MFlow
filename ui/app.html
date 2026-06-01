@@ -245,9 +245,35 @@ body.compact #curve-wrap{flex:1}
 #bottom-bar{display:flex;align-items:center;gap:6px;height:42px;flex-shrink:0;
   background:var(--base);border-top:1px solid var(--border);padding:0 10px}
 #status-msg{font-size:10px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#btn-aall{font-size:13px;font-weight:700;padding:6px 14px;border:1.5px solid var(--accent);
+#btn-aall{font-size:10px;font-weight:700;letter-spacing:.3px;padding:6px 14px;border:1.5px solid var(--accent);
   border-radius:var(--r);background:transparent;color:var(--accent);cursor:pointer;font-family:inherit;transition:background .15s}
 #btn-aall:hover{background:var(--sel-bg)}
+/* Comp scan elements */
+#btn-scan{width:100%;font-size:11px;font-weight:700;letter-spacing:.5px;padding:7px 0;border-radius:var(--r);cursor:pointer;
+  border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s}
+#btn-scan:hover{border-color:var(--foam);color:var(--foam)}
+#btn-scan.scanning{border-color:var(--iris);color:var(--iris);animation:scanPulse 1s ease-in-out infinite}
+@keyframes scanPulse{0%,100%{opacity:1}50%{opacity:.5}}
+.scan-tool-hdr{font-size:9px;font-weight:700;letter-spacing:.5px;padding:5px 4px 2px;
+  color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:5px;cursor:pointer}
+.scan-tool-hdr:hover{color:var(--text)}
+.scan-tool-hdr.sel-all{color:var(--accent)}
+.scan-tool-chk{width:11px;height:11px;border-radius:2px;border:1px solid var(--border-hi);
+  background:var(--overlay);flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:8px;line-height:1;transition:all .15s}
+.scan-tool-hdr.sel-all .scan-tool-chk{background:var(--accent);border-color:var(--accent);color:var(--base)}
+.scan-inp-row{display:flex;align-items:center;gap:5px;padding:2px 4px 2px 14px;
+  border-radius:2px;cursor:pointer;transition:background .1s}
+.scan-inp-row:hover{background:var(--overlay)}
+.scan-inp-row.sel{background:var(--sel-bg)}
+.scan-inp-chk{width:9px;height:9px;border-radius:1px;border:1px solid var(--border-hi);
+  background:var(--overlay);flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:7px;line-height:1;transition:all .15s}
+.scan-inp-row.sel .scan-inp-chk{background:var(--accent);border-color:var(--accent);color:var(--base)}
+.scan-inp-lbl{font-size:10px;color:var(--subtle);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scan-inp-kf{font-size:9px;color:var(--muted);flex-shrink:0}
+#scan-ph{font-size:10px;color:var(--muted);padding:8px 6px;text-align:center;line-height:1.6}
+#scan-sel-count{font-size:9px;color:var(--muted);text-align:center}
 #btn-apply{font-size:13px;font-weight:800;padding:6px 16px;border:1.5px solid var(--accent);
   border-radius:var(--r);background:var(--accent);color:var(--base);cursor:pointer;font-family:inherit;transition:opacity .15s}
 #btn-apply:hover{opacity:.85}
@@ -464,8 +490,8 @@ body.compact #curve-wrap{flex:1}
   <div id="right-panel">
     <!-- Tab bar -->
     <div id="rp-tabs">
-      <button class="rp-tab active" id="tab-preview" onclick="setRPTab('preview')">PREVIEW</button>
-      <button class="rp-tab" id="tab-settings" onclick="setRPTab('settings')">PARAMS</button>
+      <button class="rp-tab" id="tab-preview" onclick="setRPTab('preview')">PREVIEW</button>
+      <button class="rp-tab active" id="tab-settings" onclick="setRPTab('settings')">PARAMS</button>
     </div>
 
     <!-- Preview tab -->
@@ -524,8 +550,19 @@ body.compact #curve-wrap{flex:1}
     </div>
 
     <!-- Settings tab -->
-    <div id="rp-settings" style="display:none;overflow-y:auto;flex:1">
-      <div id="inp-list" style="display:flex;flex-direction:column;gap:2px"></div>
+    <div id="rp-settings" style="display:none;overflow-y:auto;flex:1;flex-direction:column">
+      <!-- Scan panel — fills available space, scroll inside -->
+      <div style="flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden">
+        <div id="scan-tree" style="flex:1;overflow-y:auto;padding:4px 6px;min-height:60px">
+          <div id="scan-ph">Click SCAN ALL to find<br>all animated nodes</div>
+        </div>
+        <div style="padding:8px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
+          <span id="scan-sel-count"></span>
+          <button id="btn-scan" onclick="doScanAll()">⟳ SCAN ALL</button>
+        </div>
+      </div>
+      <!-- Active node inputs — shown below scan -->
+      <div id="inp-list" style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;border-top:1px solid var(--border);padding:4px 0;max-height:140px;overflow-y:auto"></div>
     </div>
   </div>
 </div>
@@ -533,7 +570,7 @@ body.compact #curve-wrap{flex:1}
 <div id="bottom-bar">
   <span id="status-msg">Ready</span>
   <button id="btn-flip" onclick="flipAll()" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:var(--r);cursor:pointer;border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s">FLIP</button>
-  <button id="btn-aall" onclick="backend&&backend.apply_curve_all()">APPLY ALL</button>
+  <button id="btn-aall" onclick="applySelected()">APPLY SELECTED</button>
   <button id="btn-apply" onclick="backend&&backend.apply_curve()">▶ APPLY</button>
 </div>
 
@@ -769,6 +806,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       backend.presets_updated.connect( s=>renderPresets(JSON.parse(s)));
       backend.profiles_updated.connect(s=>renderProfiles(JSON.parse(s)));
       backend.tool_updated.connect(s=>{const d=JSON.parse(s);renderParamsTree(d);renderInputsList(d);});
+      backend.comp_scan_updated.connect(s=>renderCompScan(JSON.parse(s)));
       backend.connection_changed.connect((ok,t)=>setConn(ok,t));
       backend.status_changed.connect(  (m,c)=>setStatus(m,c));
       backend.apply_done.connect(      (ok,m)=>setStatus(m,ok?'#9ccfd8':'#eb6f92'));
@@ -783,6 +821,8 @@ document.addEventListener('DOMContentLoaded',()=>{
       });
       // Tell Python we're ready — replaces the blind 600 ms timer
       backend.js_ready();
+      // Start on PARAMS tab
+      setRPTab('settings');
     });
   } else { setConn(false,'Qt not available'); }
   // Debounced search — avoids re-filtering on every keystroke during fast typing
@@ -1978,6 +2018,127 @@ function applySettingsUI(s){
   setMode(mode);
 }
 function applyTheme(cls){document.body.className=(compact?'compact ':'')+cls;}
+/* ── Comp Scan ── */
+let _scanData={};
+let _scanSel={};  // {tool_name: Set<inp_id>}
+
+function doScanAll(){
+  if(!backend) return;
+  const btn=document.getElementById('btn-scan');
+  if(btn){btn.classList.add('scanning');btn.textContent='Scanning…';}
+  backend.scan_comp();
+}
+
+function renderCompScan(data){
+  _scanData=data||{};
+  for(const k of Object.keys(_scanSel)){if(!_scanData[k]) delete _scanSel[k];}
+  const btn=document.getElementById('btn-scan');
+  if(btn){btn.classList.remove('scanning');btn.textContent='⟳ SCAN ALL';}
+  const tree=document.getElementById('scan-tree');
+  const ph=document.getElementById('scan-ph');
+  if(!tree) return;
+  tree.innerHTML='';
+  const tools=Object.keys(_scanData);
+  if(!tools.length){
+    if(ph){ph.style.display='';ph.textContent='No animated nodes found';}
+    _updateScanCount(); return;
+  }
+  if(ph) ph.style.display='none';
+  const frag=document.createDocumentFragment();
+  tools.forEach(toolName=>{
+    const inputs=_scanData[toolName];
+    const allInpIds=Object.keys(inputs);
+    const col=_nodeColor(toolName);
+    if(!_scanSel[toolName]) _scanSel[toolName]=new Set();
+
+    const hdr=document.createElement('div');
+    const chk=document.createElement('div'); chk.className='scan-tool-chk';
+    const lbl=document.createElement('span'); lbl.textContent=toolName;
+    const cnt=document.createElement('span');
+    cnt.style.cssText='font-size:9px;color:var(--muted);margin-left:auto;padding-right:4px';
+    cnt.textContent=allInpIds.length+'×';
+    hdr.appendChild(chk); hdr.appendChild(lbl); hdr.appendChild(cnt);
+    hdr.style.color=col;
+
+    function _refreshHdr(){
+      const allSel=allInpIds.every(id=>_scanSel[toolName].has(id));
+      hdr.className='scan-tool-hdr'+(allSel?' sel-all':'');
+      chk.textContent=allSel?'✓':'';
+    }
+    _refreshHdr();
+
+    hdr.onclick=()=>{
+      const wasAll=allInpIds.every(id=>_scanSel[toolName].has(id));
+      if(wasAll){_scanSel[toolName].clear();}
+      else{allInpIds.forEach(id=>_scanSel[toolName].add(id));}
+      _refreshHdr();
+      // refresh input rows without full re-render
+      hdr.parentNode.querySelectorAll('[data-tool="'+toolName+'"]').forEach(r=>{
+        const id=r.dataset.inp;
+        const sel=_scanSel[toolName].has(id);
+        r.classList.toggle('sel',sel);
+        const ic=r.querySelector('.scan-inp-chk');
+        if(ic) ic.textContent=sel?'✓':'';
+      });
+      _pushScanSel();
+      _updateScanCount();
+    };
+    frag.appendChild(hdr);
+
+    allInpIds.forEach(inpId=>{
+      const meta=inputs[inpId];
+      const sel=_scanSel[toolName].has(inpId);
+      const row=document.createElement('div');
+      row.className='scan-inp-row'+(sel?' sel':'');
+      row.dataset.tool=toolName; row.dataset.inp=inpId;
+      const ichk=document.createElement('div'); ichk.className='scan-inp-chk';
+      ichk.textContent=sel?'✓':'';
+      const ilbl=document.createElement('div'); ilbl.className='scan-inp-lbl'; ilbl.textContent=meta.label;
+      const ikf=document.createElement('div'); ikf.className='scan-inp-kf';
+      ikf.textContent=meta.kf_count+'◆'; ikf.style.color=col;
+      row.appendChild(ichk); row.appendChild(ilbl); row.appendChild(ikf);
+      row.onclick=e=>{
+        e.stopPropagation();
+        if(_scanSel[toolName].has(inpId)) _scanSel[toolName].delete(inpId);
+        else _scanSel[toolName].add(inpId);
+        const nowSel=_scanSel[toolName].has(inpId);
+        row.classList.toggle('sel',nowSel);
+        ichk.textContent=nowSel?'✓':'';
+        _refreshHdr();
+        _pushScanSel();
+        _updateScanCount();
+      };
+      frag.appendChild(row);
+    });
+  });
+  tree.appendChild(frag);
+  _updateScanCount();
+}
+
+function _updateScanCount(){
+  const el=document.getElementById('scan-sel-count'); if(!el) return;
+  let total=0;
+  for(const s of Object.values(_scanSel)) total+=s.size;
+  el.textContent=total>0?(total+' selected'):'';
+  const btn=document.getElementById('btn-aall');
+  if(btn) btn.style.opacity=total>0?'1':'0.6';
+}
+
+function _pushScanSel(){
+  if(!backend) return;
+  const out={};
+  for(const[tool,ids] of Object.entries(_scanSel)){if(ids.size>0) out[tool]=[...ids];}
+  backend.select_tools(JSON.stringify(out));
+}
+
+function applySelected(){
+  if(!backend) return;
+  let hasSelection=false;
+  for(const s of Object.values(_scanSel)){if(s.size>0){hasSelection=true;break;}}
+  if(hasSelection) backend.apply_curve_selected();
+  else backend.apply_curve_all();
+}
+
 /* ── Debug (callback-based — no [object Promise]) ── */
 function openDebug(){document.getElementById('dbg-ov').classList.add('open');refreshDebug();}
 function refreshDebug(){
