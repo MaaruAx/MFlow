@@ -381,40 +381,104 @@ def apply_steps(spline, n_steps, position="end") -> bool:
         return False
 
 
-def apply_overframe(spline, h1, h2, of_points) -> bool:
-    """Insert overframe keyframes and apply per-segment handles."""
-    r = _get_kf_range(spline)
-    if not r:
+def apply_overframe(spline, h1: list, h2: list, of_points: list) -> bool:
+    """Insert overframe keyframes and apply per-segment bezier handles."""
+
+    # ── 1. Read existing keyframe structure ───────────────────────────────
+    get_kf_fn = getattr(spline, "GetKeyFrames", None)
+    if not callable(get_kf_fn):
+        print("[MFlow] apply_overframe: no GetKeyFrames on object")
         return False
-    t0, v0, t1, v1 = r
-    dt, dv = t1-t0, v1-v0
-
-    def dn_t(tn): return t0 + tn*dt
-    def dn_v(vn): return v0 + vn*dv
-
-    new_kf = {t0: v0, t1: v1}
-    for p in of_points:
-        new_kf[dn_t(p.t)] = dn_v(p.v)
     try:
-        spline.SetKeyFrames(new_kf)
-    except Exception:
+        sd = get_kf_fn()
+    except Exception as e:
+        print(f"[MFlow] apply_overframe: GetKeyFrames failed: {e}")
+        return False
+    if not isinstance(sd, dict) or len(sd) < 2:
+        print(f"[MFlow] apply_overframe: need ≥2 keyframes, got {len(sd) if isinstance(sd, dict) else 0}")
         return False
 
-    # Build ordered segment list: [start, ...of_points..., end]
+    all_times = sorted(sd.keys(), key=lambda x: float(x))
+    k0, k1 = all_times[0], all_times[-1]
+    t0, t1 = float(k0), float(k1)
+    dt = t1 - t0
+    if abs(dt) < 1e-12:
+        print("[MFlow] apply_overframe: zero-duration range")
+        return False
+
+    e0, e1 = sd[k0], sd[k1]
+    v0 = _kf_scalar(e0)
+    v1 = _kf_scalar(e1)
+    if v0 is None or v1 is None:
+        print("[MFlow] apply_overframe: cannot read scalar keyframe values")
+        return False
+    dv   = v1 - v0
+    name = getattr(spline, "Name", "?")
+    print(f"[MFlow] apply_overframe: '{name}'  t={t0:.0f}→{t1:.0f}  "
+          f"v={v0:.4f}→{v1:.4f}  okf_pts={len(of_points)}")
+
+    def dn_t(tn): return t0 + tn * dt
+    def dn_v(vn): return v0 + vn * dv
+
+    # ── 2. Build keyframe table: copy existing + add OKF intermediate pts ─
+    # Shallow-copy to avoid mutating Fusion's internal dict
+    tbl = {k: (dict(v) if isinstance(v, dict) else v) for k, v in sd.items()}
+    _strip_locks(tbl)   # remove LockedY/Locked flags that block handle writes
+
+    end0, end1 = int(round(t0)), int(round(t1))
+    skipped = 0
+    for p in of_points:
+        ft   = dn_t(p.t)
+        fv   = dn_v(p.v)
+        ft_k = int(round(ft))
+        # Skip points that would collapse onto an existing endpoint
+        if ft_k == end0 or ft_k == end1:
+            print(f"[MFlow] apply_overframe: skip OKF point t={p.t:.3f} "
+                  f"— frame {ft_k} collides with endpoint")
+            skipped += 1
+            continue
+        tbl[ft_k] = {1: float(fv)}   # {1: value} is the Fusion scalar kf format
+
+    ok = _call_set_kf(spline, tbl)
+    print(f"[MFlow] apply_overframe: SetKeyFrames {'OK' if ok else 'FAILED'}"
+          f"  skipped={skipped}/{len(of_points)}")
+    if not ok:
+        return False
+
+    # ── 3. Apply per-segment bezier handles ───────────────────────────────
+    sorted_pts = sorted(of_points, key=lambda x: x.t)
     seg = (
         [(0.0, 0.0, None, h1)]
-        + [(p.t, p.v, p.lh, p.rh) for p in sorted(of_points, key=lambda x: x.t)]
+        + [(p.t, p.v, p.lh, p.rh) for p in sorted_pts]
         + [(1.0, 1.0, h2,  None)]
     )
-    for i in range(len(seg)-1):
-        pt0, pv0, _, rh = seg[i]
-        pt1, pv1, lh, _ = seg[i+1]
-        seg_dt = (pt1-pt0)*dt
-        seg_dv = (pv1-pv0)*dv
-        ft0 = dn_t(pt0); fv0 = dn_v(pv0)
-        ft1 = dn_t(pt1); fv1 = dn_v(pv1)
+    handles_ok = 0
+    handles_expected = 0
+    for i in range(len(seg) - 1):
+        pt0, pv0, _, rh  = seg[i]
+        pt1, pv1, lh, _  = seg[i + 1]
+        seg_dt = (pt1 - pt0) * dt
+        seg_dv = (pv1 - pv0) * dv
+        ft0s = dn_t(pt0);  fv0s = dn_v(pv0)
+        ft1s = dn_t(pt1);  fv1s = dn_v(pv1)
         if rh:
-            _write_handle(spline, ft0, "RH", ft0 + rh[0]*seg_dt, fv0 + rh[1]*seg_dv)
+            handles_expected += 1
+            wrote = _write_handle(spline, ft0s, "RH",
+                                  ft0s + rh[0] * seg_dt,
+                                  fv0s + rh[1] * seg_dv)
+            if wrote:
+                handles_ok += 1
+            else:
+                print(f"[MFlow] apply_overframe: RH handle FAILED at frame {ft0s:.1f}")
         if lh:
-            _write_handle(spline, ft1, "LH", ft1 + lh[0]*seg_dt, fv1 + lh[1]*seg_dv)
+            handles_expected += 1
+            wrote = _write_handle(spline, ft1s, "LH",
+                                  ft1s + lh[0] * seg_dt,
+                                  fv1s + lh[1] * seg_dv)
+            if wrote:
+                handles_ok += 1
+            else:
+                print(f"[MFlow] apply_overframe: LH handle FAILED at frame {ft1s:.1f}")
+
+    print(f"[MFlow] apply_overframe: handles {handles_ok}/{handles_expected}  → DONE")
     return True
