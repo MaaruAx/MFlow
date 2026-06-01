@@ -31,6 +31,7 @@ class Backend(QObject):
     presets_updated    = Signal(str)   # JSON list
     profiles_updated   = Signal(str)   # JSON {names, active}
     tool_updated       = Signal(str)   # JSON {name, inputs: {id: {label, kf_count}}}
+    comp_scan_updated  = Signal(str)   # JSON {tool_name: {inp_id: {label, kf_count}}}
     connection_changed = Signal(bool, str)   # connected, detail text
     status_changed     = Signal(str, str)    # message, hex color
     apply_done         = Signal(bool, str)   # success, message
@@ -58,8 +59,8 @@ class Backend(QObject):
         self._h2       = [0.58, 1.0]
         self._of_points = []          # list of dicts from JS
         self._sel_inp  = None         # (tool_name, inp_id)
+        self._sel_tools = {}          # {tool_name: {inp_id: meta}} — comp scan selection
         self._fps      = float(self._settings.get("bake_fps", 24))
-        self._js_ready = False        # True once JS signals it's fully initialised
         self._python_scan_cache = None  # cached result of scan_pythons()
         self._python_scan_time  = 0.0   # epoch when cache was last filled
 
@@ -369,6 +370,7 @@ class Backend(QObject):
         self._watcher = ResolveWatcher(self._comp, self)
         self._watcher.tool_changed.connect(self._on_tool_changed)
         self._watcher.disconnected.connect(self._on_disconnected)
+        self._watcher.comp_scan_updated.connect(self._on_comp_scan)
         self._watcher.start()
 
     def _on_tool_changed(self, name, inputs):
@@ -383,6 +385,26 @@ class Backend(QObject):
 
     def _on_disconnected(self):
         self.connection_changed.emit(False, "Disconnected")
+
+    def _on_comp_scan(self, scan_result: dict):
+        """Forward comp-wide scan result to JS as JSON."""
+        self._last_comp_scan = scan_result  # cache for select_tools
+        payload = {}
+        for tool_name, inputs in scan_result.items():
+            payload[tool_name] = {
+                k: {"label": v["label"], "kf_count": v["kf_count"]}
+                for k, v in inputs.items()
+            }
+        self.comp_scan_updated.emit(json.dumps(payload))
+
+    @Slot()
+    def scan_comp(self):
+        """Trigger a full comp scan. Result arrives via comp_scan_updated signal."""
+        if self._watcher is None:
+            self.status_changed.emit("Not connected", "#eb6f92")
+            return
+        self.status_changed.emit("Scanning composition…", "var(--muted)")
+        self._watcher.scan_all_tools()
 
     # ── State from JS ─────────────────────────────────────────────────────────
 
@@ -404,6 +426,33 @@ class Backend(QObject):
     @Slot(str, str)
     def select_input(self, tool_name, inp_id):
         self._sel_inp = (tool_name, inp_id)
+
+    @Slot(str)
+    def select_tools(self, data_json):
+        """
+        Called from JS when user selects/deselects nodes in the comp scan panel.
+        Uses _last_comp_scan cache — never triggers a new scan that would emit
+        comp_scan_updated and reset the JS selection state.
+        """
+        if self._watcher is None:
+            return
+        try:
+            selection = json.loads(data_json)
+        except Exception:
+            return
+
+        if not selection:
+            self._sel_tools = {}
+            return
+
+        cache = getattr(self, '_last_comp_scan', {})
+        new_sel = {}
+        for tool_name, inp_ids in selection.items():
+            tool_inputs = cache.get(tool_name, {})
+            filtered = {iid: tool_inputs[iid] for iid in inp_ids if iid in tool_inputs}
+            if filtered:
+                new_sel[tool_name] = filtered
+        self._sel_tools = new_sel
 
     # ── Presets ───────────────────────────────────────────────────────────────
 
@@ -450,23 +499,27 @@ class Backend(QObject):
 
     @Slot()
     def apply_curve(self):
-        self._do_apply(all_inputs=False)
+        self._do_apply(scope="single")
 
     @Slot()
-    def apply_curve_all(self):
-        self._do_apply(all_inputs=True)
+    def apply_curve_selected(self):
+        """Apply to all selected nodes from the comp scan, or active tool if none selected."""
+        self._do_apply(scope="selected")
 
-    def _do_apply(self, all_inputs):
+    # Keep old name as alias so any existing connections don't break
+    @Slot()
+    def apply_curve_all(self):
+        self._do_apply(scope="selected")
+
+    def _do_apply(self, all_inputs=None, scope="single"):
+        # Legacy call from auto-apply timer passes all_inputs bool — normalise
+        if all_inputs is True:
+            scope = "selected"
+        elif all_inputs is False:
+            scope = "single"
+
         if self._comp is None:
             self.apply_done.emit(False, "Not connected to Resolve")
-            return
-        try:
-            tool = self._comp.ActiveTool
-        except Exception:
-            self.apply_done.emit(False, "Could not read active tool")
-            return
-        if not tool:
-            self.apply_done.emit(False, "No tool selected in Fusion")
             return
 
         fps = self._fps
@@ -479,35 +532,64 @@ class Backend(QObject):
             self.apply_done.emit(False, "Watcher not running")
             return
 
-        all_inp = self._watcher._animated_inputs(tool)
-        if not all_inp:
-            self.apply_done.emit(False, "No animated inputs found on this tool")
-            return
+        # Build the list of (tool, inputs_dict) to process
+        work_items = []  # list of (tool_obj, {inp_id: meta})
 
-        if all_inputs:
-            targets = all_inp
-        elif self._sel_inp:
-            _, sel_id = self._sel_inp
-            targets = {sel_id: all_inp[sel_id]} if sel_id in all_inp else all_inp
+        if scope == "selected" and self._sel_tools:
+            # Multi-node: use everything the user selected in the comp scan
+            for tool_name, inp_dict in self._sel_tools.items():
+                try:
+                    tool_list = self._comp.GetToolList(False)
+                    tool_obj = next(
+                        (t for t in tool_list.values() if t.Name == tool_name), None
+                    ) if tool_list else None
+                    if tool_obj and inp_dict:
+                        work_items.append((tool_obj, inp_dict))
+                except Exception:
+                    pass
+            if not work_items:
+                self.apply_done.emit(False, "No nodes selected — use Scan All and select nodes first")
+                return
         else:
-            targets = all_inp
+            # Single-node: active tool only (original behaviour)
+            try:
+                tool = self._comp.ActiveTool
+            except Exception:
+                self.apply_done.emit(False, "Could not read active tool")
+                return
+            if not tool:
+                self.apply_done.emit(False, "No tool selected in Fusion")
+                return
+            all_inp = self._watcher._animated_inputs(tool)
+            if not all_inp:
+                self.apply_done.emit(False, "No animated inputs found on this tool")
+                return
+            if scope == "single" and self._sel_inp:
+                _, sel_id = self._sel_inp
+                targets = {sel_id: all_inp[sel_id]} if sel_id in all_inp else all_inp
+            else:
+                targets = all_inp
+            work_items.append((tool, targets))
 
         applied = 0
         no_spline = 0
         failed = 0
+        tool_names = []
         try:
             self._comp.StartUndo("MFlow: Apply")
             self._comp.Lock()
-            for inp_id, meta in targets.items():
-                spline = self._get_spline(meta["input_obj"])
-                if spline is None:
-                    no_spline += 1
-                    print(f"[MFlow] _do_apply: no BezierSpline for input '{inp_id}'")
-                    continue
-                if self._apply_one(spline, fps):
-                    applied += 1
-                else:
-                    failed += 1
+            for tool_obj, inp_dict in work_items:
+                tool_names.append(tool_obj.Name)
+                for inp_id, meta in inp_dict.items():
+                    spline = self._get_spline(meta["input_obj"])
+                    if spline is None:
+                        no_spline += 1
+                        print(f"[MFlow] _do_apply: no BezierSpline for '{inp_id}' on '{tool_obj.Name}'")
+                        continue
+                    if self._apply_one(spline, fps):
+                        applied += 1
+                    else:
+                        failed += 1
             self._comp.Unlock()
             self._comp.EndUndo(True)
         except Exception as e:
@@ -516,8 +598,9 @@ class Backend(QObject):
             self.apply_done.emit(False, f"Exception: {e}")
             return
 
+        names_str = ", ".join(tool_names) if tool_names else "?"
         if applied:
-            self.apply_done.emit(True, f"Applied to {applied} input(s) on '{tool.Name}'")
+            self.apply_done.emit(True, f"Applied to {applied} input(s) on: {names_str}")
         elif no_spline > 0 and failed == 0:
             self.apply_done.emit(False,
                 f"No BezierSpline found on {no_spline} input(s). "
@@ -527,7 +610,7 @@ class Backend(QObject):
                 f"Apply failed on {failed} input(s). "
                 f"Check the terminal for [MFlow] lines.")
         else:
-            self.apply_done.emit(False, "No animated inputs found on active tool.")
+            self.apply_done.emit(False, "No animated inputs found.")
 
     def _get_spline(self, inp):
         """
