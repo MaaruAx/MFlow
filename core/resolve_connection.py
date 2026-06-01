@@ -100,8 +100,9 @@ class ResolveWatcher(QObject):
     Uses undo-stack length as a cheap change trigger (friend's approach),
     only doing a detailed input scan when something actually changed.
     """
-    tool_changed  = Signal(str, dict)   # tool_name, {inp_id: {label, kf_count, input_obj}}
-    disconnected  = Signal()
+    tool_changed       = Signal(str, dict)   # tool_name, {inp_id: {label, kf_count, input_obj}}
+    disconnected       = Signal()
+    comp_scan_updated  = Signal(dict)        # {tool_name: {inp_id: {label, kf_count, input_obj}}}
 
     def __init__(self, comp, parent=None):
         super().__init__(parent)
@@ -154,6 +155,31 @@ class ResolveWatcher(QObject):
             return [(k, v["input_obj"]) for k, v in self._animated_inputs(tool).items()]
         except Exception:
             return []
+
+    def scan_all_tools(self):
+        """
+        Scan every tool in the comp and emit comp_scan_updated with all
+        animated inputs found.  Called explicitly (never in the poll loop)
+        so it doesn't affect normal poll performance.
+        Returns the result dict as well for immediate use.
+        """
+        result = {}
+        try:
+            tool_list = self._comp.GetToolList(False)  # False = all tools, not just selected
+            if not tool_list:
+                return result
+            for tool in tool_list.values():
+                try:
+                    name = tool.Name
+                    inputs = self._animated_inputs(tool)
+                    if inputs:
+                        result[name] = inputs
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        self.comp_scan_updated.emit(result)
+        return result
 
     # ── internals ─────────────────────────────────────────────────────────────
 
