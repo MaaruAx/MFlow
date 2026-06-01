@@ -370,7 +370,7 @@ body.compact #curve-wrap{flex:1}
 <div id="titlebar">
   <span id="appname"><span id="nm">M</span><span id="nf">Flow</span></span>
   <span class="badge" id="badge-fluid">FLUID</span>
-  <span id="version">v2.1.5</span>
+  <span id="version">v2.2.0</span>
   <div class="spacer"></div>
   <div id="conn-row">
     <div id="conn-dot"></div>
@@ -905,6 +905,15 @@ let _syncingModeLib=false;
 /* ── Mode (full palette swap + auto-sync library pill) ── */
 function setMode(m){
   mode=m;
+  // ── Sync OKF toggle with mode (single source of truth) ──
+  const _okfNew=(m==='overframe');
+  if(okfActive!==_okfNew){
+    okfActive=_okfNew;
+    const _btn=document.getElementById('okf-toggle');
+    if(_btn){_btn.textContent=okfActive?'ON':'OFF';_btn.classList.toggle('on',okfActive);}
+    const _ctrl=document.getElementById('okf-ctrl');
+    if(_ctrl)_ctrl.classList.toggle('enabled',okfActive);
+  }
   const col=MODE_COLORS[m]||'#9ccfd8';
   document.documentElement.style.setProperty('--accent',col);
   const _nm=document.getElementById('nm'); if(_nm) _nm.style.color=col;
@@ -1604,6 +1613,8 @@ function drawCard(cv,preset){
 function selectPreset(idx){
   selIdx=idx;const p=allPresets[idx];if(!p)return;
   h1=[...(p.h1||[0.42,0])];h2=[...(p.h2||[0.58,1])];
+  // Restore OKF extra points when the preset carries them
+  if(p.overframe_points) okfPoints=p.overframe_points.map(pt=>({...pt}));
   if(isSpring()&&p.params){if(p.params.zeta!=null)physZeta=p.params.zeta;if(p.params.omega_n!=null)physOmegaN=p.params.omega_n;syncSpringSliders();}
   if(isElastic()&&p.params){if(p.params.amplitude!=null)elAmp=p.params.amplitude;if(p.params.period!=null)elPeriod=p.params.period;syncElasticSliders();}
   setLibrary(p.library||'easing');pushState();
@@ -1929,10 +1940,8 @@ function renderParamsTree(data){
 }
 /* ── OKF ── */
 function toggleOKF(){
-  okfActive=!okfActive;const btn=document.getElementById('okf-toggle');
-  btn.textContent=okfActive?'ON':'OFF';btn.classList.toggle('on',okfActive);
-  document.getElementById('okf-ctrl').classList.toggle('enabled',okfActive);
-  pushState();
+  // Switching mode is the single source of truth — setMode syncs okfActive + button + ctrl
+  setMode(okfActive?'easing':'overframe');
 }
 function addOKFPoint(){
   const ts=[0,...okfPoints.map(p=>p.t),1];let maxG=0,bestMid=0.5;
