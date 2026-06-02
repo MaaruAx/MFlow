@@ -43,6 +43,7 @@ class Backend(QObject):
         self._fusion_app = fusion_app
         self._win      = window
         self._comp     = comp
+        self._resolve  = None   # stored after first successful reconnect()
         self._watcher  = None
         self._profiles = load_profiles()
         self._settings = _rj(settings_file())
@@ -194,19 +195,48 @@ class Backend(QObject):
 
     @Slot(str)
     def reconnect(self, custom_path=""):
-        from core.resolve_connection import get_resolve, get_comp
-        self.connection_changed.emit(False, "Connecting…")
+        # Emit immediately so the UI shows "Connecting…" right away
+        self.connection_changed.emit(False, "Connecting\u2026")
         try:
             s = json.loads(self.get_settings())
             cp = custom_path.strip() or s.get("dvr_path", "")
         except Exception:
             cp = custom_path.strip()
-        resolve = get_resolve(cp)
-        if resolve:
-            from core.resolve_connection import get_comp as _gc
-            self.set_comp(_gc(resolve))
+
+        # Run get_resolve() on a thread-pool worker so the Qt main thread (and
+        # the UI) stays responsive during the IPC call (which can take 2-5 s).
+        _self = self
+
+        class _ConnectWorker(QRunnable):
+            def run(self):
+                try:
+                    from core.resolve_connection import get_resolve, get_comp as _gc
+                    resolve = get_resolve(cp)
+                    if resolve:
+                        _self._resolve = resolve
+                        comp = _gc(resolve)
+                        # Marshal back to the Qt main thread before touching Qt objects
+                        QTimer.singleShot(0, lambda: _self._apply_new_comp(comp))
+                    else:
+                        QTimer.singleShot(0, lambda: _self.connection_changed.emit(
+                            False,
+                            "Not connected \u2014 open Resolve and enable "
+                            "Preferences > System > General > External scripting: Local"))
+                except Exception as exc:
+                    msg = f"Connect error: {exc}"
+                    QTimer.singleShot(0, lambda: _self.connection_changed.emit(False, msg))
+
+        QThreadPool.globalInstance().start(_ConnectWorker())
+
+    def _apply_new_comp(self, comp):
+        """Called on the Qt main thread after a background reconnect succeeds."""
+        if comp:
+            self.set_comp(comp)
         else:
-            self.connection_changed.emit(False, "Not connected — check Preferences > External Scripting")
+            self.connection_changed.emit(
+                False,
+                "Resolve found but no active Fusion comp \u2014 "
+                "open a composition or switch to the Fusion page")
 
     def _announce_connection(self):
         if self._comp:
@@ -386,7 +416,13 @@ class Backend(QObject):
         self.tool_updated.emit(json.dumps(payload))
 
     def _on_disconnected(self):
-        self.connection_changed.emit(False, "Disconnected")
+        # Don't just show "Disconnected" — the most common cause is the user
+        # switching projects in Resolve, where the old comp object goes stale.
+        # Wait 2 s for Resolve to finish loading the new project, then attempt
+        # a single automatic reconnect.  If it fails (Resolve truly closed),
+        # reconnect() will emit "Not connected" and stop.
+        self.connection_changed.emit(False, "Reconnecting\u2026")
+        QTimer.singleShot(2000, lambda: self.reconnect(""))
 
     def _on_comp_scan(self, scan_result: dict):
         """Forward comp-wide scan result to JS as JSON."""
