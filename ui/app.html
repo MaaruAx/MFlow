@@ -80,6 +80,7 @@ html,body{width:100%;height:100%;background:var(--base);color:var(--text);
 #main{display:flex;flex:1;min-height:0;position:relative;overflow:hidden}
 body.compact #preset-panel,body.compact #right-panel,body.compact #params-sidebar{display:none!important}
 body.compact #curve-wrap{flex:1}
+body.compact #kf-range-widget{display:none!important}
 /* Params sidebar — CSS */
 #params-sidebar{position:absolute;left:0;top:0;bottom:0;width:0;overflow:hidden;z-index:50;
   background:var(--surface);border-right:1px solid var(--border);
@@ -277,6 +278,22 @@ body.compact #curve-wrap{flex:1}
 #btn-apply{font-size:13px;font-weight:800;padding:6px 16px;border:1.5px solid var(--accent);
   border-radius:var(--r);background:var(--accent);color:var(--base);cursor:pointer;font-family:inherit;transition:opacity .15s}
 #btn-apply:hover{opacity:.85}
+/* KF range widget */
+#kf-range-widget{display:flex;align-items:center;gap:6px;
+  border:1.5px solid var(--accent);border-radius:var(--r);padding:3px 8px;flex-shrink:0}
+#kfr-curves-col{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding-right:6px;border-right:1px solid var(--border-hi)}
+#kfr-curves-num{font-size:14px;font-weight:800;color:var(--accent);line-height:1}
+#kfr-curves-lbl{font-size:7px;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase}
+#kfr-controls{display:flex;align-items:center;gap:4px}
+.kfr-grp{display:flex;align-items:center;gap:2px}
+.kfr-lbl{font-size:7px;font-weight:700;letter-spacing:.5px;color:var(--muted);text-transform:uppercase;margin-right:1px}
+.kfr-btn{width:14px;height:14px;border:none;background:transparent;color:var(--iris);cursor:pointer;
+  font-size:11px;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;
+  border-radius:2px;transition:color .1s,background .1s}
+.kfr-btn:hover{color:var(--accent);background:var(--sel-bg)}
+.kfr-val{font-size:13px;font-weight:800;color:var(--accent);min-width:16px;text-align:center;line-height:1}
+.kfr-sep{font-size:9px;color:var(--border-hi);padding:0 1px}
 /* Resize handles */
 .resize-edge{position:fixed;z-index:9998}
 .resize-right{right:0;top:4px;bottom:4px;width:5px;cursor:e-resize}
@@ -569,7 +586,27 @@ body.compact #curve-wrap{flex:1}
 
 <div id="bottom-bar">
   <span id="status-msg">Ready</span>
-  <button id="btn-flip" onclick="flipAll()" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:var(--r);cursor:pointer;border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s">FLIP</button>
+  <div id="kf-range-widget">
+    <div id="kfr-curves-col">
+      <div id="kfr-curves-num">—</div>
+      <div id="kfr-curves-lbl">Curves</div>
+    </div>
+    <div id="kfr-controls">
+      <div class="kfr-grp">
+        <span class="kfr-lbl">FROM</span>
+        <button class="kfr-btn" onclick="kfrStep('from',-1)">◀</button>
+        <div class="kfr-val" id="kfr-from">1</div>
+        <button class="kfr-btn" onclick="kfrStep('from',1)">▶</button>
+      </div>
+      <div class="kfr-sep">–</div>
+      <div class="kfr-grp">
+        <span class="kfr-lbl">TO</span>
+        <button class="kfr-btn" onclick="kfrStep('to',-1)">◀</button>
+        <div class="kfr-val" id="kfr-to">∞</div>
+        <button class="kfr-btn" onclick="kfrStep('to',1)">▶</button>
+      </div>
+    </div>
+  </div>
   <button id="btn-aall" onclick="applySelected()">APPLY SELECTED</button>
   <button id="btn-apply" onclick="backend&&backend.apply_curve()">▶ APPLY</button>
 </div>
@@ -805,7 +842,7 @@ document.addEventListener('DOMContentLoaded',()=>{
       backend=ch.objects.backend;
       backend.presets_updated.connect( s=>renderPresets(JSON.parse(s)));
       backend.profiles_updated.connect(s=>renderProfiles(JSON.parse(s)));
-      backend.tool_updated.connect(s=>{const d=JSON.parse(s);renderParamsTree(d);renderInputsList(d);});
+      backend.tool_updated.connect(s=>{const d=JSON.parse(s);renderParamsTree(d);renderInputsList(d);kfrUpdateMax(d);});
       backend.comp_scan_updated.connect(s=>renderCompScan(JSON.parse(s)));
       backend.connection_changed.connect((ok,t)=>setConn(ok,t));
       backend.status_changed.connect(  (m,c)=>setStatus(m,c));
@@ -821,6 +858,8 @@ document.addEventListener('DOMContentLoaded',()=>{
       });
       // Tell Python we're ready — replaces the blind 600 ms timer
       backend.js_ready();
+      // Auto-scan on startup once UI is settled
+      setTimeout(()=>{ if(backend) doScanAll(); }, 800);
       // Start on PARAMS tab
       setRPTab('settings');
     });
@@ -2138,6 +2177,7 @@ function _pushScanSel(){
   const out={};
   for(const[tool,ids] of Object.entries(_scanSel)){if(ids.size>0) out[tool]=[...ids];}
   backend.select_tools(JSON.stringify(out));
+  kfrUpdateMaxFromScan();
 }
 
 function applySelected(){
@@ -2146,6 +2186,81 @@ function applySelected(){
   for(const s of Object.values(_scanSel)){if(s.size>0){hasSelection=true;break;}}
   if(hasSelection) backend.apply_curve_selected();
   else backend.apply_curve_all();
+}
+
+/* ── KF Range widget ── */
+let _kfrFrom=1, _kfrTo=2, _kfrMax=2;
+
+function kfrUpdateMax(toolData){
+  // Called on tool_updated (single active node)
+  // If there's a scan selection, use min kf_count across selected nodes instead
+  let max=2;
+  if(_kfrHasScanSel()){
+    max=_kfrMinFromScan();
+  } else {
+    const inputs=toolData&&toolData.inputs?toolData.inputs:{};
+    for(const m of Object.values(inputs)){
+      if(typeof m.kf_count==='number' && m.kf_count>max) max=m.kf_count;
+    }
+  }
+  _kfrApplyMax(max);
+}
+
+function kfrUpdateMaxFromScan(){
+  // Called after scan selection changes
+  if(_kfrHasScanSel()){
+    _kfrApplyMax(_kfrMinFromScan());
+  }
+}
+
+function _kfrHasScanSel(){
+  for(const s of Object.values(_scanSel)){if(s.size>0) return true;}
+  return false;
+}
+
+function _kfrMinFromScan(){
+  // For each selected tool, find max kf_count among its selected inputs,
+  // then take the min across all selected tools
+  let minMax=Infinity;
+  for(const[toolName,ids] of Object.entries(_scanSel)){
+    if(!ids.size) continue;
+    const toolInputs=_scanData[toolName]||{};
+    let toolMax=0;
+    for(const id of ids){
+      const m=toolInputs[id];
+      if(m && typeof m.kf_count==='number' && m.kf_count>toolMax) toolMax=m.kf_count;
+    }
+    if(toolMax>0 && toolMax<minMax) minMax=toolMax;
+  }
+  return isFinite(minMax)?minMax:2;
+}
+
+function _kfrApplyMax(max){
+  _kfrMax=Math.max(2,max);
+  // Clamp: from always >= 1, to always <= max, and to > from
+  if(_kfrTo>_kfrMax) _kfrTo=_kfrMax;
+  if(_kfrFrom>=_kfrTo) _kfrFrom=Math.max(1,_kfrTo-1);
+  _kfrRender();
+  if(backend) backend.set_kf_range(_kfrFrom, _kfrTo);
+}
+
+function kfrStep(which, delta){
+  if(which==='from'){
+    _kfrFrom=Math.max(1, Math.min(_kfrFrom+delta, _kfrTo-1));
+  } else {
+    _kfrTo=Math.max(_kfrFrom+1, Math.min(_kfrTo+delta, _kfrMax));
+  }
+  _kfrRender();
+  if(backend) backend.set_kf_range(_kfrFrom, _kfrTo);
+}
+
+function _kfrRender(){
+  const ef=document.getElementById('kfr-from');
+  const et=document.getElementById('kfr-to');
+  const ec=document.getElementById('kfr-curves-num');
+  if(ef) ef.textContent=_kfrFrom;
+  if(et) et.textContent=_kfrTo;
+  if(ec) ec.textContent=Math.max(0,_kfrTo-_kfrFrom);
 }
 
 /* ── Debug (callback-based — no [object Promise]) ── */
