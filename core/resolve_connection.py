@@ -113,6 +113,12 @@ class ResolveWatcher(QObject):
         self._selected_input = None   # (tool_name, inp_id) chosen by user
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
+        # Cooldown timer: fires scan_all_tools 2.5s after last undo change
+        # so bulk operations (deleting 20 nodes) only trigger one scan
+        self._scan_cooldown = QTimer(self)
+        self._scan_cooldown.setSingleShot(True)
+        self._scan_cooldown.setInterval(2500)
+        self._scan_cooldown.timeout.connect(self.scan_all_tools)
 
     def start(self):
         self._last_undo = self._undo_len()
@@ -201,6 +207,9 @@ class ResolveWatcher(QObject):
             if name_changed or undo_changed:
                 self._last_name = name
                 self._last_undo = undo
+                if undo_changed:
+                    # Restart cooldown — scan fires 2.5s after last change
+                    self._scan_cooldown.start()
                 if active:
                     # Only re-scan inputs when tool changes — expensive operation
                     # On undo-only change, reuse cached inputs
