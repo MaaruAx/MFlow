@@ -278,10 +278,12 @@ def _call_set_kf(obj, tbl) -> bool:
     return False
 
 
-def apply_bezier(spline, h1: list, h2: list) -> bool:
+def apply_bezier(spline, h1: list, h2: list, kf_from: int = 1, kf_to: int = 0) -> bool:
     """
-    Apply cubic-bezier handles to a BezierSpline or Point2D input.
-    Handles both scalar inputs and compound (Point2D) inputs like Center.
+    Apply cubic-bezier handles to every segment within [kf_from, kf_to].
+    Each consecutive pair of keyframes in the range gets its own h1/h2 handles,
+    so intermediate keyframes are never skipped or corrupted.
+    kf_from/kf_to are 1-based indices; kf_to=0 means last keyframe.
     """
     get_kf = getattr(spline, "GetKeyFrames", None)
     if not callable(get_kf):
@@ -298,53 +300,101 @@ def apply_bezier(spline, h1: list, h2: list) -> bool:
         return False
 
     all_times = sorted(sd.keys(), key=lambda x: float(x))
-    k0, k1 = all_times[0], all_times[-1]
-    e0, e1 = sd[k0], sd[k1]
-    dt = float(k1) - float(k0)
-    if abs(dt) < 1e-12: return False
-
-    # Shallow copy to avoid mutating Fusion's internal dict
-    tbl = {k: dict(v) if isinstance(v, dict) else v for k, v in sd.items()}
-    if not isinstance(tbl[k0], dict): tbl[k0] = {1: tbl[k0]}
-    if not isinstance(tbl[k1], dict): tbl[k1] = {1: tbl[k1]}
+    n = len(all_times)
+    i0 = max(0, kf_from - 1)
+    i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
+    if i1 <= i0: i1 = min(i0 + 1, n - 1)
 
     name = getattr(spline, "Name", "?")
 
-    # Strip LockedY from the copy so SetKeyFrames can write handles
+    # Build one shared table — shallow copy, strips locks once
+    tbl = {k: dict(v) if isinstance(v, dict) else v for k, v in sd.items()}
     _strip_locks(tbl)
 
-    # ── Point2D path input (Center, Pivot, etc.) ──────────────────────────
-    p0, p1 = _path_point(e0), _path_point(e1)
-    if p0 is not None and p1 is not None:
-        dx, dy = p1[0]-p0[0], p1[1]-p0[1]
-        # Use the dominant axis for value delta
-        dv = dx if abs(dx) >= abs(dy) else dy
-        tbl[k0]["RH"] = {1: h1[0]*dt,       2: h1[1]*dv}
-        tbl[k1]["LH"] = {1: (h2[0]-1.0)*dt, 2: (h2[1]-1.0)*dv}
-        ok = _call_set_kf(spline, tbl)
-        print(f"[MFlow] apply_bezier: Point2D {'OK' if ok else 'FAILED'} on '{name}'")
-        return ok
+    # Ensure every keyframe in range is a dict so we can write handles
+    for i in range(i0, i1 + 1):
+        k = all_times[i]
+        if not isinstance(tbl[k], dict):
+            tbl[k] = {1: tbl[k]}
 
-    # ── Scalar input ──────────────────────────────────────────────────────
-    v0 = _kf_scalar(e0); v1 = _kf_scalar(e1)
-    if v0 is None or v1 is None:
-        print(f"[MFlow] apply_bezier: cannot read scalar values")
+    any_ok = False
+
+    # Apply handles to each consecutive segment within [i0, i1]
+    for seg_i in range(i0, i1):
+        ka, kb = all_times[seg_i], all_times[seg_i + 1]
+        ea, eb = sd[ka], sd[kb]
+        ta, tb = float(ka), float(kb)
+        dt = tb - ta
+        if abs(dt) < 1e-12:
+            print(f"[MFlow] apply_bezier: zero-duration seg [{seg_i+1}→{seg_i+2}] skipped")
+            continue
+
+        # ── Point2D ──
+        p0, p1 = _path_point(ea), _path_point(eb)
+        if p0 is not None and p1 is not None:
+            dx, dy = p1[0]-p0[0], p1[1]-p0[1]
+            dv = dx if abs(dx) >= abs(dy) else dy
+            tbl[ka]["RH"] = {1: h1[0]*dt,         2: h1[1]*dv}
+            tbl[kb]["LH"] = {1: (h2[0]-1.0)*dt,   2: (h2[1]-1.0)*dv}
+            print(f"[MFlow] apply_bezier: Point2D seg [{seg_i+1}→{seg_i+2}] t={ta:.1f}→{tb:.1f}"
+                  f"  RH_off={h1[0]*dt:.2f}  LH_off={(h2[0]-1.0)*dt:.2f}")
+            any_ok = True
+            continue
+
+        # ── Scalar ──
+        v0 = _kf_scalar(ea); v1 = _kf_scalar(eb)
+        if v0 is None or v1 is None:
+            print(f"[MFlow] apply_bezier: cannot read scalar on '{name}' seg [{seg_i+1}→{seg_i+2}]")
+            continue
+        dv = v1 - v0
+        rh_off = h1[0]*dt
+        lh_off = (h2[0]-1.0)*dt
+        tbl[ka]["RH"] = {1: rh_off, 2: h1[1]*dv}
+        tbl[kb]["LH"] = {1: lh_off, 2: (h2[1]-1.0)*dv}
+        print(f"[MFlow] apply_bezier: scalar seg [{seg_i+1}→{seg_i+2}] '{name}'"
+              f"  t={ta:.1f}→{tb:.1f}  v={v0:.3f}→{v1:.3f}"
+              f"  RH_off={rh_off:.2f}  LH_off={lh_off:.2f}")
+        any_ok = True
+
+    if not any_ok:
         return False
-    dv = v1 - v0
-    tbl[k0]["RH"] = {1: h1[0]*dt,       2: h1[1]*dv}
-    tbl[k1]["LH"] = {1: (h2[0]-1.0)*dt, 2: (h2[1]-1.0)*dv}
+
     ok = _call_set_kf(spline, tbl)
-    print(f"[MFlow] apply_bezier: scalar {'OK' if ok else 'FAILED'} on '{name}' t={float(k0):.1f}→{float(k1):.1f}")
+    print(f"[MFlow] apply_bezier: SetKeyFrames {'OK' if ok else 'FAILED'} on '{name}'"
+          f" range=[{i0+1}→{i1+1}] segs={i1-i0}")
     return ok
 
 
 
 
-def apply_baked(spline, frames) -> bool:
+def apply_baked(spline, frames, kf_from: int = 1, kf_to: int = 0) -> bool:
+    """Apply baked frames, replacing keyframes only within the kf_from..kf_to range."""
     if not frames:
         return False
     try:
-        kf = {int(round(f)): v for f, v in frames}
+        # Get existing keyframes to know the time range we should replace
+        get_kf = getattr(spline, "GetKeyFrames", None)
+        if callable(get_kf):
+            sd = get_kf()
+            if isinstance(sd, dict) and len(sd) >= 2:
+                all_times = sorted(sd.keys(), key=lambda x: float(x))
+                n = len(all_times)
+                i0 = max(0, kf_from - 1)
+                i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
+                if i1 <= i0: i1 = min(i0 + 1, n - 1)
+                t_start = float(all_times[i0])
+                t_end   = float(all_times[i1])
+                # Merge: keep existing kfs outside the range, replace inside
+                existing = {k: v for k, v in sd.items()
+                            if float(k) < t_start or float(k) > t_end}
+                new_range = {int(round(f)): v for f, v in frames
+                             if t_start <= f <= t_end}
+                kf = {**existing, **new_range}
+            else:
+                kf = {int(round(f)): v for f, v in frames}
+        else:
+            kf = {int(round(f)): v for f, v in frames}
+
         set_kf = getattr(spline, "SetKeyFrames", None)
         if not callable(set_kf):
             return False
@@ -381,7 +431,7 @@ def apply_steps(spline, n_steps, position="end") -> bool:
         return False
 
 
-def apply_overframe(spline, h1: list, h2: list, of_points: list) -> bool:
+def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 1, kf_to: int = 0) -> bool:
     """Insert overframe keyframes and apply per-segment bezier handles."""
 
     # ── 1. Read existing keyframe structure ───────────────────────────────
@@ -399,7 +449,11 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list) -> bool:
         return False
 
     all_times = sorted(sd.keys(), key=lambda x: float(x))
-    k0, k1 = all_times[0], all_times[-1]
+    n = len(all_times)
+    i0 = max(0, kf_from - 1)
+    i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
+    if i1 <= i0: i1 = min(i0 + 1, n - 1)
+    k0, k1 = all_times[i0], all_times[i1]
     t0, t1 = float(k0), float(k1)
     dt = t1 - t0
     if abs(dt) < 1e-12:
