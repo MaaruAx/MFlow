@@ -301,11 +301,22 @@ def main():
                 except Exception as e:
                     log(f"  Could not remove {item}: {e}", "WARN")
 
-    errs = copy_tree(HERE, install_dir)
-    if errs:
-        for e in errs: log(e, "WARN")
+    # Guard: if install.py is running FROM inside the install dir (e.g. user
+    # navigated to %LOCALAPPDATA%\MFlow and ran install.py from there), skip the
+    # file copy entirely.  copy_tree(src, dst) with src==dst calls shutil.rmtree
+    # on each subdirectory before re-copying it — if the copy then fails (e.g.
+    # a lock or permission error) the directory stays deleted, which is exactly
+    # what caused the "No module named 'ui'" / "No module named 'core'" errors.
+    _here_real = os.path.realpath(os.path.abspath(HERE))
+    _inst_real  = os.path.realpath(os.path.abspath(install_dir))
+    if _here_real == _inst_real:
+        log("Source == install dir — skipping file copy (already in place)")
     else:
-        log(f"OK - copied to {install_dir}")
+        errs = copy_tree(HERE, install_dir)
+        if errs:
+            for e in errs: log(e, "WARN")
+        else:
+            log(f"OK - copied to {install_dir}")
 
     # Write path files with fully expanded real paths
     write_python_path(python_exe, install_dir)
