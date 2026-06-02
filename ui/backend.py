@@ -60,6 +60,8 @@ class Backend(QObject):
         self._of_points = []          # list of dicts from JS
         self._sel_inp  = None         # (tool_name, inp_id)
         self._sel_tools = {}          # {tool_name: {inp_id: meta}} — comp scan selection
+        self._kf_from  = 1           # 1-based start keyframe index (1 = first)
+        self._kf_to    = 0           # 1-based end keyframe index (0 = last)
         self._fps      = float(self._settings.get("bake_fps", 24))
         self._python_scan_cache = None  # cached result of scan_pythons()
         self._python_scan_time  = 0.0   # epoch when cache was last filled
@@ -454,6 +456,12 @@ class Backend(QObject):
                 new_sel[tool_name] = filtered
         self._sel_tools = new_sel
 
+    @Slot(int, int)
+    def set_kf_range(self, from_idx, to_idx):
+        """from_idx and to_idx are 1-based real indices. to_idx=0 still accepted as last-kf fallback."""
+        self._kf_from = max(1, from_idx)
+        self._kf_to   = max(0, to_idx)
+
     # ── Presets ───────────────────────────────────────────────────────────────
 
     @Slot(str)
@@ -683,8 +691,9 @@ class Backend(QObject):
     def _apply_one(self, spline, fps):
         mode = self._mode
         h1, h2 = self._h1, self._h2
+        kf_from, kf_to = self._kf_from, self._kf_to
         if mode == "easing":
-            return apply_bezier(spline, h1, h2)
+            return apply_bezier(spline, h1, h2, kf_from=kf_from, kf_to=kf_to)
         if mode == "overframe":
             pts = [OverframePoint(
                 t=p["t"], v=p["v"],
@@ -692,33 +701,38 @@ class Backend(QObject):
                 rh=p.get("rh", [0.1, 0.0]),
                 tangent=p.get("tangent", "smooth"),
             ) for p in self._of_points]
-            return apply_overframe(spline, h1, h2, pts) if pts else apply_bezier(spline, h1, h2)
-        r = self._kf_range(spline)
+            return apply_overframe(spline, h1, h2, pts, kf_from=kf_from, kf_to=kf_to) if pts else apply_bezier(spline, h1, h2, kf_from=kf_from, kf_to=kf_to)
+        r = self._kf_range(spline, kf_from=kf_from, kf_to=kf_to)
         if mode == "elastic":
             if not r: return False
             t0, v0, t1, v1 = r
             frames = bake_elastic_penner(t0, v0, t1, v1, fps,
                                          amplitude=self._el_amplitude,
                                          period=self._el_period)
-            return apply_baked(spline, frames)
+            return apply_baked(spline, frames, kf_from=kf_from, kf_to=kf_to)
         if mode in ("spring", "bounce"):
             if not r: return False
             t0, v0, t1, v1 = r
             frames = bake_oscillator(t0, v0, t1, v1, fps,
                                      zeta=self._phys_zeta,
                                      omega_n=self._phys_omega_n)
-            return apply_baked(spline, frames)
-        return apply_bezier(spline, h1, h2)
+            return apply_baked(spline, frames, kf_from=kf_from, kf_to=kf_to)
+        return apply_bezier(spline, h1, h2, kf_from=kf_from, kf_to=kf_to)
 
-    def _kf_range(self, spline):
-        """Read t0,v0,t1,v1 from the spline object (PlainInput or BezierSpline tool)."""
+    def _kf_range(self, spline, kf_from=1, kf_to=0):
+        """Read t0,v0,t1,v1 using 1-based kf_from/kf_to indices. kf_to=0 means last."""
         try:
             get_kf = getattr(spline, "GetKeyFrames", None)
             if not callable(get_kf): return None
             sd = get_kf()
             if not isinstance(sd, dict) or len(sd) < 2: return None
             times = sorted(sd.keys(), key=lambda x: float(x))
-            k0, k1 = times[0], times[-1]
+            n = len(times)
+            # Clamp indices to valid range
+            i0 = max(0, kf_from - 1)           # from_idx 1-based → 0-based
+            i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
+            if i1 <= i0: i1 = min(i0 + 1, n - 1)  # always at least one segment
+            k0, k1 = times[i0], times[i1]
             def _v(k):
                 e = sd[k]
                 if isinstance(e, dict):
