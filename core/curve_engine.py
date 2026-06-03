@@ -367,46 +367,85 @@ def apply_bezier(spline, h1: list, h2: list, kf_from: int = 1, kf_to: int = 0) -
 
 
 
-def apply_baked(spline, frames, kf_from: int = 1, kf_to: int = 0) -> bool:
-    """Apply baked frames, replacing keyframes only within the kf_from..kf_to range."""
+def apply_baked(spline, frames, kf_from: int = 1, kf_to: int = 0,
+                t_start: float = None, t_end: float = None) -> bool:
+    """
+    Apply baked frames within the time range [t_start, t_end].
+    If t_start/t_end are provided (from _bake_range), they are used directly.
+    Otherwise falls back to kf_from/kf_to index-based range.
+    Always clears previously-baked keyframes in the range first.
+    Anchor keyframes are preserved so Ctrl+Z restores them correctly.
+    """
     if not frames:
         return False
     try:
-        # Get existing keyframes to know the time range we should replace
         get_kf = getattr(spline, "GetKeyFrames", None)
-        if callable(get_kf):
-            sd = get_kf()
-            if isinstance(sd, dict) and len(sd) >= 2:
-                all_times = sorted(sd.keys(), key=lambda x: float(x))
-                n = len(all_times)
-                i0 = max(0, kf_from - 1)
-                i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
-                if i1 <= i0: i1 = min(i0 + 1, n - 1)
-                t_start = float(all_times[i0])
-                t_end   = float(all_times[i1])
-                # Merge: keep existing kfs outside the range, replace inside
-                existing = {k: v for k, v in sd.items()
-                            if float(k) < t_start or float(k) > t_end}
-                new_range = {int(round(f)): v for f, v in frames
-                             if t_start <= f <= t_end}
-                kf = {**existing, **new_range}
-            else:
-                kf = {int(round(f)): v for f, v in frames}
-        else:
-            kf = {int(round(f)): v for f, v in frames}
-
         set_kf = getattr(spline, "SetKeyFrames", None)
-        if not callable(set_kf):
+        if not callable(get_kf) or not callable(set_kf):
             return False
-        for args in ((kf, True), (kf,)):
-            try:
-                set_kf(*args)
-                return True
-            except Exception:
-                continue
+
+        sd = get_kf()
+        if not isinstance(sd, dict) or len(sd) < 2:
+            kf = {int(round(f)): v for f, v in frames}
+            for args in ((kf, True), (kf,)):
+                try: set_kf(*args); return True
+                except Exception: continue
+            return False
+
+        all_times = sorted(sd.keys(), key=lambda x: float(x))
+        n = len(all_times)
+
+        # Resolve t_start / t_end
+        if t_start is None or t_end is None:
+            i0 = max(0, kf_from - 1)
+            i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
+            if i1 <= i0: i1 = min(i0 + 1, n - 1)
+            t_start = float(all_times[i0])
+            t_end   = float(all_times[i1])
+
+        v_start = _anchor_value(spline, t_start, sd.get(
+            min(all_times, key=lambda k: abs(float(k)-t_start))))
+        v_end   = _anchor_value(spline, t_end, sd.get(
+            min(all_times, key=lambda k: abs(float(k)-t_end))))
+
+        # Keep kfs outside range, replace everything inside with baked frames
+        kf = {}
+        for k, v in sd.items():
+            ft = float(k)
+            if ft < t_start or ft > t_end:
+                kf[k] = v
+
+        for f, v in frames:
+            ft = float(f)
+            if t_start <= ft <= t_end:
+                kf[int(round(ft))] = v
+
+        # Force anchors
+        kf[int(round(t_start))] = v_start
+        kf[int(round(t_end))]   = v_end
+
+        for args in ((kf, True), (kf, False), (kf,)):
+            try: set_kf(*args); return True
+            except Exception: continue
         return False
+
+    except Exception as e:
+        print(f"[MFlow] apply_baked exception: {e}")
+        return False
+
+
+def _anchor_value(spline, t, kf_entry):
+    """
+    Read the true value at anchor time t.
+    Tries GetInput first (most reliable), falls back to kf_entry parsing.
+    """
+    try:
+        v = spline.GetInput(t)
+        if v is not None:
+            return float(v)
     except Exception:
-        return False
+        pass
+    return _kf_scalar(kf_entry) or 0.0
 
 
 def apply_steps(spline, n_steps, position="end") -> bool:
