@@ -728,6 +728,7 @@ class Backend(QObject):
         mode = self._mode
         h1, h2 = self._h1, self._h2
         kf_from, kf_to = self._kf_from, self._kf_to
+
         if mode == "easing":
             return apply_bezier(spline, h1, h2, kf_from=kf_from, kf_to=kf_to)
         if mode == "overframe":
@@ -738,25 +739,34 @@ class Backend(QObject):
                 tangent=p.get("tangent", "smooth"),
             ) for p in self._of_points]
             return apply_overframe(spline, h1, h2, pts, kf_from=kf_from, kf_to=kf_to) if pts else apply_bezier(spline, h1, h2, kf_from=kf_from, kf_to=kf_to)
-        r = self._kf_range(spline, kf_from=kf_from, kf_to=kf_to)
+
+        # spring / elastic / bounce — use anchor-aware range
+        r = self._bake_range(spline, kf_from=kf_from, kf_to=kf_to)
+        if not r: return False
+        t0, v0, t1, v1 = r
+
         if mode == "elastic":
-            if not r: return False
-            t0, v0, t1, v1 = r
             frames = bake_elastic_penner(t0, v0, t1, v1, fps,
                                          amplitude=self._el_amplitude,
                                          period=self._el_period)
-            return apply_baked(spline, frames, kf_from=kf_from, kf_to=kf_to)
+            return apply_baked(spline, frames, t_start=t0, t_end=t1)
         if mode in ("spring", "bounce"):
-            if not r: return False
-            t0, v0, t1, v1 = r
             frames = bake_oscillator(t0, v0, t1, v1, fps,
                                      zeta=self._phys_zeta,
                                      omega_n=self._phys_omega_n)
-            return apply_baked(spline, frames, kf_from=kf_from, kf_to=kf_to)
+            return apply_baked(spline, frames, t_start=t0, t_end=t1)
         return apply_bezier(spline, h1, h2, kf_from=kf_from, kf_to=kf_to)
 
-    def _kf_range(self, spline, kf_from=1, kf_to=0):
-        """Read t0,v0,t1,v1 using 1-based kf_from/kf_to indices. kf_to=0 means last."""
+    def _bake_range(self, spline, kf_from=1, kf_to=0):
+        """
+        Like _kf_range but detects when the spline is already baked (dense kfs)
+        and recovers the original user anchors instead of using index positions.
+
+        Strategy: find the two 'anchor' keyframes — the ones at the true boundaries
+        of the baked range. We identify them as the keyframes that have the largest
+        gap to their neighbors, i.e. they are isolated points at the edges of a
+        dense baked cluster.
+        """
         try:
             get_kf = getattr(spline, "GetKeyFrames", None)
             if not callable(get_kf): return None
@@ -764,12 +774,55 @@ class Backend(QObject):
             if not isinstance(sd, dict) or len(sd) < 2: return None
             times = sorted(sd.keys(), key=lambda x: float(x))
             n = len(times)
-            # Clamp indices to valid range
-            i0 = max(0, kf_from - 1)           # from_idx 1-based → 0-based
-            i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
-            if i1 <= i0: i1 = min(i0 + 1, n - 1)  # always at least one segment
-            k0, k1 = times[i0], times[i1]
-            def _v(k):
+            fts = [float(t) for t in times]
+
+            # Compute gaps between consecutive keyframes
+            gaps = [fts[i+1] - fts[i] for i in range(n-1)]
+            avg_gap = sum(gaps) / len(gaps) if gaps else 1.0
+
+            # A "baked" spline has many keyframes with gap ≈ 1 frame (at fps).
+            # Anchors are the outermost keyframes of the selected range.
+            # If the spline looks baked (avg_gap < 3), find the true boundary
+            # anchors by looking for the first and last keyframe that are
+            # significantly farther from their neighbor than the average.
+            is_baked = (n > 10 and avg_gap < 3.0)
+
+            if is_baked:
+                # Find anchor candidates: keyframes with gap > 2x avg on either side
+                threshold = max(avg_gap * 2.0, 2.0)
+                left_anchor_i  = 0  # default: first kf
+                right_anchor_i = n - 1  # default: last kf
+
+                # Walk from left to find the first large gap (= right boundary of left anchor)
+                for i in range(n - 1):
+                    if gaps[i] > threshold:
+                        left_anchor_i = i
+                        break
+
+                # Walk from right to find the last large gap (= left boundary of right anchor)
+                for i in range(n - 2, -1, -1):
+                    if gaps[i] > threshold:
+                        right_anchor_i = i + 1
+                        break
+
+                # Apply kf_from/kf_to as segment indices on anchors, not on all kfs
+                # For baked splines we treat the detected anchors as the full range
+                t0 = fts[left_anchor_i]
+                t1 = fts[right_anchor_i]
+            else:
+                # Not baked — use normal index-based range
+                i0 = max(0, kf_from - 1)
+                i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
+                if i1 <= i0: i1 = min(i0 + 1, n - 1)
+                t0 = fts[i0]
+                t1 = fts[i1]
+
+            def _v(t, k):
+                try:
+                    v = spline.GetInput(t)
+                    if v is not None: return float(v)
+                except Exception:
+                    pass
                 e = sd[k]
                 if isinstance(e, dict):
                     for key in (1, 1.0, "Value"):
@@ -777,7 +830,45 @@ class Backend(QObject):
                             return float(e[key])
                     return 0.0
                 return float(e) if isinstance(e, (int, float)) else 0.0
-            return float(k0), _v(k0), float(k1), _v(k1)
+
+            k0 = times[[abs(float(t)-t0) for t in times].index(min(abs(float(t)-t0) for t in times))]
+            k1 = times[[abs(float(t)-t1) for t in times].index(min(abs(float(t)-t1) for t in times))]
+            return t0, _v(t0, k0), t1, _v(t1, k1)
+        except Exception:
+            return None
+
+    def _kf_range(self, spline, kf_from=1, kf_to=0):
+        """Read t0,v0,t1,v1 using 1-based kf_from/kf_to indices. kf_to=0 means last.
+        Uses GetInput for values so baked intermediate keyframes don't corrupt v0/v1."""
+        try:
+            get_kf = getattr(spline, "GetKeyFrames", None)
+            if not callable(get_kf): return None
+            sd = get_kf()
+            if not isinstance(sd, dict) or len(sd) < 2: return None
+            times = sorted(sd.keys(), key=lambda x: float(x))
+            n = len(times)
+            i0 = max(0, kf_from - 1)
+            i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
+            if i1 <= i0: i1 = min(i0 + 1, n - 1)
+            k0, k1 = times[i0], times[i1]
+            t0, t1 = float(k0), float(k1)
+
+            def _v(t, entry):
+                # GetInput is the authoritative source for the actual value at a time
+                try:
+                    v = spline.GetInput(t)
+                    if v is not None: return float(v)
+                except Exception:
+                    pass
+                # Fallback: parse the kf entry dict
+                if isinstance(entry, dict):
+                    for key in (1, 1.0, "Value"):
+                        if key in entry and isinstance(entry[key], (int, float)):
+                            return float(entry[key])
+                    return 0.0
+                return float(entry) if isinstance(entry, (int, float)) else 0.0
+
+            return t0, _v(t0, sd[k0]), t1, _v(t1, sd[k1])
         except Exception:
             return None
 
