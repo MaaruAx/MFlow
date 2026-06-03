@@ -116,6 +116,35 @@ class MFlowWindow(QMainWindow):
         self._channel.registerObject("backend", self._backend)
         self._view.page().setWebChannel(self._channel)
 
+        # ── qwebchannel.js injection ──────────────────────────────────────────
+        # Qt 6.7+ blocks qrc:// resources from file:// pages (security policy).
+        # The <script src="qrc:///qtwebchannel/qwebchannel.js"> tag in app.html
+        # fails silently, leaving QWebChannel undefined in JS.  As a result:
+        #   * backend is never assigned -> every if(backend)btn.click() is a no-op
+        #   * js_ready() is never called -> connection never announced, presets
+        #     never loaded, the UI appears open but completely non-functional.
+        # Fix: inject the script at DocumentCreation via QWebEngineScript, which
+        # runs before any <script> tags and is not subject to the qrc:// ban.
+        try:
+            from PySide6.QtWebEngineCore import QWebEngineScript
+            from PySide6.QtCore import QFile, QIODevice
+            _qwc = QFile(":/qtwebchannel/qwebchannel.js")
+            if _qwc.open(QIODevice.OpenModeFlag.ReadOnly):
+                _js = bytes(_qwc.readAll()).decode("utf-8", errors="replace")
+                _qwc.close()
+                _script = QWebEngineScript()
+                _script.setName("__qwebchannel_inject__")
+                _script.setSourceCode(_js)
+                _script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+                _script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+                self._view.page().scripts().insert(_script)
+                log.debug("qwebchannel.js injected via QWebEngineScript")
+            else:
+                log.warning("Could not read qrc:///qtwebchannel/qwebchannel.js -- "
+                            "UI may not respond if Qt version >= 6.7")
+        except Exception as _e:
+            log.warning("qwebchannel.js injection skipped: %s", _e)
+
         if not os.path.isfile(APP_HTML):
             log.error("app.html not found at: %s", APP_HTML)
             raise FileNotFoundError(f"app.html missing: {APP_HTML}")
