@@ -133,22 +133,6 @@ def bake_oscillator(t0: float, v0: float, t1: float, v1: float,
     return result
 
 
-    t: float = 0.5
-    v: float = 0.5
-    lh: list = field(default_factory=lambda: [-0.1, 0.0])
-    rh: list = field(default_factory=lambda: [ 0.1, 0.0])
-    tangent: str = "smooth"
-
-    def apply_smooth(self):
-        self.lh = [-self.rh[0], -self.rh[1]]
-
-    def apply_sym(self):
-        mag = math.hypot(*self.rh)
-        ang = math.atan2(self.rh[1], self.rh[0])
-        self.lh = [-mag*math.cos(ang), -mag*math.sin(ang)]
-
-
-
 # ── OverkeyFrame point ────────────────────────────────────────────────────────
 
 from dataclasses import dataclass, field as _field
