@@ -285,7 +285,7 @@ def main():
     else:
         install_dir = INSTALL_DIR
         # Clean stale files from previous versions (preserve configs and presets)
-    KEEP_PATTERNS = {"settings.json", "profiles.json", "presets", "mflow_path.txt", "python_path.txt"}
+    KEEP_PATTERNS = {"settings.json", "profiles.json", "presets", "themes", "mflow_path.txt", "python_path.txt"}
     if os.path.isdir(install_dir) and install_dir != HERE:
         for item in os.listdir(install_dir):
             if item in KEEP_PATTERNS or item.startswith("."):
@@ -317,6 +317,26 @@ def main():
             for e in errs: log(e, "WARN")
         else:
             log(f"OK - copied to {install_dir}")
+
+    # -- Copy bundled themes to AppData (non-destructive: never overwrite user edits)
+    bundled_themes = os.path.join(install_dir, "themes")
+    if os.path.isdir(bundled_themes):
+        try:
+            from core.platform_config import themes_dir as _themes_dir
+            user_themes = _themes_dir()
+        except Exception:
+            user_themes = None
+        if user_themes:
+            for fname in os.listdir(bundled_themes):
+                if not fname.endswith(".json"):
+                    continue
+                dst = os.path.join(user_themes, fname)
+                if not os.path.exists(dst):  # never overwrite user's version
+                    try:
+                        shutil.copy2(os.path.join(bundled_themes, fname), dst)
+                        log(f"  Theme: {fname}")
+                    except Exception as e:
+                        log(f"  Theme copy failed: {fname}: {e}", "WARN")
 
     # Write path files with fully expanded real paths
     write_python_path(python_exe, install_dir)
