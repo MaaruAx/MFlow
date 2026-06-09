@@ -90,7 +90,7 @@ APP_HTML = os.path.join(HERE, "ui", "app.html")
 
 
 class MFlowWindow(QMainWindow):
-    def __init__(self, comp=None, fusion_app=None):
+    def __init__(self, comp=None, fusion_app=None, resolve=None):
         super().__init__()
         self.setWindowTitle("MFlow")
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
@@ -109,7 +109,7 @@ class MFlowWindow(QMainWindow):
         self._channel = QWebChannel(self._view.page())
         try:
             from ui.backend import Backend
-            self._backend = Backend(self, comp=comp, fusion_app=fusion_app)
+            self._backend = Backend(self, comp=comp, fusion_app=fusion_app, resolve=resolve)
         except Exception as e:
             log.error("Backend init failed: %s", e, exc_info=True)
             raise
@@ -181,7 +181,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("MFlow")
-    app.setApplicationVersion("2.1")
+    app.setApplicationVersion("2.3.2")
 
     comp = None
     try:
@@ -198,12 +198,14 @@ def main():
             comp = get_comp(resolve)
             log.info("Connected to Resolve")
         else:
+            resolve = None
             log.info("Resolve not found — running standalone")
     except Exception as e:
         log.warning("Resolve connection error: %s", e)
+        resolve = None
 
     try:
-        win = MFlowWindow(comp=comp)
+        win = MFlowWindow(comp=comp, resolve=resolve)
         win.show()
         code = app.exec()
         # Clean exit — remove crash log so we don't show stale crashes next launch
