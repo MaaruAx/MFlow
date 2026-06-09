@@ -9,7 +9,9 @@ from PySide6.QtWidgets import QFileDialog, QApplication
 from core.preset_manager  import (load_profiles, save_profiles, add_preset,
                                    delete_preset, new_profile, delete_profile,
                                    switch_profile, load_builtin, active_presets)
-from core.platform_config import settings_file
+import logging
+log = logging.getLogger("mflow")
+from core.platform_config import settings_file, themes_dir, bundled_themes_dir, language_dir
 from core.curve_engine    import (apply_bezier, apply_baked, apply_steps,
                                    apply_overframe, bake_oscillator,
                                    bake_elastic_penner, OverframePoint)
@@ -37,13 +39,27 @@ class Backend(QObject):
     apply_done         = Signal(bool, str)   # success, message
     settings_signal    = Signal(str)         # JSON settings dict
     pythons_scanned    = Signal(str)         # JSON {pythons, active, versions} — async result
+    themes_updated     = Signal(str)         # JSON [{name, filename}] — themes/ folder listing
+    load_theme_result  = Signal(str)         # JSON theme object
+    comp_list_updated  = Signal(str)         # JSON [{id, name, active}]
+    spline_copied      = Signal(str)         # removed — kept stub for compat
 
-    def __init__(self, window, comp=None, fusion_app=None, parent=None):
+    def __init__(self, window, comp=None, fusion_app=None, resolve=None, parent=None):
         super().__init__(parent)
         self._fusion_app = fusion_app
         self._win      = window
         self._comp     = comp
-        self._resolve  = None   # stored after first successful reconnect()
+        self._resolve  = resolve  # stored from startup or reconnect
+        self._fu       = None    # cached Fusion scripting object
+        # Cache _fu immediately if resolve is available at startup
+        if resolve:
+            try:
+                fu = resolve.Fusion()
+                if fu:
+                    self._fu = fu
+                    log.info("[Init] Fusion object cached from startup resolve")
+            except Exception as e:
+                log.debug("[Init] Could not get Fusion at startup: %s", e)
         self._watcher  = None
         self._profiles = load_profiles()
         self._settings = _rj(settings_file())
@@ -63,6 +79,9 @@ class Backend(QObject):
         self._sel_tools = {}          # {tool_name: {inp_id: meta}} — comp scan selection
         self._kf_from  = 1           # 1-based start keyframe index (1 = first)
         self._kf_to    = 0           # 1-based end keyframe index (0 = last)
+        self._spline_clipboard = None  # {tool, input, keyframes}
+        self._auto_comp = True        # auto-follow active Fusion comp
+        self._switching_comp = False   # guard against re-entrant comp switches
         self._fps      = float(self._settings.get("bake_fps", 24))
         self._python_scan_cache = None  # cached result of scan_pythons()
         self._python_scan_time  = 0.0   # epoch when cache was last filled
@@ -187,6 +206,15 @@ class Backend(QObject):
 
     def set_comp(self, comp):
         self._comp = comp
+        # Try to populate _fu from _resolve if not already cached
+        if self._fu is None and self._resolve:
+            try:
+                fu = self._resolve.Fusion()
+                if fu:
+                    self._fu = fu
+                    log.info("[Connect] _fu populated from _resolve in set_comp")
+            except Exception as e:
+                log.debug("[Connect] Could not get Fusion from _resolve in set_comp: %s", e)
         if self._watcher:
             self._watcher.stop()
             self._watcher = None
@@ -209,20 +237,52 @@ class Backend(QObject):
 
         class _ConnectWorker(QRunnable):
             def run(self):
+                import time
                 try:
                     from core.resolve_connection import get_resolve, get_comp as _gc
-                    resolve = get_resolve(cp)
+                    log.info("[Connect] Starting connection attempt…")
+                    log.info("[Connect] Module search path: %s", cp or "(auto)")
+
+                    resolve = None
+                    for attempt in range(3):
+                        if attempt > 0:
+                            log.info("[Connect] Retry %d/3 — waiting 2s…", attempt + 1)
+                            time.sleep(2)
+                        resolve = get_resolve(cp)
+                        if resolve:
+                            break
+                        log.warning("[Connect] Attempt %d failed — resolve=None", attempt + 1)
+
                     if resolve:
+                        log.info("[Connect] Resolve object obtained successfully")
                         _self._resolve = resolve
+                        try:
+                            _self._fu = resolve.Fusion()
+                            log.info("[Connect] Fusion object cached: %s",
+                                     "OK" if _self._fu else "None — Fusion page may not be active")
+                        except Exception as e:
+                            log.warning("[Connect] Could not cache Fusion object: %s", e)
+                            _self._fu = None
+                        log.info("[Connect] Getting active Fusion comp…")
                         comp = _gc(resolve)
-                        # Marshal back to the Qt main thread before touching Qt objects
+                        if comp:
+                            log.info("[Connect] Comp found, name='%s'",
+                                     _self._get_comp_name(comp))
+                        else:
+                            log.warning("[Connect] No active Fusion comp — "
+                                        "open a comp on the Fusion page in DaVinci Resolve")
                         QTimer.singleShot(0, lambda: _self._apply_new_comp(comp))
                     else:
+                        log.warning("[Connect] All attempts failed. "
+                                    "Ensure DaVinci Resolve is open and:\n"
+                                    "  Preferences > System > General > "
+                                    "External scripting using = Local")
                         QTimer.singleShot(0, lambda: _self.connection_changed.emit(
                             False,
-                            "Not connected \u2014 open Resolve and enable "
-                            "Preferences > System > General > External scripting: Local"))
+                            "Not connected \u2014 open Resolve and set "
+                            "Preferences > General > External scripting: Local"))
                 except Exception as exc:
+                    log.error("[Connect] Exception: %s", exc, exc_info=True)
                     msg = f"Connect error: {exc}"
                     QTimer.singleShot(0, lambda: _self.connection_changed.emit(False, msg))
 
@@ -231,8 +291,10 @@ class Backend(QObject):
     def _apply_new_comp(self, comp):
         """Called on the Qt main thread after a background reconnect succeeds."""
         if comp:
+            log.info("[Connect] Applying comp to watcher")
             self.set_comp(comp)
         else:
+            log.warning("[Connect] No comp available — Fusion page may not be active")
             self.connection_changed.emit(
                 False,
                 "Resolve found but no active Fusion comp \u2014 "
@@ -241,11 +303,12 @@ class Backend(QObject):
     def _announce_connection(self):
         if self._comp:
             try:
-                comp_name = self._comp.GetAttrs().get("COMPS_Name", "Fusion")
+                comp_name = self._get_comp_name(self._comp)
+                log.info("[Announce] Comp name resolved: '%s'", comp_name)
                 edition = "Free"
                 ver_str = ""
                 try:
-                    fu = (self._comp.GetFusion() if hasattr(self._comp, "GetFusion")
+                    fu = (self._comp.GetFusion() if callable(getattr(self._comp, "GetFusion", None))
                           else getattr(self._comp, "Fusion", None))
                     if fu:
                         # Version number
@@ -284,13 +347,17 @@ class Backend(QObject):
     @Slot(str)
     def start_system_resize(self, edge: str):
         from PySide6.QtCore import Qt
+        E = Qt.Edge
         edges = {
-            'right':  Qt.Edge.RightEdge,
-            'left':   Qt.Edge.LeftEdge,
-            'bottom': Qt.Edge.BottomEdge,
-            'br': Qt.Edge.RightEdge | Qt.Edge.BottomEdge,
-            'bl': Qt.Edge.LeftEdge  | Qt.Edge.BottomEdge,
-        }.get(edge, Qt.Edge.RightEdge | Qt.Edge.BottomEdge)
+            'right':  E.RightEdge,
+            'left':   E.LeftEdge,
+            'top':    E.TopEdge,
+            'bottom': E.BottomEdge,
+            'br': E.RightEdge  | E.BottomEdge,
+            'bl': E.LeftEdge   | E.BottomEdge,
+            'tr': E.RightEdge  | E.TopEdge,
+            'tl': E.LeftEdge   | E.TopEdge,
+        }.get(edge, E.RightEdge | E.BottomEdge)
         try:
             self._win.windowHandle().startSystemResize(edges)
         except Exception:
@@ -397,8 +464,10 @@ class Backend(QObject):
 
     def _start_watcher(self):
         if self._comp is None:
+            log.warning("[Watcher] Cannot start — comp is None")
             return
         from core.resolve_connection import ResolveWatcher
+        log.info("[Watcher] Starting watcher on comp")
         self._watcher = ResolveWatcher(self._comp, self)
         self._watcher.tool_changed.connect(self._on_tool_changed)
         self._watcher.disconnected.connect(self._on_disconnected)
@@ -406,6 +475,28 @@ class Backend(QObject):
         self._watcher.start()
 
     def _on_tool_changed(self, name, inputs):
+        if name:
+            log.debug("[Watcher] Active tool: '%s' (%d animated inputs)", name, len(inputs))
+        # Auto-follow check — guarded against re-entrant switches
+        if self._auto_comp and self._fu and not self._switching_comp:
+            try:
+                current = self._fu.GetCurrentComp()
+                if current and self._comp and not self._comps_match(current, self._comp):
+                    new_name = self._get_comp_name(current)
+                    log.info("[AutoComp] Comp changed, following: '%s'", new_name)
+                    self._switching_comp = True
+                    try:
+                        self._last_comp_scan = {}
+                        self._apply_new_comp(current)
+                        self.comp_list_updated.emit(json.dumps([
+                            {"id": "current", "name": new_name, "active": True}
+                        ]))
+                    finally:
+                        self._switching_comp = False
+                    return  # don't emit tool_updated for the old comp
+            except Exception as e:
+                self._switching_comp = False
+                log.debug("[AutoComp] Poll check failed: %s", e)
         payload = {
             "name": name,
             "inputs": {
@@ -416,17 +507,17 @@ class Backend(QObject):
         self.tool_updated.emit(json.dumps(payload))
 
     def _on_disconnected(self):
-        # Don't just show "Disconnected" — the most common cause is the user
-        # switching projects in Resolve, where the old comp object goes stale.
-        # Wait 2 s for Resolve to finish loading the new project, then attempt
-        # a single automatic reconnect.  If it fails (Resolve truly closed),
-        # reconnect() will emit "Not connected" and stop.
+        log.warning("[Watcher] Comp disconnected — attempting auto-reconnect in 2s")
+        self._fu = None  # invalidate cached Fusion object
         self.connection_changed.emit(False, "Reconnecting\u2026")
         QTimer.singleShot(2000, lambda: self.reconnect(""))
 
     def _on_comp_scan(self, scan_result: dict):
         """Forward comp-wide scan result to JS as JSON."""
-        self._last_comp_scan = scan_result  # cache for select_tools
+        log.info("[Scan] Comp scan complete: %d tools with keyframes", len(scan_result))
+        for tool_name, inputs in scan_result.items():
+            log.debug("[Scan]   %s: %d input(s)", tool_name, len(inputs))
+        self._last_comp_scan = scan_result
         payload = {}
         for tool_name, inputs in scan_result.items():
             payload[tool_name] = {
@@ -439,10 +530,346 @@ class Backend(QObject):
     def scan_comp(self):
         """Trigger a full comp scan. Result arrives via comp_scan_updated signal."""
         if self._watcher is None:
+            log.warning("[Scan] scan_comp called but watcher is None — not connected")
             self.status_changed.emit("Not connected", "#eb6f92")
             return
+        log.info("[Scan] Manual scan triggered")
         self.status_changed.emit("Scanning composition…", "var(--muted)")
         self._watcher.scan_all_tools()
+
+    # ── Fusion / comp helpers ─────────────────────────────────────────────────
+
+    def _get_fusion(self):
+        """Return the Fusion scripting object, trying all known paths."""
+        # 0. Cached from startup or previous connect
+        if self._fu:
+            try:
+                _ = self._fu.GetCurrentComp  # liveness check
+                return self._fu
+            except Exception:
+                self._fu = None
+        # 1. Via stored resolve
+        if self._resolve:
+            try:
+                fu = self._resolve.Fusion()
+                if fu:
+                    self._fu = fu
+                    return fu
+            except Exception as e:
+                log.debug("[Fusion] _resolve.Fusion() raised: %s", e)
+        # 2. Via comp object
+        if self._comp:
+            try:
+                fn = getattr(self._comp, "GetFusion", None)
+                fu = fn() if callable(fn) else None
+                if fu:
+                    self._fu = fu
+                    return fu
+                else:
+                    log.debug("[Fusion] comp.GetFusion() returned None")
+            except Exception as e:
+                log.debug("[Fusion] comp.GetFusion() raised: %s", e)
+        # 3. bmd.scriptapp fallback (only available inside Fusion process)
+        try:
+            import bmd  # type: ignore
+            fu = bmd.scriptapp("Fusion")
+            if fu:
+                self._fu = fu
+                return fu
+        except Exception as e:
+            log.debug("[Fusion] bmd.scriptapp('Fusion') raised: %s", e)
+        log.warning("[Fusion] All paths to Fusion object failed")
+        return None
+
+    def _get_comp_name(self, comp) -> str:
+        """
+        Return a human-readable name for a comp object.
+        Strategy:
+        1. Try GetAttrs single-key form (COMPS_FileName)
+        2. Scan timeline clips — find which clip owns this comp, return clip name
+        3. Fall back to project/timeline name
+        """
+        if comp is None:
+            return ""
+
+        # 1. Direct attribute — works on Fusion standalone
+        try:
+            v = comp.GetAttrs("COMPS_FileName")
+            if v and isinstance(v, str) and v.strip():
+                import os as _os
+                return _os.path.splitext(_os.path.basename(v.strip()))[0]
+        except Exception:
+            pass
+        try:
+            attrs = comp.GetAttrs()
+            if isinstance(attrs, dict):
+                for key in ("COMPS_FileName", "COMPS_Name", "CompName"):
+                    v = attrs.get(key)
+                    if v and isinstance(v, str) and v.strip():
+                        return v.strip()
+        except Exception:
+            pass
+
+        # 2. Scan timeline — find clip that owns this comp
+        if self._resolve:
+            try:
+                proj = self._resolve.GetProjectManager().GetCurrentProject()
+                if proj:
+                    tl = proj.GetCurrentTimeline()
+                    if tl:
+                        track_count = tl.GetTrackCount("video")
+                        for t in range(1, track_count + 1):
+                            items = tl.GetItemListInTrack("video", t) or []
+                            for item in items:
+                                try:
+                                    if item.GetFusionCompCount() == 0:
+                                        continue
+                                    clip_comp = item.GetFusionCompByIndex(1)
+                                    if clip_comp is None:
+                                        continue
+                                    # Compare by checking if they have the same keyframes/tools
+                                    # (object identity doesn't work across IPC)
+                                    if self._comps_match(comp, clip_comp):
+                                        name = item.GetName()
+                                        if name:
+                                            return name
+                                except Exception:
+                                    continue
+            except Exception as e:
+                log.debug("[get_comp_name] Timeline scan failed: %s", e)
+
+        # 3. Timeline name as last resort
+        if self._resolve:
+            try:
+                proj = self._resolve.GetProjectManager().GetCurrentProject()
+                if proj:
+                    tl = proj.GetCurrentTimeline()
+                    if tl:
+                        return tl.GetName()
+                    return proj.GetName()
+            except Exception:
+                pass
+
+        return "Composition"
+
+    def _comps_match(self, comp_a, comp_b) -> bool:
+        """
+        Compare two comp objects by their tool names — since object identity
+        doesn't work across IPC boundaries in DaVinci.
+        """
+        try:
+            def _tool_names(c):
+                tools = c.GetToolList(False)
+                if not tools:
+                    return frozenset()
+                return frozenset(t.Name for _, t in tools.items())
+            return _tool_names(comp_a) == _tool_names(comp_b)
+        except Exception:
+            return False
+
+    # ── Comp listing ──────────────────────────────────────────────────────────
+
+    @Slot(bool)
+    def list_comps(self, auto_mode: bool = True):
+        """
+        Emit comp_list_updated.
+        auto_mode=True:  report current comp name only — NO switching (avoids feedback loop).
+        auto_mode=False: list all Fusion comps in memory for manual selection.
+        """
+        fu = self._get_fusion()
+        if fu is None:
+            log.warning("[list_comps] No Fusion object available — cannot list compositions")
+            self.comp_list_updated.emit(json.dumps([]))
+            return
+        try:
+            if auto_mode:
+                current = fu.GetCurrentComp()
+                if current:
+                    name = self._get_comp_name(current) or "Active Composition"
+                    log.debug("[list_comps] Auto: active = '%s'", name)
+                    self.comp_list_updated.emit(json.dumps([
+                        {"id": "current", "name": name, "active": True}
+                    ]))
+                else:
+                    self.comp_list_updated.emit(json.dumps([]))
+                return
+            # Manual mode — scan timeline clips for real clip names
+            log.info("[list_comps] Manual mode — scanning timeline + GetCompList")
+            comps = []
+            seen_fps = set()  # deduplicate by tool-name fingerprint
+
+            # fingerprint of currently active comp for marking active
+            active_fp = None
+            if self._comp:
+                try:
+                    t2 = self._comp.GetToolList(False)
+                    if t2: active_fp = frozenset(x.Name for _, x in t2.items())
+                except Exception: pass
+
+            # 1. Timeline clips — preferred (have real clip names)
+            if self._resolve:
+                try:
+                    proj = self._resolve.GetProjectManager().GetCurrentProject()
+                    tl   = proj.GetCurrentTimeline() if proj else None
+                    if tl:
+                        track_count = tl.GetTrackCount("video")
+                        for tr in range(1, track_count + 1):
+                            for ii, item in enumerate(tl.GetItemListInTrack("video", tr) or []):
+                                try:
+                                    if item.GetFusionCompCount() == 0: continue
+                                    cc = item.GetFusionCompByIndex(1)
+                                    if cc is None: continue
+                                    tt = cc.GetToolList(False)
+                                    tids = {x.ID for _, x in (tt or {}).items()}
+                                    if tids == {"AudioDisplay","MediaIn","MediaOut"}: continue
+                                    fp = frozenset(x.Name for _, x in (tt or {}).items())
+                                    if fp in seen_fps: continue
+                                    seen_fps.add(fp)
+                                    name = item.GetName() or f"Clip {ii+1}"
+                                    comps.append({"id": f"clip:{tr}:{ii}",
+                                                  "name": name,
+                                                  "active": fp == active_fp})
+                                    log.debug("[list_comps] clip '%s' active=%s", name, fp==active_fp)
+                                except Exception as e:
+                                    log.debug("[list_comps] clip err: %s", e)
+                except Exception as e:
+                    log.debug("[list_comps] timeline scan err: %s", e)
+
+            # 2. GetCompList for Fusion Effects / standalone comps not on clips
+            raw = fu.GetCompList()
+            log.info("[list_comps] GetCompList: %d entries", len(raw) if raw else 0)
+            if raw:
+                for k, c in raw.items():
+                    try:
+                        tt = c.GetToolList(False)
+                        tids = {x.ID for _, x in (tt or {}).items()}
+                        if tids == {"AudioDisplay","MediaIn","MediaOut"}: continue
+                        fp = frozenset(x.Name for _, x in (tt or {}).items())
+                        if fp in seen_fps: continue
+                        seen_fps.add(fp)
+                        comps.append({"id": str(k),
+                                      "name": f"Fusion Effect {k}",
+                                      "active": fp == active_fp})
+                    except Exception as e:
+                        log.debug("[list_comps] effect err %s: %s", k, e)
+
+            if not comps:
+                self.comp_list_updated.emit(json.dumps([])); return
+
+            comps.sort(key=lambda c: (0 if c["active"] else 1, c["name"].lower()))
+            self.comp_list_updated.emit(json.dumps(comps))
+
+        except Exception as e:
+            log.error("[list_comps] Error: %s", e, exc_info=True)
+            self.comp_list_updated.emit(json.dumps([]))
+
+    @Slot(str)
+    def set_active_comp(self, comp_id: str):
+        """Switch MFlow to a different composition."""
+        fu = self._get_fusion()
+        if fu is None:
+            self.status_changed.emit("Cannot switch comp — not connected", "#eb6f92")
+            return
+        try:
+            if comp_id == 'current':
+                new_comp = fu.GetCurrentComp()
+                if not new_comp:
+                    self.status_changed.emit("No active comp on Fusion page", "#eb6f92")
+                    return
+                self._do_switch_comp(fu, new_comp)
+
+            elif comp_id.startswith('clip:'):
+                _, tr_s, ii_s = comp_id.split(':', 2)
+                tr, ii = int(tr_s), int(ii_s)
+                proj = self._resolve.GetProjectManager().GetCurrentProject()
+                tl   = proj.GetCurrentTimeline() if proj else None
+                if tl:
+                    items = tl.GetItemListInTrack("video", tr) or []
+                    if ii < len(items):
+                        clip_comp = items[ii].GetFusionCompByIndex(1)
+                        if clip_comp:
+                            try:
+                                clip_comp.SetActive()
+                                log.info("[set_active_comp] SetActive called on clip comp")
+                            except Exception:
+                                pass
+                # Defer GetCurrentComp by 100 ms — lets Resolve process SetActive
+                # without blocking the Qt main thread with time.sleep()
+                QTimer.singleShot(100, lambda: self._finalize_clip_comp(fu))
+
+            else:
+                raw = fu.GetCompList()
+                if not raw or comp_id not in raw:
+                    self.status_changed.emit("Comp not found", "#eb6f92")
+                    return
+                self._do_switch_comp(fu, raw[comp_id])
+
+        except Exception as e:
+            self._switching_comp = False
+            self.status_changed.emit(f"Switch comp failed: {e}", "#eb6f92")
+            log.error("[set_active_comp] Error: %s", e, exc_info=True)
+
+    def _finalize_clip_comp(self, fu):
+        """Continuation of set_active_comp for clip: comps — runs after 100 ms delay."""
+        try:
+            new_comp = fu.GetCurrentComp()
+            if not new_comp:
+                self.status_changed.emit("Could not activate clip comp", "#eb6f92")
+                return
+            self._do_switch_comp(fu, new_comp)
+        except Exception as e:
+            self.status_changed.emit(f"Switch comp failed: {e}", "#eb6f92")
+            log.error("[set_active_comp] _finalize_clip_comp error: %s", e, exc_info=True)
+
+    def _do_switch_comp(self, fu, new_comp):
+        """Shared finalization for all comp-switch paths."""
+        self._switching_comp = True
+        try:
+            if self._watcher:
+                self._watcher.stop()
+                self._watcher = None
+            self._last_comp_scan = {}
+            self._apply_new_comp(new_comp)
+            name = self._get_comp_name(new_comp)
+            log.info("[set_active_comp] Switched to '%s'", name)
+            self.status_changed.emit(f"Switched to: {name}", "#9ccfd8")
+        finally:
+            self._switching_comp = False
+
+    # ── i18n ─────────────────────────────────────────────────────────────────
+
+    @Slot(result=str)
+    def get_i18n(self) -> str:
+        """Return the JSON string of the active language file."""
+        lang = self._settings.get("language", "en")
+        base = language_dir()
+        path = os.path.join(base, f"{lang}.json")
+        if not os.path.isfile(path):
+            path = os.path.join(base, "en.json")
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                return fh.read()
+        except Exception as exc:
+            log.warning("[i18n] Could not load language file: %s", exc)
+            return "{}"
+
+    @Slot(result=str)
+    def list_languages(self) -> str:
+        """Return a JSON array of {code, label} objects for all available languages."""
+        base = language_dir()
+        langs = []
+        for fname in sorted(os.listdir(base)):
+            if not fname.endswith(".json"):
+                continue
+            code = fname[:-5]
+            try:
+                with open(os.path.join(base, fname), "r", encoding="utf-8") as fh:
+                    data = json.load(fh)
+                label = data.get("_meta", {}).get("language", code)
+            except Exception:
+                label = code
+            langs.append({"code": code, "label": label})
+        return json.dumps(langs)
 
     # ── State from JS ─────────────────────────────────────────────────────────
 
@@ -497,6 +924,11 @@ class Backend(QObject):
         """from_idx and to_idx are 1-based real indices. to_idx=0 still accepted as last-kf fallback."""
         self._kf_from = max(1, from_idx)
         self._kf_to   = max(0, to_idx)
+
+    @Slot(bool)
+    def set_auto_comp(self, enabled: bool):
+        self._auto_comp = enabled
+        log.info("[AutoComp] Auto-follow %s", "enabled" if enabled else "disabled")
 
     # ── Presets ───────────────────────────────────────────────────────────────
 
@@ -981,5 +1413,91 @@ class Backend(QObject):
                 _wj(settings_file(), d)
                 self.settings_signal.emit(json.dumps(d))
                 self.status_changed.emit("Settings imported", "#9ccfd8")
+
+    # ── Theme folder ──────────────────────────────────────────────────────────
+
+    @Slot(str, str)
+    def export_theme_dialog(self, name: str, json_data: str):
+        """Open a Save File dialog and write the theme JSON."""
+        safe = "".join(c for c in name if c.isalnum() or c in " _-").strip() or "theme"
+        path, _ = QFileDialog.getSaveFileName(
+            None, "Export Theme", safe + ".json", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            data = json.loads(json_data)
+            _wj(path, data)
+            self.status_changed.emit(f"Theme exported: {path}", "#9ccfd8")
+        except Exception as e:
+            self.status_changed.emit(f"Theme export failed: {e}", "#eb6f92")
+
+    @Slot()
+    def list_themes(self):
+        """Scan themes/ folder (user AppData) and bundled themes/ (install dir)."""
+        seen = {}  # filename → entry, user themes override bundled
+        # Bundled first (lower priority)
+        try:
+            bdir = bundled_themes_dir()
+            if os.path.isdir(bdir):
+                for fname in sorted(os.listdir(bdir)):
+                    if not fname.endswith(".json"):
+                        continue
+                    try:
+                        data = _rj(os.path.join(bdir, fname))
+                        key = fname[:-5]
+                        seen[key] = {"name": data.get("name", key), "filename": key, "bundled": True}
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+        # User themes (higher priority — override bundled with same key)
+        try:
+            tdir = themes_dir()
+            for fname in sorted(os.listdir(tdir)):
+                if not fname.endswith(".json"):
+                    continue
+                try:
+                    data = _rj(os.path.join(tdir, fname))
+                    key = fname[:-5]
+                    seen[key] = {"name": data.get("name", key), "filename": key, "bundled": False}
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        self.themes_updated.emit(json.dumps(sorted(seen.values(), key=lambda x: x["name"])))
+
+    @Slot(str)
+    def load_theme(self, name: str):
+        """Load a theme JSON from user or bundled themes/ folder."""
+        for tdir in [themes_dir(), bundled_themes_dir()]:
+            if not os.path.isdir(tdir):
+                continue
+            path = os.path.join(tdir, name + ".json")
+            if not os.path.isfile(path):
+                path = os.path.join(tdir, name)
+            if os.path.isfile(path):
+                try:
+                    data = _rj(path)
+                    self.load_theme_result.emit(json.dumps(data))
+                    return
+                except Exception:
+                    pass
+        self.status_changed.emit(f"Theme not found: {name}", "#eb6f92")
+
+    @Slot(str, str)
+    def save_theme(self, name: str, json_data: str):
+        """Save a theme JSON to themes/ folder."""
+        tdir = themes_dir()
+        safe = "".join(c for c in name if c.isalnum() or c in " _-").strip() or "theme"
+        path = os.path.join(tdir, safe + ".json")
+        try:
+            data = json.loads(json_data)
+            data["name"] = name
+            _wj(path, data)
+            self.status_changed.emit(f"Theme saved: {name}", "#9ccfd8")
+            self.list_themes()
+        except Exception as e:
+            self.status_changed.emit(f"Theme save failed: {e}", "#eb6f92")
+
 
 
