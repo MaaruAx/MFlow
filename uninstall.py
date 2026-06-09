@@ -65,7 +65,7 @@ LAUNCHER_FILES = [
 ]
 
 # Files/folders inside install dir to KEEP (user data)
-KEEP = {"settings.json", "profiles.json", "presets"}
+KEEP = {"settings.json", "profiles.json", "presets", "themes"}
 
 def sep(c="-"): print(c * 54)
 
@@ -102,7 +102,7 @@ def main():
     sep("=")
 
     print("\nThis will remove MFlow from your system.")
-    print("Your settings, profiles and presets will be preserved.")
+    print("Your settings, profiles, presets and themes will be preserved.")
     print()
 
     confirm = input("Continue? [y/N]: ").strip().lower()
