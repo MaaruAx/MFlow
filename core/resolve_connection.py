@@ -13,57 +13,74 @@ def get_resolve(custom_path: str = ""):
     Strips Microsoft Store App Execution Aliases from PATH, clears stale imports,
     adds Resolve DLL directory before importing.
     """
+    import logging
+    log = logging.getLogger("mflow")
+
     if sys.platform == "win32":
-        # Strip Microsoft Store aliases — intercept DLL resolution when
-        # multiple Python versions are installed
         parts = os.environ.get("PATH", "").split(os.pathsep)
         os.environ["PATH"] = os.pathsep.join(
             p for p in parts if
             "WindowsApps" not in p and
             "windowsapps" not in p.lower()
         )
-        # Add Resolve DLL dir
-        for rdir in [
+        resolve_dirs = [
             r"C:\Program Files\Blackmagic Design\DaVinci Resolve",
             r"C:\Program Files (x86)\Blackmagic Design\DaVinci Resolve",
-        ]:
+        ]
+        for rdir in resolve_dirs:
             if os.path.isdir(rdir):
+                log.info("[get_resolve] Found Resolve dir: %s", rdir)
                 if rdir not in os.environ.get("PATH", ""):
                     os.environ["PATH"] = rdir + os.pathsep + os.environ["PATH"]
                 try: os.add_dll_directory(rdir)
                 except (AttributeError, OSError): pass
                 break
+        else:
+            log.warning("[get_resolve] Resolve install dir not found in standard locations")
 
-    # Remove stale cached imports from a previous/wrong-version attempt
-    # OrderedDict shim: fusionscript DLL needs this in builtins on Python 3.10+
     import builtins
     from collections import OrderedDict as _OD
     if not hasattr(builtins, "OrderedDict"):
         builtins.OrderedDict = _OD
 
+    # Force-remove cached module so Python re-imports fresh on each attempt
     for _k in ("DaVinciResolveScript", "fusionscript"):
+        if _k in sys.modules:
+            log.debug("[get_resolve] Removing stale sys.modules['%s']", _k)
         sys.modules.pop(_k, None)
 
+    search_paths = resolve_module_paths(custom_path)
+    log.info("[get_resolve] Module search paths: %s", search_paths)
+    for p in search_paths:
+        if os.path.isdir(p):
+            log.debug("[get_resolve] Adding to sys.path: %s", p)
+            if p not in sys.path:
+                sys.path.insert(0, p)
+        else:
+            log.debug("[get_resolve] Path does not exist: %s", p)
+
     # Method 1: DaVinciResolveScript module (preferred)
-    for p in resolve_module_paths(custom_path):
-        if os.path.isdir(p) and p not in sys.path:
-            sys.path.insert(0, p)
     try:
         import DaVinciResolveScript as _dvr  # noqa
+        log.info("[get_resolve] DaVinciResolveScript imported OK")
         r = _dvr.scriptapp("Resolve")
         if r:
+            log.info("[get_resolve] scriptapp('Resolve') returned object — connected")
             return r
-        print("[MFlow] scriptapp returned None.\n"
-              "  Resolve must be open and:\n"
-              "  Preferences > System > General > External scripting using > Local")
+        log.warning("[get_resolve] scriptapp('Resolve') returned None — "
+                    "Resolve is not running OR External Scripting is not set to Local.\n"
+                    "  Fix: DaVinci Resolve > Preferences > System > General > "
+                    "External scripting using = Local")
     except ImportError as e:
-        print(f"[MFlow] Import failed: {e}")
-        print(f"  Searched: {resolve_module_paths(custom_path)}")
+        log.warning("[get_resolve] DaVinciResolveScript import failed: %s", e)
+        log.warning("[get_resolve] Searched paths: %s", search_paths)
     except Exception as e:
-        print(f"[MFlow] Error: {e}")
+        log.error("[get_resolve] Unexpected error importing DaVinciResolveScript: %s", e,
+                  exc_info=True)
 
-    # Method 2: fusionscript DLL
+    # Method 2: fusionscript DLL direct load
     fsp = fusionscript_path()
+    log.info("[get_resolve] fusionscript path: %s", fsp or "(not found)")
     if fsp:
         try:
             spec = importlib.util.spec_from_file_location("fusionscript", fsp)
@@ -71,10 +88,14 @@ def get_resolve(custom_path: str = ""):
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
                 r = mod.scriptapp("Resolve")
-                if r: return r
+                if r:
+                    log.info("[get_resolve] fusionscript fallback succeeded")
+                    return r
+                log.warning("[get_resolve] fusionscript.scriptapp('Resolve') returned None")
         except Exception as e:
-            print(f"[MFlow] fusionscript fallback failed: {e}")
+            log.warning("[get_resolve] fusionscript fallback failed: %s", e)
 
+    log.warning("[get_resolve] All methods failed — returning None")
     return None
 
 
