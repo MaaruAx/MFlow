@@ -117,36 +117,98 @@ def get_comp(resolve):
 
 class ResolveWatcher(QObject):
     """
-    Polls the active Fusion comp every 350 ms.
-    Uses undo-stack length as a cheap change trigger (friend's approach),
-    only doing a detailed input scan when something actually changed.
+    Polls the active Fusion comp every 500 ms for tool/undo changes.
+    A separate 1500 ms timer independently detects when the user switches
+    to a different comp in Resolve (powers the auto-follow feature).
     """
-    tool_changed       = Signal(str, dict)   # tool_name, {inp_id: {label, kf_count, input_obj}}
+    tool_changed       = Signal(str, dict)
     disconnected       = Signal()
-    comp_scan_updated  = Signal(dict)        # {tool_name: {inp_id: {label, kf_count, input_obj}}}
+    comp_scan_updated  = Signal(dict)
+    comp_changed       = Signal()   # user opened a different comp in Resolve
 
-    def __init__(self, comp, parent=None):
+    def __init__(self, comp, fu=None, parent=None):
         super().__init__(parent)
-        self._comp        = comp
-        self._last_name   = ""
-        self._last_undo   = 0
-        self._cached_inputs = {}
-        self._selected_input = None   # (tool_name, inp_id) chosen by user
+        self._comp           = comp
+        self._fu             = fu       # Fusion object — needed for comp-identity check
+        self._last_name      = ""
+        self._last_undo      = 0
+        self._cached_inputs  = {}
+        self._selected_input = None
+        self._comp_name      = self._get_comp_attr_name()   # stable name for comparison
+
+        self._poll_fail_count = 0           # consecutive poll failures
+        self._comp_fp = self._quick_fp(comp)  # fingerprint for comp-change detection
+
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
-        # Cooldown timer: fires scan_all_tools 2.5s after last undo change
-        # so bulk operations (deleting 20 nodes) only trigger one scan
+
         self._scan_cooldown = QTimer(self)
         self._scan_cooldown.setSingleShot(True)
         self._scan_cooldown.setInterval(2500)
         self._scan_cooldown.timeout.connect(self.scan_all_tools)
 
+        # Independent comp-switch detector — slower cadence to keep IPC light
+        self._comp_timer = QTimer(self)
+        self._comp_timer.timeout.connect(self._comp_check)
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+
+    def _get_comp_attr_name(self) -> str:
+        """Return a stable string name for self._comp (cheap — uses GetAttrs)."""
+        try:
+            attrs = self._comp.GetAttrs()
+            return attrs.get("COMPS_FileName") or attrs.get("COMPS_Name") or ""
+        except Exception:
+            return ""
+
+    def _quick_fp(self, comp) -> str:
+        """
+        Fast fingerprint for comp-change detection.
+        Uses first 5 sorted tool names + count.
+        Avoids COMPS_FileName/COMPS_Name which are empty for Resolve timeline comps.
+        One GetToolList IPC call, only from _comp_check (every 1500 ms).
+        """
+        try:
+            tools = comp.GetToolList(False)
+            if not tools:
+                return ""
+            names = sorted(t.Name for t in tools.values())
+            return f"{len(names)}:" + ",".join(names[:5])
+        except Exception:
+            return ""
+
+    def _comp_check(self):
+        """Periodic check: has the user switched to a different comp in Resolve?"""
+        if not self._fu:
+            return
+        try:
+            current = self._fu.GetCurrentComp()
+            if not current:
+                return
+            current_fp = self._quick_fp(current)
+            # Only fire if fingerprint is non-empty AND different from stored one.
+            # COMPS_FileName/COMPS_Name are empty for timeline comps so we use
+            # tool-name fingerprints which ARE reliable across IPC.
+            if current_fp and current_fp != self._comp_fp:
+                import logging
+                logging.getLogger("mflow").debug(
+                    "[Watcher] _comp_check: fp changed '%s' → '%s'",
+                    self._comp_fp, current_fp)
+                self.comp_changed.emit()
+        except Exception:
+            pass
+
+    # ── lifecycle ─────────────────────────────────────────────────────────────
+
     def start(self):
         self._last_undo = self._undo_len()
         self._timer.start(self.POLL_MS)
+        if self._fu:
+            self._comp_timer.start(1500)
 
     def stop(self):
         self._timer.stop()
+        self._comp_timer.stop()
 
     def force_refresh(self):
         try:
@@ -223,6 +285,7 @@ class ResolveWatcher(QObject):
             active = self._comp.ActiveTool
             name   = active.Name if active else ""
             undo   = self._undo_len()
+            self._poll_fail_count = 0   # reset on any successful IPC call
             name_changed = (name != self._last_name)
             undo_changed = (undo != self._last_undo)
             if name_changed or undo_changed:
@@ -241,8 +304,16 @@ class ResolveWatcher(QObject):
                     self._cached_inputs = {}
                     self.tool_changed.emit("", {})
         except Exception:
-            self.disconnected.emit()
-            self._timer.stop()
+            self._poll_fail_count += 1
+            import logging
+            logging.getLogger("mflow").debug(
+                "[Watcher] Poll failed (%d/3 consecutive)", self._poll_fail_count)
+            if self._poll_fail_count >= 3:
+                import logging
+                logging.getLogger("mflow").warning(
+                    "[Watcher] 3 consecutive poll failures — emitting disconnected")
+                self.disconnected.emit()
+                self._timer.stop()
 
     def _emit(self, tool):
         self.tool_changed.emit(tool.Name, self._animated_inputs(tool))
