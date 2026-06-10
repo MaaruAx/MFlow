@@ -92,8 +92,9 @@ body.compact #kf-range-widget{display:none!important}
   background:var(--overlay);cursor:pointer;display:flex;align-items:center;
   justify-content:center;font-size:13px;color:var(--love);font-family:inherit;line-height:1}
 #params-scroll{flex:1;overflow-y:auto;padding:4px 6px 8px}
-.tool-hdr{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);
-  padding:7px 8px 4px;text-transform:uppercase;border-bottom:1px solid var(--border);margin-bottom:2px}
+.tool-hdr{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--node-col,var(--muted));
+  border-bottom:1px solid color-mix(in srgb,var(--node-col,var(--muted)),transparent 78%);
+  padding:7px 8px 4px;text-transform:uppercase;margin-bottom:2px}
 .inp-subtitle{font-size:9px;font-weight:700;letter-spacing:.5px;color:var(--muted);
   padding:6px 8px 3px;text-transform:uppercase;border-bottom:1px solid var(--border);
   margin-bottom:2px;display:flex;align-items:center;gap:5px}
@@ -1083,6 +1084,11 @@ function liveVar(v, c) {
     _TC[v.slice(2)] = c;
     scheduleDraw();
   }
+  // --subtle is derived via CSS color-mix(--muted, --text).
+  // Remove any static body-level override so the derivation stays live.
+  if (v==='--muted'||v==='--text') {
+    document.body.style.removeProperty('--subtle');
+  }
 }
 /** Update a mode color + sync accent if it's the current mode, refresh cards */
 function liveColor(m, c) {
@@ -1090,7 +1096,7 @@ function liveColor(m, c) {
   const sw = $('sw-'+m); if (sw) sw.style.background = c;
   _clearNodeColors(); // node palette derived from mode colors — invalidate
   if (mode === m) {
-    document.documentElement.style.setProperty('--accent', c);
+    document.body.style.setProperty('--accent', c);
   }
   // Refresh card names and borders that belong to this library
   document.querySelectorAll('#preset-grid .pcard').forEach(card => {
@@ -1187,6 +1193,12 @@ function setConn(ok, txt) {
   $('conn-dot').className = ok ? 'on' : '';
   const l = $('conn-text'); l.textContent = txt;
   l.style.color = ok ? 'var(--accent)' : 'var(--muted)';
+  const btn = $('btn-conn');
+  if (btn) {
+    const connecting = txt.startsWith('Connecting');
+    btn.disabled = connecting;
+    btn.textContent = connecting ? '…' : (ok ? 'Reconnect' : 'Connect');
+  }
 }
 function doReconnect() {
   setConn(false, 'Connecting…');
@@ -1226,7 +1238,7 @@ function setMode(m) {
   }
   // Update --accent CSS variable — every element using var(--accent) updates automatically
   const col = MODE_COLORS[m] || '#9ccfd8';
-  document.documentElement.style.setProperty('--accent', col);
+  document.body.style.setProperty('--accent', col);
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode===m));
   // Sync library pill (class only — colors come from CSS var(--accent))
   if (!_syncingModeLib) {
@@ -1247,7 +1259,7 @@ function setMode(m) {
   if (ela) ela.style.display = isElastic() ? '' : 'none';
   if (non) non.style.display = isPhysics() ? 'none' : '';
   // Apply mode palette (hl-med / hl-low tint)
-  Object.entries(MODE_PALETTE[m] || {}).forEach(([k,v]) => document.documentElement.style.setProperty(k,v));
+  Object.entries(MODE_PALETTE[m] || {}).forEach(([k,v]) => document.body.style.setProperty(k,v));
   pushState();
 }
 
@@ -1265,7 +1277,8 @@ function setLibrary(lib) {
 function applyTheme(cls) {
   if (!cls) document.body.style.cssText = '';
   document.body.className = (compact ? 'compact ' : '') + cls;
-  requestAnimationFrame(() => { _refreshThemeColors(); scheduleDraw(); });
+  // Re-apply mode accent after any body style reset — setMode writes to body.style
+  requestAnimationFrame(() => { _refreshThemeColors(); setMode(mode); scheduleDraw(); });
 }
 function applyPresetCols(n) {
   document.documentElement.style.setProperty('--preset-cols', n);
@@ -2057,7 +2070,8 @@ function renderParamsTree(data) {
   ph.style.display='none';
   const col=_nodeColor(data.name);
   const hdr=document.createElement('div'); hdr.className='tool-hdr';
-  hdr.style.cssText=`color:${col};border-bottom-color:${col}22`; hdr.textContent=data.name; tree.appendChild(hdr);
+  hdr.style.setProperty('--node-col', col);
+  hdr.textContent=data.name; tree.appendChild(hdr);
   Object.entries(data.inputs).forEach(([id,meta]) => {
     const row=document.createElement('div'); row.className='inp-row'+(id===selInpId?' sel':'');
     row.style.setProperty('--node-col',col);
@@ -2460,7 +2474,7 @@ function applySettingsUI(s) {
     if(gc.handle_fill){HANDLE_FILL=gc.handle_fill;const sw=$('sw-cc-handle-fill');if(sw)sw.style.background=gc.handle_fill;}
     if(gc.edge){EDGE_COLOR=gc.edge;const sw=$('sw-cc-edge');if(sw)sw.style.background=gc.edge;}
   }
-  _populateSettingsForm(s); setMode(mode);
+  _populateSettingsForm(s); setMode(mode); // re-apply accent after settings loaded
 }
 function resetColors() {
   ['--base','--surface','--overlay','--border','--text','--muted'].forEach(v=>document.body.style.removeProperty(v));
@@ -2474,7 +2488,11 @@ function resetColors() {
 // § 26. THEME SYSTEM
 // ═══════════════════════════════════════════════════════════════
 function applyThemeJSON(data) {
-  Object.entries(data.colors||{}).forEach(([k,v])=>document.body.style.setProperty('--'+k.replace(/_/g,'-'),v));
+  Object.entries(data.colors||{}).forEach(([k,v])=>{
+    const vn='--'+k.replace(/_/g,'-');
+    if(vn==='--subtle') return; // derived via color-mix() in CSS — never override
+    document.body.style.setProperty(vn,v);
+  });
   if (data.mode_colors) Object.assign(MODE_COLORS,data.mode_colors);
   if (data.grid_colors) {
     const gc=data.grid_colors;

@@ -834,6 +834,8 @@ class Backend(QObject):
             # Auto-scan so Nodes panel is populated right after comp switch
             QTimer.singleShot(400, self.scan_comp)
             log.info("[AutoComp] Auto-scan scheduled after comp switch")
+            # Update the comp selector label in the toolbar
+            QTimer.singleShot(0, lambda: self.list_comps(True))
         finally:
             self._switching_comp = False
 
