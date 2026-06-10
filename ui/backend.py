@@ -468,35 +468,34 @@ class Backend(QObject):
             return
         from core.resolve_connection import ResolveWatcher
         log.info("[Watcher] Starting watcher on comp")
-        self._watcher = ResolveWatcher(self._comp, self)
+        self._watcher = ResolveWatcher(self._comp, fu=self._fu, parent=self)
         self._watcher.tool_changed.connect(self._on_tool_changed)
         self._watcher.disconnected.connect(self._on_disconnected)
         self._watcher.comp_scan_updated.connect(self._on_comp_scan)
+        self._watcher.comp_changed.connect(self._on_watcher_comp_changed)
         self._watcher.start()
+
+    def _on_watcher_comp_changed(self):
+        """Watcher's _comp_check (fingerprint) confirmed the user switched comps."""
+        if not self._auto_comp or self._switching_comp:
+            return
+        fu = self._get_fusion()
+        if not fu:
+            return
+        try:
+            current = fu.GetCurrentComp()
+            if not current:
+                return
+            log.info("[AutoComp] Watcher detected comp switch — following")
+            self._do_switch_comp(fu, current)
+        except Exception as e:
+            log.debug("[AutoComp] comp-change handling failed: %s", e)
 
     def _on_tool_changed(self, name, inputs):
         if name:
             log.debug("[Watcher] Active tool: '%s' (%d animated inputs)", name, len(inputs))
-        # Auto-follow check — guarded against re-entrant switches
-        if self._auto_comp and self._fu and not self._switching_comp:
-            try:
-                current = self._fu.GetCurrentComp()
-                if current and self._comp and not self._comps_match(current, self._comp):
-                    new_name = self._get_comp_name(current)
-                    log.info("[AutoComp] Comp changed, following: '%s'", new_name)
-                    self._switching_comp = True
-                    try:
-                        self._last_comp_scan = {}
-                        self._apply_new_comp(current)
-                        self.comp_list_updated.emit(json.dumps([
-                            {"id": "current", "name": new_name, "active": True}
-                        ]))
-                    finally:
-                        self._switching_comp = False
-                    return  # don't emit tool_updated for the old comp
-            except Exception as e:
-                self._switching_comp = False
-                log.debug("[AutoComp] Poll check failed: %s", e)
+        # Comp-change detection handled by watcher's _comp_check (1500 ms, fingerprint-based).
+        # Removed inline _comps_match here — it called GetToolList twice per 500 ms poll.
         payload = {
             "name": name,
             "inputs": {
@@ -507,10 +506,9 @@ class Backend(QObject):
         self.tool_updated.emit(json.dumps(payload))
 
     def _on_disconnected(self):
-        log.warning("[Watcher] Comp disconnected — attempting auto-reconnect in 2s")
-        self._fu = None  # invalidate cached Fusion object
-        self.connection_changed.emit(False, "Reconnecting\u2026")
-        QTimer.singleShot(2000, lambda: self.reconnect(""))
+        log.warning("[Watcher] Connection lost after repeated poll failures")
+        self._fu = None
+        self.connection_changed.emit(False, "Disconnected — click Connect")
 
     def _on_comp_scan(self, scan_result: dict):
         """Forward comp-wide scan result to JS as JSON."""
@@ -829,10 +827,13 @@ class Backend(QObject):
                 self._watcher.stop()
                 self._watcher = None
             self._last_comp_scan = {}
-            self._apply_new_comp(new_comp)
+            self._apply_new_comp(new_comp)  # creates new watcher synchronously
             name = self._get_comp_name(new_comp)
             log.info("[set_active_comp] Switched to '%s'", name)
             self.status_changed.emit(f"Switched to: {name}", "#9ccfd8")
+            # Auto-scan so Nodes panel is populated right after comp switch
+            QTimer.singleShot(400, self.scan_comp)
+            log.info("[AutoComp] Auto-scan scheduled after comp switch")
         finally:
             self._switching_comp = False
 
