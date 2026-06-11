@@ -476,7 +476,7 @@ body.compact #kf-range-widget{display:none!important}
 <div id="titlebar">
   <span id="appname"><span id="nm">M</span><span id="nf">Flow</span></span>
   <span class="badge" id="badge-fluid" data-i18n="badge.fluid">FLUID</span>
-  <span id="version">v2.3.2</span>
+  <span id="version">v2.4.0</span>
   <div class="spacer"></div>
   <div id="conn-row">
     <div id="conn-dot"></div>
@@ -1129,6 +1129,13 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('resize', _cacheBoxSize);
   requestAnimationFrame(() => { resizeCanvas(); setMode(mode); });
   window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, {passive:false});
+  // Forward Ctrl+Z / Ctrl+Shift+Z to Resolve's comp undo when no input is focused
+  document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key.toLowerCase() === 'z' && !e.target.closest('input,textarea,[contenteditable]')) {
+      e.preventDefault();
+      if (backend) { try { e.shiftKey ? backend.redo_resolve() : backend.undo_resolve(); } catch(_) {} }
+    }
+  });
   document.addEventListener('click', e => {
     if (!e.target.closest('#profile-dd')) closeProfileDrop();
     if (!e.target.closest('#btn-panels') && !e.target.closest('#panel-menu')) closePanelMenu();
@@ -2304,7 +2311,7 @@ function _updateScanCount() {
   const el=$('scan-sel-count'); if(!el)return;
   let total=0; for(const s of Object.values(_scanSel)) total+=s.size;
   el.textContent=total>0?(total+' selected'):'';
-  const btn=$('btn-aall'); if(btn) btn.style.opacity=total>0?'1':'0.6';
+  const btn=$('btn-aall'); if(btn){ btn.disabled=total===0; btn.style.opacity=total>0?'1':'0.6'; }
 }
 function _pushScanSel() {
   if (!backend) return;
@@ -2314,7 +2321,8 @@ function _pushScanSel() {
 function applySelected() {
   if (!backend) return;
   let hasSel=false; for(const s of Object.values(_scanSel)){if(s.size>0){hasSel=true;break;}}
-  if (hasSel) backend.apply_curve_selected(); else backend.apply_curve_all();
+  if (hasSel) backend.apply_curve_selected();
+  // No fallback — button is disabled when nothing is selected
 }
 
 // ═══════════════════════════════════════════════════════════════
