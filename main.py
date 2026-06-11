@@ -181,7 +181,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("MFlow")
-    app.setApplicationVersion("2.3.2")
+    app.setApplicationVersion("2.4.0")
 
     comp = None
     try:

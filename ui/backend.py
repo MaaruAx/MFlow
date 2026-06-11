@@ -43,6 +43,7 @@ class Backend(QObject):
     load_theme_result  = Signal(str)         # JSON theme object
     comp_list_updated  = Signal(str)         # JSON [{id, name, active}]
     spline_copied      = Signal(str)         # removed — kept stub for compat
+    _apply_comp_sig    = Signal(object)      # internal: thread-safe cross-thread comp delivery
 
     def __init__(self, window, comp=None, fusion_app=None, resolve=None, parent=None):
         super().__init__(parent)
@@ -85,6 +86,9 @@ class Backend(QObject):
         self._fps      = float(self._settings.get("bake_fps", 24))
         self._python_scan_cache = None  # cached result of scan_pythons()
         self._python_scan_time  = 0.0   # epoch when cache was last filled
+        # Thread-safe delivery: worker threads emit this to invoke _apply_new_comp
+        # on the main thread via Qt's automatic queued-connection mechanism.
+        self._apply_comp_sig.connect(self._apply_new_comp)
 
         # Start watcher if we already have a comp
         if comp:
@@ -271,20 +275,22 @@ class Backend(QObject):
                         else:
                             log.warning("[Connect] No active Fusion comp — "
                                         "open a comp on the Fusion page in DaVinci Resolve")
-                        QTimer.singleShot(0, lambda: _self._apply_new_comp(comp))
+                        # Emit via _apply_comp_sig: Qt auto-queues this onto the
+                        # main-thread event loop (QTimer.singleShot from a
+                        # QRunnable thread has no event loop and silently drops).
+                        _self._apply_comp_sig.emit(comp)
                     else:
                         log.warning("[Connect] All attempts failed. "
                                     "Ensure DaVinci Resolve is open and:\n"
                                     "  Preferences > System > General > "
                                     "External scripting using = Local")
-                        QTimer.singleShot(0, lambda: _self.connection_changed.emit(
+                        _self.connection_changed.emit(
                             False,
                             "Not connected \u2014 open Resolve and set "
-                            "Preferences > General > External scripting: Local"))
+                            "Preferences > General > External scripting: Local")
                 except Exception as exc:
                     log.error("[Connect] Exception: %s", exc, exc_info=True)
-                    msg = f"Connect error: {exc}"
-                    QTimer.singleShot(0, lambda: _self.connection_changed.emit(False, msg))
+                    _self.connection_changed.emit(False, f"Connect error: {exc}")
 
         QThreadPool.globalInstance().start(_ConnectWorker())
 
@@ -474,6 +480,8 @@ class Backend(QObject):
         self._watcher.comp_scan_updated.connect(self._on_comp_scan)
         self._watcher.comp_changed.connect(self._on_watcher_comp_changed)
         self._watcher.start()
+        # Auto-scan on every fresh watcher: startup, reconnect, and auto-follow.
+        QTimer.singleShot(600, self.scan_comp)
 
     def _on_watcher_comp_changed(self):
         """Watcher's _comp_check (fingerprint) confirmed the user switched comps."""
@@ -831,9 +839,7 @@ class Backend(QObject):
             name = self._get_comp_name(new_comp)
             log.info("[set_active_comp] Switched to '%s'", name)
             self.status_changed.emit(f"Switched to: {name}", "#9ccfd8")
-            # Auto-scan so Nodes panel is populated right after comp switch
-            QTimer.singleShot(400, self.scan_comp)
-            log.info("[AutoComp] Auto-scan scheduled after comp switch")
+            log.info("[AutoComp] Comp switch complete — watcher will auto-scan")
             # Update the comp selector label in the toolbar
             QTimer.singleShot(0, lambda: self.list_comps(True))
         finally:
@@ -990,6 +996,26 @@ class Backend(QObject):
     def apply_curve_all(self):
         self._do_apply(scope="selected")
 
+    @Slot()
+    def undo_resolve(self):
+        """Forward Ctrl+Z from MFlow window to Resolve's comp undo."""
+        if self._comp:
+            try:
+                self._comp.Undo()
+                log.debug("[Undo] comp.Undo() called")
+            except Exception as e:
+                log.debug("[Undo] comp.Undo() failed: %s", e)
+
+    @Slot()
+    def redo_resolve(self):
+        """Forward Ctrl+Shift+Z from MFlow window to Resolve's comp redo."""
+        if self._comp:
+            try:
+                self._comp.Redo()
+                log.debug("[Redo] comp.Redo() called")
+            except Exception as e:
+                log.debug("[Redo] comp.Redo() failed: %s", e)
+
     def _do_apply(self, all_inputs=None, scope="single"):
         # Legacy call from auto-apply timer passes all_inputs bool — normalise
         if all_inputs is True:
@@ -1014,7 +1040,10 @@ class Backend(QObject):
         # Build the list of (tool, inputs_dict) to process
         work_items = []  # list of (tool_obj, {inp_id: meta})
 
-        if scope == "selected" and self._sel_tools:
+        if scope == "selected":
+            if not self._sel_tools:
+                self.apply_done.emit(False, "No nodes selected — select inputs in the Scan panel first")
+                return
             # Multi-node: use everything the user selected in the comp scan
             for tool_name, inp_dict in self._sel_tools.items():
                 try:
