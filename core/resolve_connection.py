@@ -163,17 +163,20 @@ class ResolveWatcher(QObject):
 
     def _quick_fp(self, comp) -> str:
         """
-        Fast fingerprint for comp-change detection.
-        Uses first 5 sorted tool names + count.
-        Avoids COMPS_FileName/COMPS_Name which are empty for Resolve timeline comps.
-        One GetToolList IPC call, only from _comp_check (every 1500 ms).
+        Fast fingerprint for comp-change detection using clip attributes.
+        Uses COMPN_GlobalEnd + COMPN_FPS + COMPS_FileName — these are set by the
+        clip and are STABLE: they do not change when tools are added/removed within
+        the same comp (unlike GetToolList which triggered false positives).
+        One GetAttrs IPC call, only from _comp_check (every 1500 ms).
         """
         try:
-            tools = comp.GetToolList(False)
-            if not tools:
-                return ""
-            names = sorted(t.Name for t in tools.values())
-            return f"{len(names)}:" + ",".join(names[:5])
+            attrs = comp.GetAttrs()
+            end  = round(attrs.get("COMPN_GlobalEnd", -1), 3)
+            fps  = round(attrs.get("COMPN_FPS", 0), 4)
+            name = attrs.get("COMPS_FileName") or attrs.get("COMPS_Name") or ""
+            key  = f"{end}:{fps}:{name}"
+            # Return empty if all fields are defaults (unreadable comp)
+            return key if key != "-1.0:0.0:" else ""
         except Exception:
             return ""
 
