@@ -1,0 +1,35 @@
+{
+  "name": "Dracula-MFlow",
+  "author": "MaaruAx",
+  "version": 1,
+  "colors": {
+    "base": "#1e1f29",
+    "surface": "#282a36",
+    "overlay": "#282a36",
+    "muted": "#a6adc8",
+    "text": "#cdd6f4",
+    "border": "#44475a",
+    "hl_low": "#28253d",
+    "hl_med": "#3a3750"
+  },
+  "mode_colors": {
+    "easing": "#6272a4",
+    "spring": "#ffb86c",
+    "elastic": "#ff5555",
+    "overframe": "#bd93f9"
+  },
+  "grid_colors": {
+    "grid": "#282a36",
+    "cross": "#44475a",
+    "handle_fill": "#44475a",
+    "edge": "#44475a"
+  },
+  "interface_colors": {
+    "base": "#1e1f29",
+    "surface": "#282a36",
+    "overlay": "#282a36",
+    "border": "#44475a",
+    "text": "#cdd6f4",
+    "muted": "#a6adc8"
+  }
+}

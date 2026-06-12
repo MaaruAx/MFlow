@@ -1,0 +1,35 @@
+{
+  "name": "FFlow 1.0",
+  "author": "MaaruAx",
+  "version": 1,
+  "colors": {
+    "base": "#191919",
+    "surface": "#1c1c1c",
+    "overlay": "#1c1c1c",
+    "muted": "#71777a",
+    "text": "#cccccc",
+    "border": "#343434",
+    "hl_low": "#28253d",
+    "hl_med": "#3a3750"
+  },
+  "mode_colors": {
+    "easing": "#e05828",
+    "spring": "#e05828",
+    "elastic": "#e05828",
+    "overframe": "#e05828"
+  },
+  "grid_colors": {
+    "grid": "#1f1f1f",
+    "cross": "#292929",
+    "handle_fill": "#292929",
+    "edge": "#292929"
+  },
+  "interface_colors": {
+    "base": "#191919",
+    "surface": "#1c1c1c",
+    "overlay": "#1c1c1c",
+    "border": "#343434",
+    "text": "#cccccc",
+    "muted": "#71777a"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "name": "Nord-MFlow",
+  "author": "MaaruAx",
+  "version": 1,
+  "colors": {
+    "base": "#2e3440",
+    "surface": "#3b4252",
+    "overlay": "#3b4252",
+    "muted": "#a6adc8",
+    "text": "#cdd6f4",
+    "love": "#eb6f92",
+    "gold": "#f6c177",
+    "rose": "#ebbcba",
+    "pine": "#31748f",
+    "foam": "#9ccfd8",
+    "iris": "#c4a7e7",
+    "border": "#434c5e",
+    "hl_low": "#21202e",
+    "hl_med": "#403d52",
+    "hl_high": "#524f67"
+  },
+  "mode_colors": {
+    "easing": "#81a1c1",
+    "spring": "#ebcb8b",
+    "elastic": "#bf616a",
+    "overframe": "#b48ead"
+  },
+  "grid_colors": {
+    "grid": "#3b4252",
+    "cross": "#434c5e",
+    "handle_fill": "#434c5e",
+    "edge": "#434c5e"
+  },
+  "interface_colors": {
+    "base": "#2e3440",
+    "surface": "#3b4252",
+    "overlay": "#3b4252",
+    "border": "#434c5e",
+    "text": "#cdd6f4",
+    "muted": "#a6adc8"
+  }
+}
