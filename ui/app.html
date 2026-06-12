@@ -1324,9 +1324,17 @@ function setMode(m) {
   if (spr) spr.style.display = isSpring()  ? '' : 'none';
   if (ela) ela.style.display = isElastic() ? '' : 'none';
   if (non) non.style.display = isPhysics() ? 'none' : '';
-  // Apply mode palette (hl-med / hl-low tint) — skipped when a custom theme is active
+  // Apply mode palette (hl-med / hl-low tint)
   if (!_activeTheme) {
+    // Default theme: apply per-mode background tints from MODE_PALETTE
     Object.entries(MODE_PALETTE[m] || {}).forEach(([k,v]) => document.body.style.setProperty(k,v));
+  } else {
+    // Custom theme: remove any stale MODE_PALETTE overrides so theme values show through
+    ['--hl-low','--hl-med','--hl-high'].forEach(k => {
+      // Only remove if the theme itself didn't set the value (i.e. it came from MODE_PALETTE)
+      const fromTheme = _CSS_DEFAULTS[k];
+      if (!fromTheme) document.body.style.removeProperty(k);
+    });
   }
   pushState();
 }
@@ -2565,6 +2573,15 @@ function applyThemeJSON(data) {
     document.body.style.setProperty(vn,v);
   });
   if (data.mode_colors) Object.assign(MODE_COLORS,data.mode_colors);
+  // Apply current mode accent immediately — ensures mode colors update on theme switch
+  document.body.style.setProperty('--accent', MODE_COLORS[mode] || '#9ccfd8');
+  // Remove stale MODE_PALETTE overrides if theme already provides hl values via data.colors
+  // (avoids Rosé Pine purple tints bleeding into other themes)
+  if (!(data.colors && (data.colors.hl_low || data.colors['hl-low']))) {
+    document.body.style.removeProperty('--hl-low');
+    document.body.style.removeProperty('--hl-med');
+    document.body.style.removeProperty('--hl-high');
+  }
   if (data.grid_colors) {
     const gc=data.grid_colors;
     if(gc.grid){GRID_COLOR=gc.grid;const s=$('sw-cc-grid');if(s)s.style.background=gc.grid;}
