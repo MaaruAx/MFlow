@@ -15,8 +15,12 @@
   --foam:#9ccfd8;--iris:#c4a7e7;
   --border:#26233a;--hl-low:#28253d;--hl-med:#3a3750;--hl-high:#524f67;
   --accent:#9ccfd8;--r:3px;
+  color-scheme:dark; /* tells Chromium/QWebEngine to use dark mode for all native elements */
 }
-html,body{width:100%;height:100%;background:var(--base);color:var(--text);
+html,body{width:100%;height:100%;
+  /* Literal fallback — rendered immediately before CSS vars resolve, prevents white flash */
+  background:#121217;background:var(--base);
+  color:var(--text);
   font-family:'Monaspace','JetBrains Mono','Courier New',monospace;font-size:12px;overflow:hidden;user-select:none}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:var(--overlay)}
@@ -390,7 +394,8 @@ body.compact #kf-range-widget{display:none!important}
 /* ── Settings overlay ── */
 #s-ov{display:none;position:fixed;inset:0;z-index:500;
   background:rgba(0,0,0,.55);align-items:center;justify-content:center;overscroll-behavior:contain}
-#s-ov.open{display:flex}
+#s-ov.open{display:flex;animation:fadeIn .15s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
 
 /* ── Settings panel (single definition: 500px, no padding, sections handle their own padding) ── */
 #s-panel{background:var(--surface);border:1px solid var(--border);border-radius:4px;
@@ -426,8 +431,31 @@ body.compact #kf-range-widget{display:none!important}
 .col-row{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)}
 .col-row input[type=color]{width:30px;height:20px;border:1px solid var(--border);
   border-radius:2px;cursor:pointer;background:transparent;padding:1px}
-.s-sel{background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
-  color:var(--text);font-family:inherit;font-size:11px;padding:3px 7px;cursor:pointer}
+/* Native <select> hidden — replaced by .csel custom dropdown (avoids Win32 popup overflow) */
+.s-sel{display:none}
+/* Custom dropdown system */
+.csel{position:relative;display:inline-block}
+.csel-btn{background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
+  color:var(--text);font-family:inherit;font-size:11px;padding:3px 7px;cursor:pointer;
+  display:flex;align-items:center;justify-content:space-between;gap:5px;
+  width:100%;text-align:left;outline:none}
+.csel-btn:hover{border-color:var(--hl-med)}
+.csel-btn:focus-visible{border-color:var(--accent)}
+.csel-arrow{color:var(--muted);font-size:8px;flex-shrink:0;line-height:1}
+.csel-list{display:none;position:fixed;z-index:9999;
+  background:var(--overlay);border:1px solid var(--hl-med);border-radius:var(--r);
+  max-height:180px;overflow-y:auto;min-width:120px;box-shadow:0 4px 12px rgba(0,0,0,.5)}
+.csel-list.open{display:block}
+.csel-opt{padding:5px 9px;font-size:11px;color:var(--text);cursor:pointer;white-space:nowrap}
+.csel-opt:hover{background:var(--hl-low)}
+.csel-opt.active{color:var(--accent)}
+/* Fix checkbox: color-scheme:dark handles the native look, accent-color sets tick color */
+.s-check input[type=checkbox]{accent-color:var(--accent);cursor:pointer;
+  width:14px;height:14px;color-scheme:dark}
+/* Hide native spin buttons on number inputs */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield}
 /* Footer: padding + border-top (correct definition) */
 .s-foot{display:flex;gap:5px;justify-content:flex-end;padding:12px 18px;
   border-top:1px solid var(--border);flex-shrink:0}
@@ -747,15 +775,29 @@ body.compact #kf-range-widget{display:none!important}
       <div class="s-section-label" data-i18n="settings.appearance">Appearance</div>
       <div class="s-row">
         <div class="s-lbl" data-i18n="settings.theme">Theme</div>
-        <select class="s-sel" id="s-theme" onchange="applySelectedTheme(this.value)">
-          <option value="" data-i18n="settings.theme_default">Default</option>
-        </select>
+        <div class="csel" id="s-theme-wrap">
+          <button class="csel-btn" type="button" onclick="cselToggle('s-theme-wrap')">
+            <span class="csel-label" id="s-theme-label">Default</span>
+            <span class="csel-arrow">&#9660;</span>
+          </button>
+          <div class="csel-list" id="s-theme-list"></div>
+          <select class="s-sel" id="s-theme" onchange="applySelectedTheme(this.value)">
+            <option value="">Default</option>
+          </select>
+        </div>
       </div>
       <div class="s-row">
         <div class="s-lbl" data-i18n="settings.language">Language</div>
-        <select class="s-sel" id="s-lang" onchange="applyLanguage(this.value)">
-          <option value="en">English</option>
-        </select>
+        <div class="csel" id="s-lang-wrap">
+          <button class="csel-btn" type="button" onclick="cselToggle('s-lang-wrap')">
+            <span class="csel-label" id="s-lang-label">English</span>
+            <span class="csel-arrow">&#9660;</span>
+          </button>
+          <div class="csel-list" id="s-lang-list"></div>
+          <select class="s-sel" id="s-lang" onchange="applyLanguage(this.value)">
+            <option value="en">English</option>
+          </select>
+        </div>
       </div>
       <div class="s-row">
         <div class="s-lbl">Preset columns <span id="s-preset-cols-val" class="s-muted-val">2</span></div>
@@ -813,12 +855,19 @@ body.compact #kf-range-widget{display:none!important}
       <div class="s-section-label">Preview</div>
       <div class="s-row">
         <div class="s-lbl">Shape</div>
-        <select class="s-sel" id="s-shape" onchange="setPreviewShape(this.value)">
-          <option value="square">Square</option>
-          <option value="circle">Circle</option>
-          <option value="diamond">Diamond</option>
-          <option value="pill">Pill</option>
-        </select>
+        <div class="csel" id="s-shape-wrap">
+          <button class="csel-btn" type="button" onclick="cselToggle('s-shape-wrap')">
+            <span class="csel-label" id="s-shape-label">Square</span>
+            <span class="csel-arrow">&#9660;</span>
+          </button>
+          <div class="csel-list" id="s-shape-list"></div>
+          <select class="s-sel" id="s-shape" onchange="setPreviewShape(this.value)">
+            <option value="square">Square</option>
+            <option value="circle">Circle</option>
+            <option value="diamond">Diamond</option>
+            <option value="pill">Pill</option>
+          </select>
+        </div>
       </div>
       <div class="s-row">
         <div class="s-lbl">Border radius <span class="s-muted-val" id="s-shape-r-val">4%</span></div>
@@ -838,7 +887,14 @@ body.compact #kf-range-widget{display:none!important}
       <div class="s-row">
         <div class="s-lbl">Python</div>
         <div class="s-row-h">
-          <select class="s-sel" id="s-py-sel" style="flex:1" onchange="$('s-py').value=this.value"></select>
+          <div class="csel" id="s-py-sel-wrap" style="flex:1">
+            <button class="csel-btn" type="button" onclick="cselToggle('s-py-sel-wrap')" style="width:100%">
+              <span class="csel-label" id="s-py-sel-label">Auto</span>
+              <span class="csel-arrow">&#9660;</span>
+            </button>
+            <div class="csel-list" id="s-py-sel-list"></div>
+            <select class="s-sel" id="s-py-sel" onchange="$('s-py').value=this.value"></select>
+          </div>
           <button class="s-btn" onclick="rescanPython()">Rescan</button>
         </div>
         <input class="s-inp" id="s-py" type="text" placeholder="Auto" style="margin-top:3px">
@@ -915,20 +971,16 @@ function applyI18n() {
     if (v !== undefined) el.title = v;
   });
 }
-/** Load language list into the settings <select> */
+/** Load language list into the csel dropdown */
 function populateLangSelect(jsonStr) {
   const sel = $('s-lang');
-  if (!sel) return;
   try {
     const langs = JSON.parse(jsonStr);
-    const current = sel.dataset.current || 'en';
-    sel.innerHTML = '';
-    langs.forEach(({code, label}) => {
-      const opt = document.createElement('option');
-      opt.value = code; opt.textContent = label;
-      if (code === current) opt.selected = true;
-      sel.appendChild(opt);
-    });
+    const current = (sel && sel.dataset.current) || 'en';
+    const opts = langs.map(({code,label}) => ({value:code, text:label}));
+    cselPopulate('s-lang-wrap', opts, current);
+    // Keep native select in sync for $('s-lang').value reads
+    if (sel) { sel.innerHTML=''; opts.forEach(({value,text})=>sel.appendChild(new Option(text,value))); sel.value=current; }
   } catch(e) {}
 }
 
@@ -962,6 +1014,7 @@ const SP_Y_MAX=1.5, SP_OM_MIN=0.5, SP_OM_MAX=30.0, SP_T_DISPLAY=5.0;
 const EL_Y_MIN=-1.2, EL_Y_MAX=1.3, EL_Y_RNG=EL_Y_MAX-EL_Y_MIN;
 const LN=256, ANIM_DUR=1400;
 let MODE_COLORS = { easing:'#9ccfd8', spring:'#f6c177', elastic:'#eb6f92', overframe:'#c4a7e7' };
+let _activeTheme = '';  // tracks loaded theme name — prevents MODE_PALETTE from overriding theme colors
 const MODE_PALETTE = {
   easing:    {'--hl-med':'#3a3750','--hl-low':'#28253d'},
   spring:    {'--hl-med':'#3d3220','--hl-low':'#2d2618'},
@@ -1128,7 +1181,13 @@ document.addEventListener('DOMContentLoaded', () => {
   setTimeout(_initPreview, 250);
   window.addEventListener('resize', _cacheBoxSize);
   requestAnimationFrame(() => { resizeCanvas(); setMode(mode); });
-  window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, {passive:false});
+  // Populate static dropdowns (s-shape has fixed options)
+  cselPopulate('s-shape-wrap', [
+    {value:'square',text:'Square'},{value:'circle',text:'Circle'},
+    {value:'diamond',text:'Diamond'},{value:'pill',text:'Pill'}
+  ], 'square');
+
+    window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, {passive:false});
   // Forward Ctrl+Z / Ctrl+Shift+Z to Resolve's comp undo when no input is focused
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.key.toLowerCase() === 'z' && !e.target.closest('input,textarea,[contenteditable]')) {
@@ -1265,8 +1324,10 @@ function setMode(m) {
   if (spr) spr.style.display = isSpring()  ? '' : 'none';
   if (ela) ela.style.display = isElastic() ? '' : 'none';
   if (non) non.style.display = isPhysics() ? 'none' : '';
-  // Apply mode palette (hl-med / hl-low tint)
-  Object.entries(MODE_PALETTE[m] || {}).forEach(([k,v]) => document.body.style.setProperty(k,v));
+  // Apply mode palette (hl-med / hl-low tint) — skipped when a custom theme is active
+  if (!_activeTheme) {
+    Object.entries(MODE_PALETTE[m] || {}).forEach(([k,v]) => document.body.style.setProperty(k,v));
+  }
   pushState();
 }
 
@@ -2436,6 +2497,7 @@ function resetSettings() { if(confirm('Reset all settings?')){if(backend)backend
 /** Apply a language code — reloads i18n and re-applies DOM translations */
 function applyLanguage(code) {
   const sel = $('s-lang'); if (sel) sel.dataset.current = code;
+  cselSetValue('s-lang-wrap', code);
   if (!backend) return;
   // Tell backend to use this language next time get_i18n() is called
   // We pass language change through save_settings so it persists
@@ -2452,12 +2514,12 @@ function _populateSettingsForm(s) {
   const setV=(id,v)=>{const el=$(id);if(el&&v!=null)el.value=v;};
   const setC=(id,v)=>{const el=$(id);if(el&&v!=null)el.checked=v;};
   setV('s-dvr',s.dvr_path||''); setV('s-py',s.python_path||''); setV('s-fps',s.bake_fps||24);
-  setV('s-theme',s.theme||''); setC('s-aot',!!s.always_on_top); setC('s-aa2',!!s.auto_apply); setC('s-gpu',s.gpu_acceleration!==false); setC('s-auto-comp',s.auto_comp!==false);
+  setV('s-theme',s.theme||''); cselSetValue('s-theme-wrap',s.theme||''); setC('s-aot',!!s.always_on_top); setC('s-aa2',!!s.auto_apply); setC('s-gpu',s.gpu_acceleration!==false); setC('s-auto-comp',s.auto_comp!==false);
   const cols=s.preset_cols||2; setV('s-preset-cols',cols); const zoomPct=s.ui_zoom||100; setV('s-ui-zoom',zoomPct);
   const cv=$('s-preset-cols-val');if(cv)cv.textContent=cols; const zv=$('s-ui-zoom-val');if(zv)zv.textContent=zoomPct+'%';
   _updateSliderFill('s-preset-cols',1,5,cols); _updateSliderFill('s-ui-zoom',70,150,zoomPct);
   if (s.mode_colors) { setV('sc-easing',s.mode_colors.easing||'#9ccfd8'); setV('sc-spring',s.mode_colors.spring||'#f6c177'); setV('sc-elastic',s.mode_colors.elastic||'#eb6f92'); setV('sc-overframe',s.mode_colors.overframe||'#c4a7e7'); }
-  if (s.language) { const sl=$('s-lang'); if(sl){sl.value=s.language;sl.dataset.current=s.language;} }
+  if (s.language) { const sl=$('s-lang'); if(sl){sl.value=s.language;sl.dataset.current=s.language;} cselSetValue('s-lang-wrap',s.language); }
 }
 function applySettingsUI(s) {
   Object.assign(_currentSettings,s);
@@ -2496,6 +2558,7 @@ function resetColors() {
 // § 26. THEME SYSTEM
 // ═══════════════════════════════════════════════════════════════
 function applyThemeJSON(data) {
+  _activeTheme = data.name || 'custom';
   Object.entries(data.colors||{}).forEach(([k,v])=>{
     const vn='--'+k.replace(/_/g,'-');
     if(vn==='--subtle') return; // derived via color-mix() in CSS — never override
@@ -2516,21 +2579,21 @@ function applyThemeJSON(data) {
   requestAnimationFrame(()=>{ _refreshThemeColors(); setMode(mode); scheduleDraw(); });
 }
 function renderThemeOptions(themes) {
-  const sel=$('s-theme'); if(!sel)return;
-  while(sel.options.length>1) sel.remove(1);
-  themes.forEach(t=>sel.appendChild(new Option(t.name,t.name)));
+  const opts = [{value:'',text:'Default'}].concat(themes.map(t=>({value:t.name,text:t.name})));
+  const cur = $('s-theme') ? $('s-theme').value : '';
+  cselPopulate('s-theme-wrap', opts, cur||'');
 }
 function loadThemesFromFolder()    { if(!backend)return; try{if(backend.list_themes)backend.list_themes();}catch(e){} }
-function applySelectedTheme(val)   { if(!val){applyTheme('');return;} if(backend&&backend.load_theme){try{backend.load_theme(val);}catch(e){applyTheme(val);}} }
+function applySelectedTheme(val)   { if(!val){_activeTheme='';applyTheme('');setMode(mode);return;} if(backend&&backend.load_theme){try{backend.load_theme(val);}catch(e){applyTheme(val);}} }
 
 // ═══════════════════════════════════════════════════════════════
 // § 27. PYTHON LIST
 // ═══════════════════════════════════════════════════════════════
 function renderPythonList(list, active) {
   detectedPythons=list; activePython=active||list[0]||'';
-  const sel=$('s-py-sel'); if(!sel)return;
-  sel.innerHTML='';
-  list.forEach(p=>{ const opt=document.createElement('option'); opt.value=p; opt.textContent=p; opt.selected=(p===activePython); sel.appendChild(opt); });
+  const opts = list.map(p=>({value:p,text:p}));
+  if (!opts.length) opts.push({value:'',text:'Auto'});
+  cselPopulate('s-py-sel-wrap', opts, activePython);
   const inp=$('s-py'); if(inp&&!inp.value) inp.value=activePython;
 }
 function rescanPython() {
@@ -2642,7 +2705,71 @@ function copyDebug(){
   else{const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');ta.remove();}
   setStatus(t('status.debug_copied'),'var(--accent)');
 }
-</script>
+
+
+// ── Custom Select (csel) system ──────────────────────────────────────────
+// Replaces native <select> to avoid Win32 popup overflow in QWebEngineView.
+// The hidden native <select> keeps the same IDs so all existing JS reads work.
+function cselToggle(wrapperId) {
+  const wrap = $(wrapperId);
+  if (!wrap) return;
+  const list = wrap.querySelector('.csel-list');
+  const isOpen = list.classList.contains('open');
+  // Close all other open dropdowns
+  document.querySelectorAll('.csel-list.open').forEach(l => l.classList.remove('open'));
+  if (isOpen) return;
+  // Position list below button, fixed to viewport — never overflows window
+  const btn = wrap.querySelector('.csel-btn');
+  const rect = btn.getBoundingClientRect();
+  list.style.left  = rect.left + 'px';
+  list.style.top   = (rect.bottom + 3) + 'px';
+  list.style.minWidth = Math.max(rect.width, 130) + 'px';
+  list.classList.add('open');
+}
+function cselSetValue(wrapperId, value) {
+  const wrap = $(wrapperId); if (!wrap) return;
+  const native = wrap.querySelector('select');
+  const label  = wrap.querySelector('.csel-label');
+  if (native) native.value = value;
+  wrap.querySelectorAll('.csel-opt').forEach(o => {
+    const active = o.dataset.value === String(value);
+    o.classList.toggle('active', active);
+    if (active && label) label.textContent = o.textContent;
+  });
+}
+function cselPopulate(wrapperId, options, currentValue) {
+  // options: array of {value, text}
+  const wrap = $(wrapperId); if (!wrap) return;
+  const list   = wrap.querySelector('.csel-list');
+  const native = wrap.querySelector('select');
+  const label  = wrap.querySelector('.csel-label');
+  list.innerHTML = '';
+  if (native) native.innerHTML = '';
+  options.forEach(({value, text}) => {
+    // Custom visual option
+    const div = document.createElement('div');
+    div.className = 'csel-opt';
+    div.dataset.value = value;
+    div.textContent = text;
+    div.onclick = () => {
+      cselSetValue(wrapperId, value);
+      list.classList.remove('open');
+      if (native) { native.value = value; native.dispatchEvent(new Event('change', {bubbles:true})); }
+    };
+    list.appendChild(div);
+    // Mirror in hidden native select for JS compat
+    if (native) { const o = new Option(text, value); native.appendChild(o); }
+  });
+  if (currentValue != null) cselSetValue(wrapperId, currentValue);
+  else if (options.length && label) label.textContent = options[0].text;
+}
+// Close dropdowns on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.csel')) {
+    document.querySelectorAll('.csel-list.open').forEach(l => l.classList.remove('open'));
+  }
+}, true);
+</script></script>
 
 <!-- HSV Color Picker (must be after </script> but before </body>) -->
 <div id="clr-picker">

@@ -79,6 +79,7 @@ try:
     from PySide6.QtWebEngineCore import QWebEngineSettings
     from PySide6.QtWebChannel import QWebChannel
     from PySide6.QtCore import Qt, QUrl, QTimer
+    from PySide6.QtGui import QColor
 except ImportError as e:
     log.error("PySide6 not installed: %s", e)
     log.error("Run: pip install PySide6")
@@ -99,6 +100,8 @@ class MFlowWindow(QMainWindow):
 
         self._view = QWebEngineView()
         self.setCentralWidget(self._view)
+        # Eliminates white flash before CSS loads — must be set before loadUrl()
+        self._view.page().setBackgroundColor(QColor("#121217"))
 
         s = self._view.settings()
         s.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
