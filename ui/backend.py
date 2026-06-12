@@ -311,7 +311,7 @@ class Backend(QObject):
             try:
                 comp_name = self._get_comp_name(self._comp)
                 log.info("[Announce] Comp name resolved: '%s'", comp_name)
-                edition = "Free"
+                edition = "Resolve"
                 ver_str = ""
                 try:
                     fu = (self._comp.GetFusion() if callable(getattr(self._comp, "GetFusion", None))

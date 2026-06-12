@@ -81,6 +81,7 @@ html,body{width:100%;height:100%;
 /* ── Main layout ── */
 #main{display:flex;flex:1;min-height:0;position:relative;overflow:hidden}
 body.compact #preset-panel,body.compact #right-panel,body.compact #params-sidebar{display:none!important}
+body.compact #comp-selector{display:none!important}
 body.compact #curve-wrap{flex:1}
 body.compact #kf-range-widget{display:none!important}
 
@@ -172,7 +173,7 @@ body.compact #kf-range-widget{display:none!important}
 .comp-item.active-comp{color:var(--accent)}
 .comp-item .ci-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0;opacity:0}
 .comp-item.active-comp .ci-dot{opacity:1}
-#preset-search{flex:1;background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
+#preset-search{flex:1;min-width:0;background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
   color:var(--text);font-family:inherit;font-size:11px;padding:3px 7px}
 #preset-search::placeholder{color:var(--muted)}
 #preset-search:focus{outline:none;border-color:var(--hl-med)}
@@ -2325,14 +2326,14 @@ function doSaveTheme() {
 function doScanAll() {
   if (!backend) return;
   const btn=$('btn-scan');
-  if (btn) { btn.classList.add('scanning'); btn.textContent='Scanning…'; }
+  if (btn) { btn.classList.add('scanning'); btn.textContent=t('scan.scanning'); }
   backend.scan_comp();
 }
 function renderCompScan(data) {
   _scanData=data||{};
   for (const k of Object.keys(_scanSel)) { if(!_scanData[k]) delete _scanSel[k]; }
   const btn=$('btn-scan');
-  if (btn) { btn.classList.remove('scanning'); btn.textContent='⟳ SCAN ALL'; }
+  if (btn) { btn.classList.remove('scanning'); btn.textContent=t('scan.button'); }
   const tree=$('scan-tree'), ph=$('scan-ph'); if(!tree)return;
   tree.innerHTML='';
   const tools=Object.keys(_scanData);
@@ -2572,7 +2573,10 @@ function applyThemeJSON(data) {
     if(vn==='--subtle') return; // derived via color-mix() in CSS — never override
     document.body.style.setProperty(vn,v);
   });
-  if (data.mode_colors) Object.assign(MODE_COLORS,data.mode_colors);
+  if (data.mode_colors) {
+    Object.assign(MODE_COLORS,data.mode_colors);
+    ['easing','spring','elastic','overframe'].forEach(m=>{ const inp=$('sc-'+m); if(inp&&MODE_COLORS[m]) inp.value=MODE_COLORS[m]; });
+  }
   // Apply current mode accent immediately — ensures mode colors update on theme switch
   document.body.style.setProperty('--accent', MODE_COLORS[mode] || '#9ccfd8');
   // Remove stale MODE_PALETTE overrides if theme already provides hl values via data.colors
