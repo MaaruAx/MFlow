@@ -79,7 +79,7 @@ try:
     from PySide6.QtWebEngineCore import QWebEngineSettings
     from PySide6.QtWebChannel import QWebChannel
     from PySide6.QtCore import Qt, QUrl, QTimer
-    from PySide6.QtGui import QColor
+    from PySide6.QtGui import QColor, QIcon
 except ImportError as e:
     log.error("PySide6 not installed: %s", e)
     log.error("Run: pip install PySide6")
@@ -89,11 +89,17 @@ except ImportError as e:
 
 APP_HTML = os.path.join(HERE, "ui", "app.html")
 
+def _resource(relative):
+    """Resuelve rutas para frozen (PyInstaller) y desarrollo."""
+    base = getattr(sys, "_MEIPASS", HERE)
+    return os.path.join(base, relative)
+
 
 class MFlowWindow(QMainWindow):
     def __init__(self, comp=None, fusion_app=None, resolve=None):
         super().__init__()
         self.setWindowTitle("MFlow")
+        self.setWindowIcon(QIcon(_resource("MFlow.ico")))
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         self.resize(940, 580)
@@ -185,6 +191,16 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("MFlow")
     app.setApplicationVersion("2.4.0")
+
+    # ── Ícono en barra de tareas (Windows) ───────────────────────────────────
+    # Sin AppUserModelID, Windows agrupa el exe bajo el ícono del launcher de
+    # Python en lugar del de MFlow.
+    if sys.platform == "win32":
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            "MMarket.MFlow.2.4.0"
+        )
+    app.setWindowIcon(QIcon(_resource("MFlow.ico")))
 
     comp = None
     try:
