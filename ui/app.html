@@ -212,6 +212,17 @@ body.compact #kf-range-widget{display:none!important}
   border-radius:var(--r);border:1px solid var(--border);background:var(--overlay);
   cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s}
 #flip-btn:hover{border-color:var(--accent);color:var(--accent)}
+/* Extras dropdown */
+.extras-dd{position:relative;display:inline-flex}
+#extras-mode-menu,#extras-lib-menu{
+  position:absolute;top:calc(100% + 4px);left:0;
+  background:var(--overlay);border:1px solid var(--border);border-radius:var(--r);
+  z-index:1200;min-width:120px;padding:3px 0;box-shadow:0 4px 12px #0004}
+.dd-item{display:block;width:100%;text-align:left;padding:5px 10px;
+  background:transparent;border:none;cursor:pointer;font-family:inherit;
+  font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);transition:color .1s}
+.dd-item:hover{color:var(--accent);background:var(--hl-low)}
+.dd-item.active{color:var(--accent)}
 #zoom-hint{display:none;position:absolute;bottom:6px;left:6px;font-size:10px;
   color:var(--muted);background:var(--overlay);border:1px solid var(--border);
   border-radius:var(--r);padding:2px 7px;pointer-events:none}
@@ -276,7 +287,12 @@ body.compact #kf-range-widget{display:none!important}
 .cp-hint{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.5}
 /* Spring / elastic param labels inherit accent — no inline-style patching needed */
 #cp-spring .cp-lbl,#cp-spring .cp-val,#cp-spring .cp-title,
-#cp-elastic .cp-lbl,#cp-elastic .cp-val,#cp-elastic .cp-title{color:var(--accent)}
+#cp-elastic .cp-lbl,#cp-elastic .cp-val,#cp-elastic .cp-title,
+#cp-bounce .cp-lbl,#cp-bounce .cp-val,#cp-bounce .cp-title,
+#cp-catenary .cp-lbl,#cp-catenary .cp-val,#cp-catenary .cp-title,
+#cp-pulse .cp-lbl,#cp-pulse .cp-val,#cp-pulse .cp-title,
+#cp-noise .cp-lbl,#cp-noise .cp-val,#cp-noise .cp-title,
+#cp-resonance .cp-lbl,#cp-resonance .cp-val,#cp-resonance .cp-title{color:var(--accent)}
 
 /* ── Bottom bar ── */
 #bottom-bar{display:flex;align-items:center;gap:6px;height:42px;flex-shrink:0;
@@ -520,9 +536,19 @@ input[type=number]{-moz-appearance:textfield}
 <!-- ═══════════════════ TOOLBAR ═══════════════════ -->
 <div id="toolbar">
   <span class="tlabel" data-i18n="toolbar.mode_label">MODE</span>
-  <button class="mode-btn active" data-mode="easing"  onclick="setMode('easing')"  data-i18n="toolbar.easing">EASING</button>
-  <button class="mode-btn"        data-mode="spring"  onclick="setMode('spring')"  data-i18n="toolbar.spring">SPRING</button>
-  <button class="mode-btn"        data-mode="elastic" onclick="setMode('elastic')" data-i18n="toolbar.elastic">ELASTIC</button>
+  <button class="mode-btn active" data-mode="easing"    onclick="setMode('easing')"    data-i18n="toolbar.easing">EASING</button>
+  <button class="mode-btn"        data-mode="spring"    onclick="setMode('spring')"    data-i18n="toolbar.spring">SPRING</button>
+  <button class="mode-btn"        data-mode="elastic"   onclick="setMode('elastic')"   data-i18n="toolbar.elastic">ELASTIC</button>
+  <button class="mode-btn"        data-mode="bounce"    onclick="setMode('bounce')"    data-i18n="toolbar.bounce">BOUNCE</button>
+  <div class="extras-dd">
+    <button class="mode-btn" id="btn-extras-mode" onclick="toggleExtrasModeDD()" data-i18n="toolbar.extras">EXTRAS ▾</button>
+    <div id="extras-mode-menu" style="display:none">
+      <button class="dd-item" data-mode="catenary"  onclick="setMode('catenary');closeExtrasModeDD()"  data-i18n="toolbar.catenary">CATENARY</button>
+      <button class="dd-item" data-mode="pulse"     onclick="setMode('pulse');closeExtrasModeDD()"     data-i18n="toolbar.pulse">PULSE</button>
+      <button class="dd-item" data-mode="noise"     onclick="setMode('noise');closeExtrasModeDD()"     data-i18n="toolbar.noise">NOISE</button>
+      <button class="dd-item" data-mode="resonance" onclick="setMode('resonance');closeExtrasModeDD()" data-i18n="toolbar.resonance">RESONANCE</button>
+    </div>
+  </div>
   <div class="spacer"></div>
   <!-- Composition selector — left of AUTO -->
   <div id="comp-selector">
@@ -608,6 +634,16 @@ input[type=number]{-moz-appearance:textfield}
         <button class="lib-pill"        data-lib="spring"    onclick="setLibrary('spring')"    data-i18n="presets.lib_spring">SPRING</button>
         <button class="lib-pill"        data-lib="elastic"   onclick="setLibrary('elastic')"   data-i18n="presets.lib_elastic">ELASTIC</button>
         <button class="lib-pill"        data-lib="overframe" onclick="setLibrary('overframe')" data-i18n="presets.lib_okf">OKF</button>
+        <button class="lib-pill"        data-lib="bounce"    onclick="setLibrary('bounce')"    data-i18n="presets.lib_bounce">BOUNCE</button>
+        <div class="extras-dd">
+          <button class="lib-pill" id="btn-extras-lib" onclick="toggleExtrasLibDD()" data-i18n="presets.lib_extras">EXTRAS ▾</button>
+          <div id="extras-lib-menu" style="display:none">
+            <button class="dd-item" data-lib="catenary"  onclick="setLibrary('catenary');closeExtrasLibDD()"  data-i18n="presets.lib_catenary">CATENARY</button>
+            <button class="dd-item" data-lib="pulse"     onclick="setLibrary('pulse');closeExtrasLibDD()"     data-i18n="presets.lib_pulse">PULSE</button>
+            <button class="dd-item" data-lib="noise"     onclick="setLibrary('noise');closeExtrasLibDD()"     data-i18n="presets.lib_noise">NOISE</button>
+            <button class="dd-item" data-lib="resonance" onclick="setLibrary('resonance');closeExtrasLibDD()" data-i18n="presets.lib_resonance">RESONANCE</button>
+          </div>
+        </div>
       </div>
     </div>
     <div id="search-row">
@@ -695,7 +731,96 @@ input[type=number]{-moz-appearance:textfield}
             <input class="cp-sl" id="sl-elperiod" type="range" min="5" max="80" value="30" oninput="onElasticSlider()">
             <span class="cp-val" id="vl-elperiod">0.30</span>
           </div>
+          <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
+            <button class="tog on" id="btn-eldir-in"  onclick="setElasticDir('in')"  data-i18n="cp.elastic_in">← IN</button>
+            <button class="tog"    id="btn-eldir-out" onclick="setElasticDir('out')" data-i18n="cp.elastic_out">OUT →</button>
+          </div>
         </div>
+
+        <div id="cp-bounce" style="display:none">
+          <div class="cp-hint" data-i18n="cp.bounce_hint">damped cosine — ceiling settles at 1, floor at 0</div>
+          <div class="cp-row" style="margin-top:6px">
+            <span class="cp-lbl" data-i18n="cp.decay">decay</span>
+            <input class="cp-sl" id="sl-bgamma" type="range" min="5" max="200" value="40" oninput="onBounceSlider()">
+            <span class="cp-val" id="vl-bgamma">4.0</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-lbl" data-i18n="cp.frequency">frequency</span>
+            <input class="cp-sl" id="sl-bomega" type="range" min="5" max="200" value="60" oninput="onBounceSlider()">
+            <span class="cp-val" id="vl-bomega">6.0</span>
+          </div>
+          <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
+            <button class="tog on" id="btn-bdir-ceil"  onclick="setBounceDir('ceiling')" data-i18n="cp.direction_ceiling">▲ CEILING</button>
+            <button class="tog"    id="btn-bdir-floor" onclick="setBounceDir('floor')"   data-i18n="cp.direction_floor">▼ FLOOR</button>
+          </div>
+        </div>
+
+        <div id="cp-catenary" style="display:none">
+          <div class="cp-hint" data-i18n="cp.catenary_hint">cable curve — high tension = tight, low = heavy droop</div>
+          <div class="cp-row" style="margin-top:6px">
+            <span class="cp-lbl" data-i18n="cp.tension">tension</span>
+            <input class="cp-sl" id="sl-cata" type="range" min="1" max="400" value="80" oninput="onCatenarySlider()">
+            <span class="cp-val" id="vl-cata">0.80</span>
+          </div>
+        </div>
+
+        <div id="cp-pulse" style="display:none">
+          <div class="cp-hint" data-i18n="cp.pulse_hint">modulated pulse — bursts of motion with long rests</div>
+          <div class="cp-row" style="margin-top:6px">
+            <span class="cp-lbl" data-i18n="cp.speed">speed</span>
+            <input class="cp-sl" id="sl-pw1" type="range" min="10" max="200" value="80" oninput="onPulseSlider()">
+            <span class="cp-val" id="vl-pw1">8.0</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-lbl" data-i18n="cp.tempo">tempo</span>
+            <input class="cp-sl" id="sl-pw2" type="range" min="5" max="100" value="20" oninput="onPulseSlider()">
+            <span class="cp-val" id="vl-pw2">2.0</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-lbl" data-i18n="cp.sharpness">sharpness</span>
+            <input class="cp-sl" id="sl-pn" type="range" min="10" max="100" value="40" oninput="onPulseSlider()">
+            <span class="cp-val" id="vl-pn">4.0</span>
+          </div>
+        </div>
+
+        <div id="cp-noise" style="display:none">
+          <div class="cp-hint" data-i18n="cp.noise_hint">smooth organic noise — frequency controls density</div>
+          <div class="cp-row" style="margin-top:6px">
+            <span class="cp-lbl" data-i18n="cp.frequency">frequency</span>
+            <input class="cp-sl" id="sl-nfreq" type="range" min="5" max="200" value="20" oninput="onNoiseSlider()">
+            <span class="cp-val" id="vl-nfreq">2.0</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-lbl" data-i18n="cp.amplitude">amplitude</span>
+            <input class="cp-sl" id="sl-namp" type="range" min="5" max="100" value="50" oninput="onNoiseSlider()">
+            <span class="cp-val" id="vl-namp">0.50</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-lbl" data-i18n="cp.seed">seed</span>
+            <input class="cp-sl" id="sl-nseed" type="range" min="0" max="999" value="42" oninput="onNoiseSlider()">
+            <span class="cp-val" id="vl-nseed">42</span>
+          </div>
+        </div>
+
+        <div id="cp-resonance" style="display:none">
+          <div class="cp-hint" data-i18n="cp.resonance_hint">forced oscillator — when ω ≈ ω₀ amplitude grows</div>
+          <div class="cp-row" style="margin-top:6px">
+            <span class="cp-lbl" data-i18n="cp.damping">damping</span>
+            <input class="cp-sl" id="sl-rgamma" type="range" min="5" max="200" value="20" oninput="onResSlider()">
+            <span class="cp-val" id="vl-rgamma">2.0</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-lbl" data-i18n="cp.drive_omega">drive ω</span>
+            <input class="cp-sl" id="sl-romega" type="range" min="5" max="200" value="80" oninput="onResSlider()">
+            <span class="cp-val" id="vl-romega">8.0</span>
+          </div>
+          <div class="cp-row">
+            <span class="cp-lbl" data-i18n="cp.natural_omega">natural ω₀</span>
+            <input class="cp-sl" id="sl-romega0" type="range" min="5" max="200" value="80" oninput="onResSlider()">
+            <span class="cp-val" id="vl-romega0">8.0</span>
+          </div>
+        </div>
+
         <div id="cp-none" style="font-size:10px;color:var(--muted)">No extra params for EASING / OKF.</div>
       </div>
     </div>
@@ -822,11 +947,21 @@ input[type=number]{-moz-appearance:textfield}
         <div class="col-row"><span>Spring</span>   <div class="clr-swatch" id="sw-spring"    style="background:#f6c177" onclick="_openModePicker('spring',event)"    title="Click to edit"></div></div>
         <div class="col-row"><span>Elastic</span>  <div class="clr-swatch" id="sw-elastic"   style="background:#eb6f92" onclick="_openModePicker('elastic',event)"   title="Click to edit"></div></div>
         <div class="col-row"><span>OKF</span>      <div class="clr-swatch" id="sw-overframe" style="background:#c4a7e7" onclick="_openModePicker('overframe',event)" title="Click to edit"></div></div>
+        <div class="col-row"><span>Bounce</span>    <div class="clr-swatch" id="sw-bounce"    style="background:#ebbcba" onclick="_openModePicker('bounce',event)"    title="Click to edit"></div></div>
+        <div class="col-row"><span>Catenary</span>  <div class="clr-swatch" id="sw-catenary"  style="background:#31748f" onclick="_openModePicker('catenary',event)"  title="Click to edit"></div></div>
+        <div class="col-row"><span>Pulse</span>     <div class="clr-swatch" id="sw-pulse"     style="background:#e0def4" onclick="_openModePicker('pulse',event)"     title="Click to edit"></div></div>
+        <div class="col-row"><span>Noise</span>     <div class="clr-swatch" id="sw-noise"     style="background:#908caa" onclick="_openModePicker('noise',event)"     title="Click to edit"></div></div>
+        <div class="col-row"><span>Resonance</span> <div class="clr-swatch" id="sw-resonance" style="background:#f4a261" onclick="_openModePicker('resonance',event)" title="Click to edit"></div></div>
       </div>
       <input type="hidden" id="sc-easing"    value="#9ccfd8">
       <input type="hidden" id="sc-spring"    value="#f6c177">
       <input type="hidden" id="sc-elastic"   value="#eb6f92">
       <input type="hidden" id="sc-overframe" value="#c4a7e7">
+      <input type="hidden" id="sc-bounce"    value="#ebbcba">
+      <input type="hidden" id="sc-catenary"  value="#31748f">
+      <input type="hidden" id="sc-pulse"     value="#e0def4">
+      <input type="hidden" id="sc-noise"     value="#908caa">
+      <input type="hidden" id="sc-resonance" value="#f4a261">
     </div>
     <div class="s-section">
       <div class="s-section-label" data-i18n="settings.interface_colors">Interface Colors</div>
@@ -1014,13 +1149,18 @@ let CS=380, MG=30, CI=CS-2*MG, CELLS=10;
 const SP_Y_MAX=1.5, SP_OM_MIN=0.5, SP_OM_MAX=30.0, SP_T_DISPLAY=5.0;
 const EL_Y_MIN=-1.2, EL_Y_MAX=1.3, EL_Y_RNG=EL_Y_MAX-EL_Y_MIN;
 const LN=256, ANIM_DUR=1400;
-let MODE_COLORS = { easing:'#9ccfd8', spring:'#f6c177', elastic:'#eb6f92', overframe:'#c4a7e7' };
+let MODE_COLORS = { easing:'#9ccfd8', spring:'#f6c177', elastic:'#eb6f92', overframe:'#c4a7e7', bounce:'#ebbcba', catenary:'#31748f', pulse:'#e0def4', noise:'#908caa', resonance:'#f4a261' };
 let _activeTheme = '';  // tracks loaded theme name — prevents MODE_PALETTE from overriding theme colors
 const MODE_PALETTE = {
   easing:    {'--hl-med':'#3a3750','--hl-low':'#28253d'},
   spring:    {'--hl-med':'#3d3220','--hl-low':'#2d2618'},
   elastic:   {'--hl-med':'#3d2030','--hl-low':'#2d1a24'},
   overframe: {'--hl-med':'#363660','--hl-low':'#201e38'},
+  bounce:    {'--hl-med':'#3d2e2e','--hl-low':'#2d2222'},
+  catenary:  {'--hl-med':'#1e3540','--hl-low':'#162830'},
+  pulse:     {'--hl-med':'#2e2d3a','--hl-low':'#222130'},
+  noise:     {'--hl-med':'#2d2c3a','--hl-low':'#21202c'},
+  resonance: {'--hl-med':'#3d2e1a','--hl-low':'#2d2010'},
 };
 // Grid colors (separate from CSS vars — used in canvas draws)
 let GRID_COLOR   = '#1c1a28';
@@ -1031,10 +1171,15 @@ let EDGE_COLOR   = '#26233a';
 // Node palette uses the 4 mode colors as the cycle — gives visual cohesion with the curve editor
 function _getNodePalette() {
   return [
-    MODE_COLORS.easing   || '#9ccfd8',
-    MODE_COLORS.spring   || '#f6c177',
-    MODE_COLORS.elastic  || '#eb6f92',
-    MODE_COLORS.overframe|| '#c4a7e7',
+    MODE_COLORS.easing    || '#9ccfd8',
+    MODE_COLORS.spring    || '#f6c177',
+    MODE_COLORS.elastic   || '#eb6f92',
+    MODE_COLORS.overframe || '#c4a7e7',
+    MODE_COLORS.bounce    || '#ebbcba',
+    MODE_COLORS.catenary  || '#31748f',
+    MODE_COLORS.pulse     || '#e0def4',
+    MODE_COLORS.noise     || '#908caa',
+    MODE_COLORS.resonance || '#f4a261',
   ];
 }
 
@@ -1057,6 +1202,20 @@ let physZeta      = 0.3;
 let physOmegaN    = 8.0;
 let elAmp         = 1.0;
 let elPeriod      = 0.3;
+let elDirection   = 'in';    // 'in' | 'out'
+let bounceGamma   = 4.0;
+let bounceOmega   = 6.0;
+let bounceDir     = 'ceiling'; // 'ceiling' | 'floor'
+let catA          = 0.8;
+let pulseOmega1   = 8.0;
+let pulseOmega2   = 2.0;
+let pulseN        = 4.0;
+let noiseFreq     = 2.0;
+let noiseAmp      = 0.5;
+let noiseSeed     = 42;
+let resGamma      = 2.0;
+let resOmega      = 8.0;
+let resOmega0     = 8.0;
 let autoApply     = false;
 let allPresets    = [];
 let selIdx        = -1;
@@ -1198,6 +1357,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.addEventListener('click', e => {
     if (!e.target.closest('#profile-dd')) closeProfileDrop();
+    if (!e.target.closest('.extras-dd')) { closeExtrasModeDD(); closeExtrasLibDD(); }
     if (!e.target.closest('#btn-panels') && !e.target.closest('#panel-menu')) closePanelMenu();
     closeCtx();
   });
@@ -1284,9 +1444,34 @@ function updateStatus() {
 // ═══════════════════════════════════════════════════════════════
 // § 8. MODE & LIBRARY
 // ═══════════════════════════════════════════════════════════════
-function isSpring()  { return mode === 'spring';  }
-function isElastic() { return mode === 'elastic'; }
-function isPhysics() { return isSpring() || isElastic(); }
+const EXTRAS_MODES = ['catenary','pulse','noise','resonance'];
+
+function toggleExtrasModeDD() {
+  const m = $('extras-mode-menu');
+  if (!m) return;
+  const open = m.style.display !== 'none';
+  m.style.display = open ? 'none' : 'block';
+  if (!open) closeExtrasLibDD();
+}
+function closeExtrasModeDD() { const m=$('extras-mode-menu'); if(m) m.style.display='none'; }
+function toggleExtrasLibDD() {
+  const m = $('extras-lib-menu');
+  if (!m) return;
+  const open = m.style.display !== 'none';
+  m.style.display = open ? 'none' : 'block';
+  if (!open) closeExtrasModeDD();
+}
+function closeExtrasLibDD() { const m=$('extras-lib-menu'); if(m) m.style.display='none'; }
+function isSpring()    { return mode === 'spring';    }
+function isElastic()   { return mode === 'elastic';   }
+function isBounce()    { return mode === 'bounce';    }
+function isCatenary()  { return mode === 'catenary';  }
+function isPulse()     { return mode === 'pulse';     }
+function isNoise()     { return mode === 'noise';     }
+function isResonance() { return mode === 'resonance'; }
+function isPhysics()   { return isSpring() || isElastic(); }
+function isNewBaked()  { return isBounce() || isCatenary() || isPulse() || isNoise() || isResonance(); }
+function hasNoHandles(){ return isPhysics() || isNewBaked(); }
 
 function hexToRgb(hex) {
   return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`;
@@ -1307,10 +1492,15 @@ function setMode(m) {
   const col = MODE_COLORS[m] || '#9ccfd8';
   document.body.style.setProperty('--accent', col);
   document.querySelectorAll('.mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode===m));
+  // EXTRAS dropdown button activates when an extras mode is selected
+  const extModeBtn = $('btn-extras-mode');
+  if (extModeBtn) extModeBtn.classList.toggle('active', EXTRAS_MODES.includes(m));
+  document.querySelectorAll('#extras-mode-menu .dd-item').forEach(b => b.classList.toggle('active', b.dataset.mode===m));
+  closeExtrasModeDD();
   // Sync library pill (class only — colors come from CSS var(--accent))
   if (!_syncingModeLib) {
     _syncingModeLib = true;
-    const libMap = {easing:'easing',spring:'spring',elastic:'elastic',overframe:'overframe'};
+    const libMap = {easing:'easing',spring:'spring',elastic:'elastic',overframe:'overframe',bounce:'bounce',catenary:'catenary',pulse:'pulse',noise:'noise',resonance:'resonance'};
     if (libMap[m] && library !== libMap[m]) {
       library = libMap[m];
       if (backend) backend.load_library(libMap[m]);
@@ -1322,9 +1512,16 @@ function setMode(m) {
   }
   // Show/hide curve param panels
   const spr = $('cp-spring'), ela = $('cp-elastic'), non = $('cp-none');
-  if (spr) spr.style.display = isSpring()  ? '' : 'none';
-  if (ela) ela.style.display = isElastic() ? '' : 'none';
-  if (non) non.style.display = isPhysics() ? 'none' : '';
+  const bnc = $('cp-bounce'), cat = $('cp-catenary'), pls = $('cp-pulse'),
+        nse = $('cp-noise'),  res = $('cp-resonance');
+  if (spr) spr.style.display = isSpring()    ? '' : 'none';
+  if (ela) ela.style.display = isElastic()   ? '' : 'none';
+  if (bnc) bnc.style.display = isBounce()    ? '' : 'none';
+  if (cat) cat.style.display = isCatenary()  ? '' : 'none';
+  if (pls) pls.style.display = isPulse()     ? '' : 'none';
+  if (nse) nse.style.display = isNoise()     ? '' : 'none';
+  if (res) res.style.display = isResonance() ? '' : 'none';
+  if (non) non.style.display = (hasNoHandles()) ? 'none' : '';
   // Apply mode palette (hl-med / hl-low tint)
   if (!_activeTheme) {
     // Default theme: apply per-mode background tints from MODE_PALETTE
@@ -1344,8 +1541,13 @@ function setLibrary(lib) {
   library = lib;
   // Toggle active class only — colors come from CSS var(--accent)
   document.querySelectorAll('.lib-pill').forEach(b => b.classList.toggle('active', b.dataset.lib === lib));
+  // EXTRAS lib button activates when an extras library is selected
+  const extLibBtn = $('btn-extras-lib');
+  if (extLibBtn) extLibBtn.classList.toggle('active', EXTRAS_MODES.includes(lib));
+  document.querySelectorAll('#extras-lib-menu .dd-item').forEach(b => b.classList.toggle('active', b.dataset.lib===lib));
+  closeExtrasLibDD();
   _syncingModeLib = true;
-  const modeMap = {easing:'easing',spring:'spring',elastic:'elastic',overframe:'overframe'};
+  const modeMap = {easing:'easing',spring:'spring',elastic:'elastic',overframe:'overframe',bounce:'bounce',catenary:'catenary',pulse:'pulse',noise:'noise',resonance:'resonance'};
   if (modeMap[lib] && mode !== modeMap[lib]) setMode(modeMap[lib]);
   _syncingModeLib = false;
   if (backend) backend.load_library(lib);
@@ -1394,7 +1596,12 @@ function pushState() {
     backend.set_curve_state(JSON.stringify({
       h1, h2, mode, of_points:okfPoints,
       phys_zeta:physZeta, phys_omega_n:physOmegaN,
-      el_amplitude:elAmp, el_period:elPeriod
+      el_amplitude:elAmp, el_period:elPeriod, el_direction:elDirection,
+      bounce_gamma:bounceGamma, bounce_omega:bounceOmega, bounce_dir:bounceDir,
+      catenary_a:catA,
+      pulse_omega1:pulseOmega1, pulse_omega2:pulseOmega2, pulse_n:pulseN,
+      noise_freq:noiseFreq, noise_amp:noiseAmp, noise_seed:noiseSeed,
+      res_gamma:resGamma, res_omega:resOmega, res_omega0:resOmega0
     }));
   }, 80);
 }
@@ -1537,6 +1744,41 @@ function evalElastic(t, a, p) {
   const s=(pp/(2*Math.PI))*Math.asin(1/aa);
   return -(aa*(2**(10*(t-1)))*Math.sin(((t-1)-s)*2*Math.PI/pp));
 }
+function evalElasticOut(t, a, p) {
+  if (t<=0) return 0; if (t>=1) return 1;
+  const pp=Math.max(0.01,p), aa=Math.max(1.0,a);
+  const s=(pp/(2*Math.PI))*Math.asin(1/aa);
+  return aa*(2**(-10*t))*Math.sin((t-s)*2*Math.PI/pp)+1;
+}
+function evalBounceJs(t, gamma, omega) {
+  if (t<=0) return 0;
+  return 1 - Math.exp(-gamma*t)*Math.abs(Math.cos(omega*t));
+}
+function evalCatenaryJs(t, a) {
+  if (t<=0) return 0; if (t>=1) return 1;
+  a=Math.max(0.001,a);
+  const num=Math.cosh(t/a)-1, den=Math.cosh(1/a)-1;
+  return Math.abs(den)<1e-12 ? t : Math.max(0,Math.min(1,num/den));
+}
+function _mulberry32(seed) {
+  return function() {
+    seed=(seed+0x6D2B79F5)|0;
+    let t=Math.imul(seed^(seed>>>15),1|seed);
+    t=(t+Math.imul(t^(t>>>7),61|t))^t;
+    return ((t^(t>>>14))>>>0)/4294967296;
+  };
+}
+function _evalNoiseCurve(n, freq, amp, seed) {
+  const rng=_mulberry32(seed|0), nCtrl=Math.max(2,Math.floor(freq*4)+1), ctrl=[];
+  for(let i=0;i<nCtrl;i++) ctrl.push(rng()*2-1);
+  const result=[];
+  for(let i=0;i<=n;i++){
+    const t=i/n, pos=t*(nCtrl-1), idx=Math.min(Math.floor(pos),nCtrl-2), frac=pos-idx;
+    const mu2=(1-Math.cos(frac*Math.PI))/2;
+    result.push(Math.max(0,Math.min(1,0.5+(ctrl[idx]*(1-mu2)+ctrl[idx+1]*mu2)*amp)));
+  }
+  return result;
+}
 function evalBz(x, x1, y1, x2, y2) {
   if (x<=0) return 0; if (x>=1) return 1;
   let lo=0, hi=1;
@@ -1571,9 +1813,33 @@ function updateLookup() {
     }
   } else if (isElastic()) {
     for (let i=0; i<=LN; i++) {
-      let v = evalElastic(i/LN, elAmp, elPeriod);
+      let v = elDirection==='out' ? evalElasticOut(i/LN, elAmp, elPeriod) : evalElastic(i/LN, elAmp, elPeriod);
       lookup[i] = _physFlipped ? 1-v : v;
     }
+  } else if (isBounce()) {
+    for (let i=0; i<=LN; i++) {
+      let v = evalBounceJs(i/LN, bounceGamma, bounceOmega);
+      lookup[i] = bounceDir==='floor' ? 1-v : v;
+    }
+  } else if (isCatenary()) {
+    for (let i=0; i<=LN; i++) lookup[i] = evalCatenaryJs(i/LN, catA);
+  } else if (isPulse()) {
+    const raw=[];
+    for (let i=0; i<=LN; i++) raw.push(Math.sin(pulseOmega1*Math.PI*i/LN)*Math.pow(Math.abs(Math.sin(pulseOmega2*Math.PI*i/LN)),pulseN));
+    const rmin=Math.min(...raw), rmax=Math.max(...raw), rng=(rmax-rmin)||1;
+    for (let i=0; i<=LN; i++) lookup[i]=(raw[i]-rmin)/rng;
+  } else if (isNoise()) {
+    const vals=_evalNoiseCurve(LN, noiseFreq, noiseAmp, noiseSeed);
+    for (let i=0; i<=LN; i++) lookup[i]=vals[i];
+  } else if (isResonance()) {
+    const raw=[];
+    for (let i=0; i<=LN; i++) {
+      const t=i/LN, den=Math.abs(resOmega0**2-resOmega**2);
+      const A=Math.min(1/Math.max(den,0.5),5), B=-A;
+      raw.push(A*Math.cos(resOmega*t)+B*Math.exp(-resGamma*t)*Math.cos(resOmega0*t));
+    }
+    const rmin=Math.min(...raw), rmax=Math.max(...raw), rng=(rmax-rmin)||1;
+    for (let i=0; i<=LN; i++) lookup[i]=(raw[i]-rmin)/rng;
   } else {
     for (let i=0; i<=LN; i++)
       lookup[i] = okfActive ? evalOKF(i/LN) : evalBz(i/LN,h1[0],h1[1],h2[0],h2[1]);
@@ -1628,9 +1894,14 @@ function drawCurve() {
   const col = MODE_COLORS[mode] || '#9ccfd8';
   ctx.clearRect(0,0,CS,CS);
   drawGrid();
-  if      (isSpring())  drawSpringCurve(col);
-  else if (isElastic()) drawElasticCurve(col);
-  else                  drawBezierCurve(col);
+  if      (isSpring())    drawSpringCurve(col);
+  else if (isElastic())   drawElasticCurve(col);
+  else if (isBounce())    drawBounceCurve(col);
+  else if (isCatenary())  drawCatenaryCurve(col);
+  else if (isPulse())     drawPulseCurve(col);
+  else if (isNoise())     drawNoiseCurve(col);
+  else if (isResonance()) drawResonanceCurve(col);
+  else                    drawBezierCurve(col);
 }
 let _rafDrawPending = false;
 function scheduleDraw() {
@@ -1656,7 +1927,7 @@ function drawElasticCurve(col) {
   const N=200;
   ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
   for (let i=0; i<=N; i++) {
-    const raw=evalElastic(i/N, elAmp, elPeriod);
+    const raw = elDirection==='out' ? evalElasticOut(i/N, elAmp, elPeriod) : evalElastic(i/N, elAmp, elPeriod);
     const val=_physFlipped?1-raw:raw;
     const p=elToPx(i/N, val);
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
@@ -1665,6 +1936,61 @@ function drawElasticCurve(col) {
   const ah=elAmpPos(), ph=elPerPos();
   drawHandleGuide(ah.x,ah.y,'y',col); drawHandleGuide(ph.x,ph.y,'x',col);
   drawCapsule(ah.x,ah.y,'y',col,'amplitude'); drawCapsule(ph.x,ph.y,'x',col,'period');
+}
+function drawBounceCurve(col) {
+  const N=200;
+  ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
+  for (let i=0; i<=N; i++) {
+    let v=evalBounceJs(i/N, bounceGamma, bounceOmega);
+    if (bounceDir==='floor') v=1-v;
+    const p=toPx(i/N, v);
+    i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
+  }
+  ctx.stroke();
+}
+function drawCatenaryCurve(col) {
+  const N=200;
+  ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
+  for (let i=0; i<=N; i++) {
+    const p=toPx(i/N, evalCatenaryJs(i/N, catA));
+    i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
+  }
+  ctx.stroke();
+}
+function drawPulseCurve(col) {
+  const N=200, raw=[];
+  for (let i=0; i<=N; i++) raw.push(Math.sin(pulseOmega1*Math.PI*i/N)*Math.pow(Math.abs(Math.sin(pulseOmega2*Math.PI*i/N)),pulseN));
+  const rmin=Math.min(...raw), rmax=Math.max(...raw), rng=(rmax-rmin)||1;
+  ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
+  for (let i=0; i<=N; i++) {
+    const p=toPx(i/N, (raw[i]-rmin)/rng);
+    i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
+  }
+  ctx.stroke();
+}
+function drawNoiseCurve(col) {
+  const N=200, vals=_evalNoiseCurve(N, noiseFreq, noiseAmp, noiseSeed);
+  ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
+  for (let i=0; i<=N; i++) {
+    const p=toPx(i/N, vals[i]);
+    i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
+  }
+  ctx.stroke();
+}
+function drawResonanceCurve(col) {
+  const N=200, raw=[];
+  for (let i=0; i<=N; i++) {
+    const t=i/N, den=Math.abs(resOmega0**2-resOmega**2);
+    const A=Math.min(1/Math.max(den,0.5),5), B=-A;
+    raw.push(A*Math.cos(resOmega*t)+B*Math.exp(-resGamma*t)*Math.cos(resOmega0*t));
+  }
+  const rmin=Math.min(...raw), rmax=Math.max(...raw), rng=(rmax-rmin)||1;
+  ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
+  for (let i=0; i<=N; i++) {
+    const p=toPx(i/N, (raw[i]-rmin)/rng);
+    i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
+  }
+  ctx.stroke();
 }
 function drawBezierCurve(col) {
   const p0=toPx(0,0), p1=toPx(1,1), h1p=toPx(...h1), h2p=toPx(...h2);
@@ -1718,6 +2044,7 @@ function drawOKFHandles(col) {
 // ═══════════════════════════════════════════════════════════════
 function hitTest(px, py) {
   const p={x:px,y:py};
+  if (isNewBaked()) return null;
   if (isSpring()) {
     const bh=spBouncePos(), dh=spDurPos();
     if (d2(p,bh)<HR2*1.8) return 'sp_bounce';
@@ -1809,6 +2136,92 @@ function syncElasticSliders() {
   $('vl-elperiod').textContent = elPeriod.toFixed(2);
   _updateSliderFill('sl-elamp',   10, 30, Math.round(elAmp*10));
   _updateSliderFill('sl-elperiod', 5, 80, Math.round(elPeriod*100));
+  const btnIn=$('btn-eldir-in'), btnOut=$('btn-eldir-out');
+  if(btnIn)  btnIn.classList.toggle('on',  elDirection==='in');
+  if(btnOut) btnOut.classList.toggle('on', elDirection==='out');
+}
+function setElasticDir(d) { elDirection=d; syncElasticSliders(); pushState(); }
+
+function onBounceSlider() {
+  bounceGamma = $('sl-bgamma').value / 10;
+  bounceOmega = $('sl-bomega').value / 10;
+  syncBounceSliders(); pushState();
+}
+function syncBounceSliders() {
+  $('sl-bgamma').value = Math.round(bounceGamma*10);
+  $('sl-bomega').value = Math.round(bounceOmega*10);
+  $('vl-bgamma').textContent = bounceGamma.toFixed(1);
+  $('vl-bomega').textContent = bounceOmega.toFixed(1);
+  _updateSliderFill('sl-bgamma', 5, 200, Math.round(bounceGamma*10));
+  _updateSliderFill('sl-bomega', 5, 200, Math.round(bounceOmega*10));
+  const btnC=$('btn-bdir-ceil'), btnF=$('btn-bdir-floor');
+  if(btnC) btnC.classList.toggle('on', bounceDir==='ceiling');
+  if(btnF) btnF.classList.toggle('on', bounceDir==='floor');
+}
+function setBounceDir(d) { bounceDir=d; syncBounceSliders(); pushState(); }
+
+function onCatenarySlider() {
+  catA = $('sl-cata').value / 100;
+  syncCatenarySliders(); pushState();
+}
+function syncCatenarySliders() {
+  $('sl-cata').value = Math.round(catA*100);
+  $('vl-cata').textContent = catA.toFixed(2);
+  _updateSliderFill('sl-cata', 1, 400, Math.round(catA*100));
+}
+
+function onPulseSlider() {
+  pulseOmega1 = $('sl-pw1').value / 10;
+  pulseOmega2 = $('sl-pw2').value / 10;
+  pulseN      = $('sl-pn').value  / 10;
+  syncPulseSliders(); pushState();
+}
+function syncPulseSliders() {
+  $('sl-pw1').value = Math.round(pulseOmega1*10);
+  $('sl-pw2').value = Math.round(pulseOmega2*10);
+  $('sl-pn').value  = Math.round(pulseN*10);
+  $('vl-pw1').textContent = pulseOmega1.toFixed(1);
+  $('vl-pw2').textContent = pulseOmega2.toFixed(1);
+  $('vl-pn').textContent  = pulseN.toFixed(1);
+  _updateSliderFill('sl-pw1', 10, 200, Math.round(pulseOmega1*10));
+  _updateSliderFill('sl-pw2',  5, 100, Math.round(pulseOmega2*10));
+  _updateSliderFill('sl-pn',  10, 100, Math.round(pulseN*10));
+}
+
+function onNoiseSlider() {
+  noiseFreq = $('sl-nfreq').value / 10;
+  noiseAmp  = $('sl-namp').value  / 100;
+  noiseSeed = parseInt($('sl-nseed').value);
+  syncNoiseSliders(); pushState();
+}
+function syncNoiseSliders() {
+  $('sl-nfreq').value = Math.round(noiseFreq*10);
+  $('sl-namp').value  = Math.round(noiseAmp*100);
+  $('sl-nseed').value = noiseSeed;
+  $('vl-nfreq').textContent = noiseFreq.toFixed(1);
+  $('vl-namp').textContent  = noiseAmp.toFixed(2);
+  $('vl-nseed').textContent = noiseSeed;
+  _updateSliderFill('sl-nfreq',  5, 200, Math.round(noiseFreq*10));
+  _updateSliderFill('sl-namp',   5, 100, Math.round(noiseAmp*100));
+  _updateSliderFill('sl-nseed',  0, 999, noiseSeed);
+}
+
+function onResSlider() {
+  resGamma  = $('sl-rgamma').value  / 10;
+  resOmega  = $('sl-romega').value  / 10;
+  resOmega0 = $('sl-romega0').value / 10;
+  syncResSliders(); pushState();
+}
+function syncResSliders() {
+  $('sl-rgamma').value  = Math.round(resGamma*10);
+  $('sl-romega').value  = Math.round(resOmega*10);
+  $('sl-romega0').value = Math.round(resOmega0*10);
+  $('vl-rgamma').textContent  = resGamma.toFixed(1);
+  $('vl-romega').textContent  = resOmega.toFixed(1);
+  $('vl-romega0').textContent = resOmega0.toFixed(1);
+  _updateSliderFill('sl-rgamma',  5, 200, Math.round(resGamma*10));
+  _updateSliderFill('sl-romega',  5, 200, Math.round(resOmega*10));
+  _updateSliderFill('sl-romega0', 5, 200, Math.round(resOmega0*10));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1829,7 +2242,21 @@ function toggleMagnet()     { magnetEnabled=!magnetEnabled; closeCtx(); }
 function flipCurve()        { h1=[h1[0],1-h1[1]]; h2=[h2[0],1-h2[1]]; pushState(); }
 function flipH()            { [h1,h2]=[[1-h2[0],h2[1]],[1-h1[0],h1[1]]]; pushState(); }
 function flipAll()          { if(isPhysics()){_physFlipped=!_physFlipped;pushState();return;} h1=[1-h1[0],1-h1[1]]; h2=[1-h2[0],1-h2[1]]; pushState(); }
-function resetCurve()       { h1=[0.42,0.0]; h2=[0.58,1.0]; physZeta=0.3; physOmegaN=8.0; elAmp=1.0; elPeriod=0.3; _physFlipped=false; syncSpringSliders(); syncElasticSliders(); okfPoints=[]; pushState(); }
+function resetCurve() {
+  h1=[0.42,0.0]; h2=[0.58,1.0];
+  physZeta=0.3; physOmegaN=8.0;
+  elAmp=1.0; elPeriod=0.3; elDirection='in';
+  bounceGamma=4.0; bounceOmega=6.0; bounceDir='ceiling';
+  catA=1.0;
+  pulseOmega1=8.0; pulseOmega2=2.0; pulseN=4.0;
+  noiseFreq=2.0; noiseAmp=0.5; noiseSeed=42;
+  resGamma=2.0; resOmega=8.0; resOmega0=8.0;
+  _physFlipped=false;
+  syncSpringSliders(); syncElasticSliders();
+  syncBounceSliders(); syncCatenarySliders(); syncPulseSliders();
+  syncNoiseSliders(); syncResSliders();
+  okfPoints=[]; pushState();
+}
 function copyCSSCurve() {
   const css=`cubic-bezier(${h1[0].toFixed(3)}, ${h1[1].toFixed(3)}, ${h2[0].toFixed(3)}, ${h2[1].toFixed(3)})`;
   navigator.clipboard.writeText(css).then(()=>setStatus(`Copied: ${css}`,'var(--accent)'), ()=>prompt('Copy CSS curve:',css));
@@ -1847,9 +2274,10 @@ function startAnim() {
     if (!_animVisible) return;
     if (!rafT0) rafT0 = ts;
     const el  = (ts-rafT0)%(ANIM_DUR*2);
-    const t   = el<ANIM_DUR ? el/ANIM_DUR : (ANIM_DUR*2-el)/ANIM_DUR;
+    const fwd = el < ANIM_DUR;
+    const t   = fwd ? el/ANIM_DUR : (el-ANIM_DUR)/ANIM_DUR;
     const idx = Math.min(Math.floor(Math.max(0,Math.min(1,t))*LN), LN);
-    setCubes(lookup[idx]);
+    setCubes(fwd ? lookup[idx] : 1-lookup[idx]);
   }
   _animRaf = requestAnimationFrame(_loop);
 }
@@ -1944,16 +2372,35 @@ function drawCard(cv, preset) {
   x.beginPath();x.moveTo(mg+cw/2,mg);x.lineTo(mg+cw/2,mg+ch);x.stroke();
   x.beginPath();x.moveTo(mg,mg+ch/2);x.lineTo(mg+cw,mg+ch/2);x.stroke();
   x.strokeStyle=col+'33'; x.lineWidth=0.8; x.strokeRect(mg,mg,cw,ch);
-  if (['spring','elastic'].includes(preset.library)) {
+  if (['spring','elastic','bounce','catenary','pulse','noise','resonance'].includes(preset.library)) {
     const params=preset.params||{}, N=60;
     x.strokeStyle=col; x.lineWidth=1.8; x.beginPath();
     if (preset.library==='spring') {
       const z=params.zeta||0.3, w=params.omega_n||8.0;
       const tS=4.6/(Math.max(0.01,z)*Math.max(0.1,w)), yMax=1.5;
       for(let i=0;i<=N;i++){const tr=i/N*tS,val=evalSpring(tr,z,w);const px=mg+i/N*cw,py=(mg+ch)-(val/yMax)*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
-    } else {
+    } else if (preset.library==='elastic') {
       const a=params.amplitude||1.0,p=params.period||0.3,yMin=-1.2,yRng=2.5;
-      for(let i=0;i<=N;i++){const val=evalElastic(i/N,a,p);const px=mg+i/N*cw,py=(mg+ch)-((val-yMin)/yRng)*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
+      const efn=params.direction==='out'?evalElasticOut:evalElastic;
+      for(let i=0;i<=N;i++){const val=efn(i/N,a,p);const px=mg+i/N*cw,py=(mg+ch)-((val-yMin)/yRng)*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
+    } else if (preset.library==='bounce') {
+      const g=params.gamma||4,om=params.omega||6,fl=params.direction==='floor';
+      for(let i=0;i<=N;i++){let v=evalBounceJs(i/N,g,om);if(fl)v=1-v;const px=mg+i/N*cw,py=(mg+ch)-v*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
+    } else if (preset.library==='catenary') {
+      for(let i=0;i<=N;i++){const v=evalCatenaryJs(i/N,params.a||1);const px=mg+i/N*cw,py=(mg+ch)-v*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
+    } else if (preset.library==='pulse') {
+      const o1=params.omega1||8,o2=params.omega2||2,pn=params.n||4;
+      const raw=[];for(let i=0;i<=N;i++)raw.push(Math.sin(o1*Math.PI*i/N)*Math.pow(Math.abs(Math.sin(o2*Math.PI*i/N)),pn));
+      const rmin=Math.min(...raw),rmax=Math.max(...raw),rng2=(rmax-rmin)||1;
+      for(let i=0;i<=N;i++){const v=(raw[i]-rmin)/rng2;const px=mg+i/N*cw,py=(mg+ch)-v*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
+    } else if (preset.library==='noise') {
+      const vals=_evalNoiseCurve(N,params.freq||2,params.amp||0.5,params.seed||42);
+      for(let i=0;i<=N;i++){const px=mg+i/N*cw,py=(mg+ch)-vals[i]*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
+    } else if (preset.library==='resonance') {
+      const g=params.gamma||2,om=params.omega||8,om0=params.omega0||8;
+      const raw=[];for(let i=0;i<=N;i++){const t=i/N,den=Math.abs(om0**2-om**2),A=Math.min(1/Math.max(den,0.5),5),B=-A;raw.push(A*Math.cos(om*t)+B*Math.exp(-g*t)*Math.cos(om0*t));}
+      const rmin=Math.min(...raw),rmax=Math.max(...raw),rng2=(rmax-rmin)||1;
+      for(let i=0;i<=N;i++){const v=(raw[i]-rmin)/rng2;const px=mg+i/N*cw,py=(mg+ch)-v*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
     }
     x.stroke(); return;
   }
@@ -1968,7 +2415,12 @@ function selectPreset(idx) {
   h1=[...(p.h1||[0.42,0])]; h2=[...(p.h2||[0.58,1])];
   if (p.overframe_points) okfPoints=p.overframe_points.map(pt=>({...pt}));
   if (isSpring()  && p.params) { if(p.params.zeta!=null)physZeta=p.params.zeta; if(p.params.omega_n!=null)physOmegaN=p.params.omega_n; syncSpringSliders(); }
-  if (isElastic() && p.params) { if(p.params.amplitude!=null)elAmp=p.params.amplitude; if(p.params.period!=null)elPeriod=p.params.period; syncElasticSliders(); }
+  if (isElastic() && p.params) { if(p.params.amplitude!=null)elAmp=p.params.amplitude; if(p.params.period!=null)elPeriod=p.params.period; if(p.params.direction)elDirection=p.params.direction; syncElasticSliders(); }
+  if (isBounce()  && p.params) { if(p.params.gamma!=null)bounceGamma=p.params.gamma; if(p.params.omega!=null)bounceOmega=p.params.omega; if(p.params.direction)bounceDir=p.params.direction; syncBounceSliders(); }
+  if (isCatenary()&& p.params) { if(p.params.a!=null)catA=p.params.a; syncCatenarySliders(); }
+  if (isPulse()   && p.params) { if(p.params.omega1!=null)pulseOmega1=p.params.omega1; if(p.params.omega2!=null)pulseOmega2=p.params.omega2; if(p.params.n!=null)pulseN=p.params.n; syncPulseSliders(); }
+  if (isNoise()   && p.params) { if(p.params.freq!=null)noiseFreq=p.params.freq; if(p.params.amp!=null)noiseAmp=p.params.amp; if(p.params.seed!=null)noiseSeed=p.params.seed; syncNoiseSliders(); }
+  if (isResonance()&&p.params) { if(p.params.gamma!=null)resGamma=p.params.gamma; if(p.params.omega!=null)resOmega=p.params.omega; if(p.params.omega0!=null)resOmega0=p.params.omega0; syncResSliders(); }
   setLibrary(p.library||'easing'); pushState();
   document.querySelectorAll('.pcard').forEach(c => {
     const ci=+c.dataset.idx, active=ci===idx, pc=MODE_COLORS[(allPresets[ci]||{}).library]||'#26233a';
@@ -1985,8 +2437,13 @@ function saveCurrentPreset() {
   showDlg('Preset name:', '', n => {
     if (!backend) return;
     const p={name:n, library:mode, h1:[...h1], h2:[...h2]};
-    if (isSpring())  p.params={zeta:physZeta, omega_n:physOmegaN};
-    if (isElastic()) p.params={amplitude:elAmp, period:elPeriod};
+    if (isSpring())    p.params={zeta:physZeta, omega_n:physOmegaN};
+    if (isElastic())   p.params={amplitude:elAmp, period:elPeriod, direction:elDirection};
+    if (isBounce())    p.params={gamma:bounceGamma, omega:bounceOmega, direction:bounceDir};
+    if (isCatenary())  p.params={a:catA};
+    if (isPulse())     p.params={omega1:pulseOmega1, omega2:pulseOmega2, n:pulseN};
+    if (isNoise())     p.params={freq:noiseFreq, amp:noiseAmp, seed:noiseSeed};
+    if (isResonance()) p.params={gamma:resGamma, omega:resOmega, omega0:resOmega0};
     backend.save_preset(JSON.stringify(p));
   });
 }
@@ -2495,7 +2952,7 @@ function saveSettings() {
     language:  $('s-lang') ? $('s-lang').value : 'en',
     preset_cols:+($('s-preset-cols').value)||2,
     ui_zoom:   +($('s-ui-zoom').value)||100,
-    mode_colors: { easing:$('sc-easing').value||MODE_COLORS.easing, spring:$('sc-spring').value||MODE_COLORS.spring, elastic:$('sc-elastic').value||MODE_COLORS.elastic, overframe:$('sc-overframe').value||MODE_COLORS.overframe },
+    mode_colors: { easing:$('sc-easing').value||MODE_COLORS.easing, spring:$('sc-spring').value||MODE_COLORS.spring, elastic:$('sc-elastic').value||MODE_COLORS.elastic, overframe:$('sc-overframe').value||MODE_COLORS.overframe, bounce:$('sc-bounce').value||MODE_COLORS.bounce, catenary:$('sc-catenary').value||MODE_COLORS.catenary, pulse:$('sc-pulse').value||MODE_COLORS.pulse, noise:$('sc-noise').value||MODE_COLORS.noise, resonance:$('sc-resonance').value||MODE_COLORS.resonance },
     grid_colors:{grid:GRID_COLOR, cross:CROSS_COLOR, handle_fill:HANDLE_FILL, edge:EDGE_COLOR},
     interface_colors:ifaceColors
   };
@@ -2527,7 +2984,7 @@ function _populateSettingsForm(s) {
   const cols=s.preset_cols||2; setV('s-preset-cols',cols); const zoomPct=s.ui_zoom||100; setV('s-ui-zoom',zoomPct);
   const cv=$('s-preset-cols-val');if(cv)cv.textContent=cols; const zv=$('s-ui-zoom-val');if(zv)zv.textContent=zoomPct+'%';
   _updateSliderFill('s-preset-cols',1,5,cols); _updateSliderFill('s-ui-zoom',70,150,zoomPct);
-  if (s.mode_colors) { setV('sc-easing',s.mode_colors.easing||'#9ccfd8'); setV('sc-spring',s.mode_colors.spring||'#f6c177'); setV('sc-elastic',s.mode_colors.elastic||'#eb6f92'); setV('sc-overframe',s.mode_colors.overframe||'#c4a7e7'); }
+  if (s.mode_colors) { setV('sc-easing',s.mode_colors.easing||'#9ccfd8'); setV('sc-spring',s.mode_colors.spring||'#f6c177'); setV('sc-elastic',s.mode_colors.elastic||'#eb6f92'); setV('sc-overframe',s.mode_colors.overframe||'#c4a7e7'); setV('sc-bounce',s.mode_colors.bounce||'#ebbcba'); setV('sc-catenary',s.mode_colors.catenary||'#31748f'); setV('sc-pulse',s.mode_colors.pulse||'#e0def4'); setV('sc-noise',s.mode_colors.noise||'#908caa'); setV('sc-resonance',s.mode_colors.resonance||'#f4a261'); }
   if (s.language) { const sl=$('s-lang'); if(sl){sl.value=s.language;sl.dataset.current=s.language;} cselSetValue('s-lang-wrap',s.language); }
 }
 function applySettingsUI(s) {
@@ -2575,7 +3032,7 @@ function applyThemeJSON(data) {
   });
   if (data.mode_colors) {
     Object.assign(MODE_COLORS,data.mode_colors);
-    ['easing','spring','elastic','overframe'].forEach(m=>{ const inp=$('sc-'+m); if(inp&&MODE_COLORS[m]) inp.value=MODE_COLORS[m]; });
+    ['easing','spring','elastic','overframe','bounce','catenary','pulse','noise','resonance'].forEach(m=>{ const inp=$('sc-'+m); if(inp&&MODE_COLORS[m]) inp.value=MODE_COLORS[m]; });
   }
   // Apply current mode accent immediately — ensures mode colors update on theme switch
   document.body.style.setProperty('--accent', MODE_COLORS[mode] || '#9ccfd8');
