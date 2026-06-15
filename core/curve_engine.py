@@ -176,7 +176,140 @@ def bake_elastic_penner(t0, v0, t1, v1, fps, amplitude=1.0, period=0.3):
     return result
 
 
+def bake_elastic_out(t0, v0, t1, v1, fps, amplitude=1.0, period=0.3):
+    """Penner easeOutElastic — settles at start, oscillates at end."""
+    n = max(1, int(round(t1 - t0)))
+    result = []
+    for i in range(n + 1):
+        tn  = i / n
+        val = elastic_out(tn, amplitude, period)
+        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    return result
+
+
+# ── Bounce (damped cosine) ────────────────────────────────────────────────────
+
+def eval_bounce(t: float, gamma: float = 4.0, omega: float = 6.0) -> float:
+    """Ceiling bounce: 1 - e^(-γt)·|cos(ωt)|  → starts 0, settles at 1."""
+    if t <= 0: return 0.0
+    return 1.0 - math.exp(-gamma * t) * abs(math.cos(omega * t))
+
+
+def bake_bounce(t0, v0, t1, v1, fps, gamma=4.0, omega=6.0, flipped=False):
+    """flipped=True → floor version: starts ~1, settles at 0."""
+    n = max(1, int(round(t1 - t0)))
+    result = []
+    for i in range(n + 1):
+        tn  = i / n
+        val = eval_bounce(tn, gamma, omega)
+        if flipped:
+            val = 1.0 - val
+        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    return result
+
+
+# ── Catenary ──────────────────────────────────────────────────────────────────
+
+def eval_catenary(t: float, a: float = 1.0) -> float:
+    """Normalized catenary: (cosh(t/a) - 1) / (cosh(1/a) - 1).
+    f(0)=0, f(1)=1. Bows below diagonal (slow start, fast end).
+    High a → near-linear. Low a → heavy droop / exponential-like jump.
+    """
+    if t <= 0: return 0.0
+    if t >= 1: return 1.0
+    a   = max(0.001, a)
+    num = math.cosh(t / a) - 1.0
+    den = math.cosh(1.0 / a) - 1.0
+    if abs(den) < 1e-12:
+        return t
+    return max(0.0, min(1.0, num / den))
+
+
+def bake_catenary(t0, v0, t1, v1, fps, a=1.0):
+    n = max(1, int(round(t1 - t0)))
+    result = []
+    for i in range(n + 1):
+        val = eval_catenary(i / n, a)
+        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    return result
+
+
+# ── Pulse (modulated wave) ────────────────────────────────────────────────────
+
+def eval_pulse_raw(t: float, omega1: float, omega2: float, n: float) -> float:
+    return math.sin(omega1 * math.pi * t) * abs(math.sin(omega2 * math.pi * t)) ** n
+
+
+def bake_pulse(t0, v0, t1, v1, fps, omega1=8.0, omega2=2.0, n=4.0):
+    frames = max(1, int(round(t1 - t0)))
+    raw = [eval_pulse_raw(i / frames, omega1, omega2, n) for i in range(frames + 1)]
+    r_min, r_max = min(raw), max(raw)
+    span = r_max - r_min if abs(r_max - r_min) > 1e-10 else 1.0
+    result = []
+    for i, r in enumerate(raw):
+        val = (r - r_min) / span
+        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    return result
+
+
+# ── Noise (smooth random) ─────────────────────────────────────────────────────
+
+def bake_noise(t0, v0, t1, v1, fps, freq=2.0, amp=0.5, seed=42):
+    """Smooth noise via cosine interpolation over seeded random control points."""
+    import random
+    rng    = random.Random(int(seed))
+    n      = max(1, int(round(t1 - t0)))
+    n_ctrl = max(2, int(freq * 4) + 1)
+    ctrl   = [rng.uniform(-1.0, 1.0) for _ in range(n_ctrl)]
+    result = []
+    for i in range(n + 1):
+        t   = i / n
+        pos = t * (n_ctrl - 1)
+        idx = min(int(pos), n_ctrl - 2)
+        frac = pos - idx
+        mu2  = (1.0 - math.cos(frac * math.pi)) / 2.0
+        v    = ctrl[idx] * (1.0 - mu2) + ctrl[idx + 1] * mu2
+        val  = max(0.0, min(1.0, 0.5 + v * amp))
+        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    return result
+
+
+# ── Resonance (forced oscillator) ─────────────────────────────────────────────
+
+def eval_resonance_raw(t: float, gamma: float, omega: float, omega0: float) -> float:
+    denom = abs(omega0 ** 2 - omega ** 2)
+    A = min(1.0 / max(denom, 0.5), 5.0)
+    B = -A
+    return A * math.cos(omega * t) + B * math.exp(-gamma * t) * math.cos(omega0 * t)
+
+
+def bake_resonance(t0, v0, t1, v1, fps, gamma=2.0, omega=8.0, omega0=8.0):
+    n   = max(1, int(round(t1 - t0)))
+    raw = [eval_resonance_raw(i / n, gamma, omega, omega0) for i in range(n + 1)]
+    r_min, r_max = min(raw), max(raw)
+    span = r_max - r_min if abs(r_max - r_min) > 1e-10 else 1.0
+    result = []
+    for i, r in enumerate(raw):
+        val = (r - r_min) / span
+        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    return result
+
+
 # ── Resolve spline writing ────────────────────────────────────────────────────
+
+def _numeric_times(sd: dict) -> list:
+    """Return sorted list of only the numeric keys from a GetKeyFrames dict.
+    Fusion distortion/compound nodes can return dicts with string keys like
+    'Value' — filtering those out prevents float() conversion errors.
+    """
+    times = []
+    for k in sd.keys():
+        try:
+            float(k)
+            times.append(k)
+        except (TypeError, ValueError):
+            pass
+    return sorted(times, key=float)
 
 def _get_kf_range(spline):
     """Return (t0, v0, t1, v1) or None if not enough keyframes."""
@@ -283,7 +416,10 @@ def apply_bezier(spline, h1: list, h2: list, kf_from: int = 1, kf_to: int = 0) -
         print(f"[MFlow] apply_bezier: < 2 keyframes")
         return False
 
-    all_times = sorted(sd.keys(), key=lambda x: float(x))
+    all_times = _numeric_times(sd)
+    if len(all_times) < 2:
+        print(f"[MFlow] apply_bezier: < 2 numeric keyframes (non-numeric keys ignored)")
+        return False
     n = len(all_times)
     i0 = max(0, kf_from - 1)
     i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
@@ -376,7 +512,14 @@ def apply_baked(spline, frames, kf_from: int = 1, kf_to: int = 0,
                 except Exception: continue
             return False
 
-        all_times = sorted(sd.keys(), key=lambda x: float(x))
+        all_times = _numeric_times(sd)
+        if len(all_times) < 2:
+            # No numeric keyframes — write directly
+            kf = {int(round(f)): v for f, v in frames}
+            for args in ((kf, True), (kf,)):
+                try: set_kf(*args); return True
+                except Exception: continue
+            return False
         n = len(all_times)
 
         # Resolve t_start / t_end
@@ -471,8 +614,11 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
         print(f"[MFlow] apply_overframe: need ≥2 keyframes, got {len(sd) if isinstance(sd, dict) else 0}")
         return False
 
-    all_times = sorted(sd.keys(), key=lambda x: float(x))
+    all_times = _numeric_times(sd)
     n = len(all_times)
+    if n < 2:
+        print(f"[MFlow] apply_overframe: < 2 numeric keyframes")
+        return False
     i0 = max(0, kf_from - 1)
     i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
     if i1 <= i0: i1 = min(i0 + 1, n - 1)
