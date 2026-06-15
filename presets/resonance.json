@@ -1,0 +1,6 @@
+[
+  {"name":"near resonance","library":"resonance","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"gamma":1.0,"omega":7.5,"omega0":8.0}},
+  {"name":"fast transient","library":"resonance","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"gamma":5.0,"omega":12.0,"omega0":8.0}},
+  {"name":"on edge",       "library":"resonance","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"gamma":0.5,"omega":8.0,"omega0":8.0}},
+  {"name":"detuned",       "library":"resonance","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"gamma":2.0,"omega":6.0,"omega0":10.0}}
+]

@@ -1,0 +1,7 @@
+[
+  {"name":"ceiling soft",  "library":"bounce","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"gamma":3.0,"omega":5.0,"direction":"ceiling"}},
+  {"name":"ceiling rigid", "library":"bounce","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"gamma":6.0,"omega":8.0,"direction":"ceiling"}},
+  {"name":"ceiling fast",  "library":"bounce","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"gamma":8.0,"omega":14.0,"direction":"ceiling"}},
+  {"name":"floor soft",    "library":"bounce","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"gamma":3.0,"omega":5.0,"direction":"floor"}},
+  {"name":"floor rigid",   "library":"bounce","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"gamma":6.0,"omega":8.0,"direction":"floor"}}
+]

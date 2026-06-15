@@ -1,0 +1,6 @@
+[
+  {"name":"handheld",     "library":"noise","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"freq":2.0,"amp":0.5,"seed":42}},
+  {"name":"shake heavy",  "library":"noise","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"freq":5.0,"amp":0.8,"seed":17}},
+  {"name":"drift slow",   "library":"noise","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"freq":1.0,"amp":0.3,"seed":99}},
+  {"name":"mechanical",   "library":"noise","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"freq":8.0,"amp":0.6,"seed":7}}
+]

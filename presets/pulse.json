@@ -1,0 +1,6 @@
+[
+  {"name":"heartbeat",    "library":"pulse","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"omega1":8.0,"omega2":2.0,"n":4.0}},
+  {"name":"radar ping",   "library":"pulse","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"omega1":16.0,"omega2":1.0,"n":6.0}},
+  {"name":"breath",       "library":"pulse","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"omega1":4.0,"omega2":1.0,"n":2.0}},
+  {"name":"double tap",   "library":"pulse","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"omega1":12.0,"omega2":3.0,"n":8.0}}
+]

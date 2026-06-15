@@ -1,0 +1,6 @@
+[
+  {"name":"taut wire",    "library":"catenary","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"a":3.0}},
+  {"name":"cable",        "library":"catenary","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"a":0.8}},
+  {"name":"heavy chain",  "library":"catenary","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"a":0.3}},
+  {"name":"free fall",    "library":"catenary","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"a":0.1}}
+]
