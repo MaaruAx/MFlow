@@ -274,7 +274,7 @@ body.compact #kf-range-widget{display:none!important}
 .tang{flex:1;text-align:center;padding:2px}
 
 /* ── Curve params ── */
-#cp-section{padding:7px 10px 8px;min-width:0;overflow:hidden}
+#cp-section{padding:7px 10px 8px;min-width:0;overflow:visible}
 .cp-title{font-size:9px;font-weight:700;letter-spacing:.6px;color:var(--muted);margin-bottom:5px}
 .cp-row{display:flex;align-items:center;gap:5px;margin-bottom:4px;min-width:0}
 .cp-lbl{font-size:10px;color:var(--muted);width:52px;flex-shrink:0}
@@ -707,14 +707,14 @@ input[type=number]{-moz-appearance:textfield}
       <div id="cp-section">
         <div class="cp-title" data-i18n="cp.title">CURVE PARAMS</div>
         <div id="cp-spring" style="display:none">
-          <div class="cp-hint">↕ vertical handle = bounce  ·  ↔ horizontal = duration</div>
+          <div class="cp-hint">↕ vertical handle = bounce  ·  ↔ horizontal = speed</div>
           <div class="cp-row" style="margin-top:6px">
             <span class="cp-lbl">bounce</span>
             <input class="cp-sl" id="sl-zeta"  type="range" min="5" max="95" value="30" oninput="onSpringSlider()">
             <span class="cp-val" id="vl-zeta">0.30</span>
           </div>
           <div class="cp-row">
-            <span class="cp-lbl">duration</span>
+            <span class="cp-lbl">speed</span>
             <input class="cp-sl" id="sl-omega" type="range" min="4" max="120" value="32" oninput="onSpringSlider()">
             <span class="cp-val" id="vl-omega">8.0</span>
           </div>
@@ -746,7 +746,7 @@ input[type=number]{-moz-appearance:textfield}
           </div>
           <div class="cp-row">
             <span class="cp-lbl" data-i18n="cp.frequency">frequency</span>
-            <input class="cp-sl" id="sl-bomega" type="range" min="5" max="200" value="60" oninput="onBounceSlider()">
+            <input class="cp-sl" id="sl-bomega" type="range" min="5" max="120" value="60" oninput="onBounceSlider()">
             <span class="cp-val" id="vl-bomega">6.0</span>
           </div>
           <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
@@ -1717,7 +1717,28 @@ function spDurPos() {
   const cx = MG+((physOmegaN-SP_OM_MIN)/(SP_OM_MAX-SP_OM_MIN))*CI;
   return { x: Math.max(MG+10, Math.min(MG+CI-10, cx)), y: spToPx(0,1.0).y };
 }
-// Elastic handle positions
+// Bounce handle positions — mirror spring pattern
+const BNC_GAMMA_MIN=0.5, BNC_GAMMA_MAX=20.0;
+const BNC_OMEGA_MIN=0.5, BNC_OMEGA_MAX=12.0;
+function bncGammaPos() {
+  const cy = MG + CI*(bounceGamma-BNC_GAMMA_MIN)/(BNC_GAMMA_MAX-BNC_GAMMA_MIN);
+  return { x: MG+CI*0.25, y: Math.max(MG+10, Math.min(MG+CI-10, cy)) };
+}
+function bncOmegaPos() {
+  const cx = MG + CI*(bounceOmega-BNC_OMEGA_MIN)/(BNC_OMEGA_MAX-BNC_OMEGA_MIN);
+  return { y: toPx(0,0).y, x: Math.max(MG+10, Math.min(MG+CI-10, cx)) };
+}
+// Resonance handle positions
+const RES_GAMMA_MIN=0.1, RES_GAMMA_MAX=20.0;
+const RES_OMEGA_MIN=0.5, RES_OMEGA_MAX=30.0;
+function resGammaPos() {
+  const cy = MG + CI*(resGamma-RES_GAMMA_MIN)/(RES_GAMMA_MAX-RES_GAMMA_MIN);
+  return { x: MG+CI*0.25, y: Math.max(MG+10, Math.min(MG+CI-10, cy)) };
+}
+function resOmegaPos() {
+  const cx = MG + CI*(resOmega-RES_OMEGA_MIN)/(RES_OMEGA_MAX-RES_OMEGA_MIN);
+  return { y: toPx(0,0.5).y, x: Math.max(MG+10, Math.min(MG+CI-10, cx)) };
+}
 function elAmpPos() {
   const cy = MG+CI*(elAmp-1)/2;
   return { x: MG+CI*0.12, y: Math.max(MG+10, Math.min(MG+CI-10, cy)) };
@@ -1921,7 +1942,7 @@ function drawSpringCurve(col) {
   ctx.stroke();
   const bh=spBouncePos(), dh=spDurPos();
   drawHandleGuide(bh.x,bh.y,'y',col); drawHandleGuide(dh.x,dh.y,'x',col);
-  drawCapsule(bh.x,bh.y,'y',col,'bounce'); drawCapsule(dh.x,dh.y,'x',col,'duration');
+  drawCapsule(bh.x,bh.y,'y',col,'bounce'); drawCapsule(dh.x,dh.y,'x',col,'speed');
 }
 function drawElasticCurve(col) {
   const N=200;
@@ -1947,6 +1968,9 @@ function drawBounceCurve(col) {
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
   }
   ctx.stroke();
+  const gh=bncGammaPos(), oh=bncOmegaPos();
+  drawHandleGuide(gh.x,gh.y,'y',col); drawHandleGuide(oh.x,oh.y,'x',col);
+  drawCapsule(gh.x,gh.y,'y',col,'decay'); drawCapsule(oh.x,oh.y,'x',col,'freq');
 }
 function drawCatenaryCurve(col) {
   const N=200;
@@ -1991,6 +2015,9 @@ function drawResonanceCurve(col) {
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
   }
   ctx.stroke();
+  const gh=resGammaPos(), oh=resOmegaPos();
+  drawHandleGuide(gh.x,gh.y,'y',col); drawHandleGuide(oh.x,oh.y,'x',col);
+  drawCapsule(gh.x,gh.y,'y',col,'damp'); drawCapsule(oh.x,oh.y,'x',col,'drive');
 }
 function drawBezierCurve(col) {
   const p0=toPx(0,0), p1=toPx(1,1), h1p=toPx(...h1), h2p=toPx(...h2);
@@ -2051,6 +2078,18 @@ function hitTest(px, py) {
     if (d2(p,dh)<HR2*1.8) return 'sp_dur';
     return null;
   }
+  if (isBounce()) {
+    const gh=bncGammaPos(), oh=bncOmegaPos();
+    if (d2(p,gh)<HR2*1.8) return 'bnc_gamma';
+    if (d2(p,oh)<HR2*1.8) return 'bnc_omega';
+    return null;
+  }
+  if (isResonance()) {
+    const gh=resGammaPos(), oh=resOmegaPos();
+    if (d2(p,gh)<HR2*1.8) return 'res_gamma';
+    if (d2(p,oh)<HR2*1.8) return 'res_omega';
+    return null;
+  }
   if (isElastic()) {
     const ah=elAmpPos(), ph=elPerPos();
     if (d2(p,ah)<HR2*1.8) return 'el_amp';
@@ -2078,6 +2117,14 @@ function _processDrag(px, py) {
     elAmp=Math.max(1.0,Math.min(3.0, 1+(py-MG)/CI*2)); syncElasticSliders();
   } else if (dragging==='el_per') {
     elPeriod=Math.max(0.1,Math.min(0.8, 0.1+(px-MG)/CI*0.7)); syncElasticSliders();
+  } else if (dragging==='bnc_gamma') {
+    bounceGamma=Math.max(BNC_GAMMA_MIN,Math.min(BNC_GAMMA_MAX, BNC_GAMMA_MIN+((py-MG)/CI)*(BNC_GAMMA_MAX-BNC_GAMMA_MIN))); syncBounceSliders();
+  } else if (dragging==='bnc_omega') {
+    bounceOmega=Math.max(BNC_OMEGA_MIN,Math.min(BNC_OMEGA_MAX, BNC_OMEGA_MIN+((px-MG)/CI)*(BNC_OMEGA_MAX-BNC_OMEGA_MIN))); syncBounceSliders();
+  } else if (dragging==='res_gamma') {
+    resGamma=Math.max(RES_GAMMA_MIN,Math.min(RES_GAMMA_MAX, RES_GAMMA_MIN+((py-MG)/CI)*(RES_GAMMA_MAX-RES_GAMMA_MIN))); syncResSliders();
+  } else if (dragging==='res_omega') {
+    resOmega=Math.max(RES_OMEGA_MIN,Math.min(RES_OMEGA_MAX, RES_OMEGA_MIN+((px-MG)/CI)*(RES_OMEGA_MAX-RES_OMEGA_MIN))); syncResSliders();
   } else {
     let [t,v]=fromPx(px,py);
     if (magnetEnabled && mode==='easing') { t=snapToGrid(t); v=snapToGrid(v); }
@@ -2153,7 +2200,7 @@ function syncBounceSliders() {
   $('vl-bgamma').textContent = bounceGamma.toFixed(1);
   $('vl-bomega').textContent = bounceOmega.toFixed(1);
   _updateSliderFill('sl-bgamma', 5, 200, Math.round(bounceGamma*10));
-  _updateSliderFill('sl-bomega', 5, 200, Math.round(bounceOmega*10));
+  _updateSliderFill('sl-bomega', 5, 120, Math.round(bounceOmega*10));
   const btnC=$('btn-bdir-ceil'), btnF=$('btn-bdir-floor');
   if(btnC) btnC.classList.toggle('on', bounceDir==='ceiling');
   if(btnF) btnF.classList.toggle('on', bounceDir==='floor');
