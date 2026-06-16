@@ -1122,7 +1122,7 @@ class Backend(QObject):
                     spline = self._get_spline(meta["input_obj"])
                     if spline is None:
                         no_spline += 1
-                        print(f"[MFlow] _do_apply: no BezierSpline for '{inp_id}' on '{tool_obj.Name}'")
+                        log.warning(f"[MFlow] _do_apply: no BezierSpline for '{inp_id}' on '{tool_obj.Name}'")
                         continue
                     if self._apply_one(spline, fps):
                         applied += 1
@@ -1146,7 +1146,7 @@ class Backend(QObject):
         elif failed > 0:
             self.apply_done.emit(False,
                 f"Apply failed on {failed} input(s). "
-                f"Check the terminal for [MFlow] lines.")
+                f"See mflow.log in your user folder \\.mflow\\ for [MFlow] details.")
         else:
             self.apply_done.emit(False, "No animated inputs found.")
 
@@ -1197,7 +1197,7 @@ class Backend(QObject):
                                     if not callable(get_kf): continue
                                     sd = get_kf()
                                     if isinstance(sd, dict) and len(sd) >= 2:
-                                        print(f"[MFlow] _get_spline: PolyPath → Displacement BezierSpline '{sub_tool.Name}'")
+                                        log.warning(f"[MFlow] _get_spline: PolyPath → Displacement BezierSpline '{sub_tool.Name}'")
                                         return sub_tool
                                 except Exception:
                                     continue
