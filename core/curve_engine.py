@@ -3,7 +3,10 @@ Bezier evaluation, baking (spring/elastic/bounce/steps), and Fusion spline appli
 Handle writing uses every known format for Resolve compatibility.
 """
 import math
+import logging
 from dataclasses import dataclass, field
+
+log = logging.getLogger("mflow")
 
 
 # ── Bezier ────────────────────────────────────────────────────────────────────
@@ -122,14 +125,19 @@ def bake_oscillator(t0: float, v0: float, t1: float, v1: float,
                     fps: float, zeta: float = 0.3, omega_n: float = 8.0) -> list:
     zeta    = max(0.01, min(0.99, zeta))
     omega_n = max(0.5, omega_n)
-    t_settle = 4.6 / (zeta * omega_n)
-    # t0/t1 are FRAME NUMBERS — step one integer frame at a time
+    # Use actual duration in seconds so omega_n (speed) changes the baked shape:
+    # high omega_n = spring settles quickly within the range,
+    # low omega_n  = spring barely starts within the range.
     n = max(1, int(round(t1 - t0)))
+    T = (t1 - t0) / fps          # actual duration in seconds
     result = []
     for i in range(n + 1):
-        tn     = i / n
-        val    = eval_spring_osc(tn * t_settle, zeta, omega_n)
+        tn  = i / n
+        val = eval_spring_osc(tn * T, zeta, omega_n)
         result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    # Force exact endpoint alignment
+    result[0]  = (result[0][0],  v0)
+    result[-1] = (result[-1][0], v1)
     return result
 
 
@@ -184,6 +192,8 @@ def bake_elastic_out(t0, v0, t1, v1, fps, amplitude=1.0, period=0.3):
         tn  = i / n
         val = elastic_out(tn, amplitude, period)
         result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    result[0]  = (result[0][0],  v0)
+    result[-1] = (result[-1][0], v1)
     return result
 
 
@@ -192,6 +202,7 @@ def bake_elastic_out(t0, v0, t1, v1, fps, amplitude=1.0, period=0.3):
 def eval_bounce(t: float, gamma: float = 4.0, omega: float = 6.0) -> float:
     """Ceiling bounce: 1 - e^(-γt)·|cos(ωt)|  → starts 0, settles at 1."""
     if t <= 0: return 0.0
+    if t >= 1: return 1.0
     return 1.0 - math.exp(-gamma * t) * abs(math.cos(omega * t))
 
 
@@ -205,6 +216,9 @@ def bake_bounce(t0, v0, t1, v1, fps, gamma=4.0, omega=6.0, flipped=False):
         if flipped:
             val = 1.0 - val
         result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    # Force exact keyframe alignment at endpoints
+    result[0]  = (result[0][0],  v0)
+    result[-1] = (result[-1][0], v1)
     return result
 
 
@@ -231,6 +245,8 @@ def bake_catenary(t0, v0, t1, v1, fps, a=1.0):
     for i in range(n + 1):
         val = eval_catenary(i / n, a)
         result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    result[0]  = (result[0][0],  v0)
+    result[-1] = (result[-1][0], v1)
     return result
 
 
@@ -249,6 +265,8 @@ def bake_pulse(t0, v0, t1, v1, fps, omega1=8.0, omega2=2.0, n=4.0):
     for i, r in enumerate(raw):
         val = (r - r_min) / span
         result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    result[0]  = (result[0][0],  v0)
+    result[-1] = (result[-1][0], v1)
     return result
 
 
@@ -271,6 +289,8 @@ def bake_noise(t0, v0, t1, v1, fps, freq=2.0, amp=0.5, seed=42):
         v    = ctrl[idx] * (1.0 - mu2) + ctrl[idx + 1] * mu2
         val  = max(0.0, min(1.0, 0.5 + v * amp))
         result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    result[0]  = (result[0][0],  v0)
+    result[-1] = (result[-1][0], v1)
     return result
 
 
@@ -292,6 +312,8 @@ def bake_resonance(t0, v0, t1, v1, fps, gamma=2.0, omega=8.0, omega0=8.0):
     for i, r in enumerate(raw):
         val = (r - r_min) / span
         result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    result[0]  = (result[0][0],  v0)
+    result[-1] = (result[-1][0], v1)
     return result
 
 
@@ -315,9 +337,11 @@ def _get_kf_range(spline):
     """Return (t0, v0, t1, v1) or None if not enough keyframes."""
     try:
         kf = spline.GetKeyFrames()
-        if not kf or len(kf) < 2:
+        if not kf:
             return None
-        times = sorted(kf.keys())
+        times = _numeric_times(kf)
+        if len(times) < 2:
+            return None
         t0, t1 = float(times[0]), float(times[-1])
         v0 = float(spline.GetInput(t0))
         v1 = float(spline.GetInput(t1))
@@ -404,21 +428,21 @@ def apply_bezier(spline, h1: list, h2: list, kf_from: int = 1, kf_to: int = 0) -
     """
     get_kf = getattr(spline, "GetKeyFrames", None)
     if not callable(get_kf):
-        print("[MFlow] apply_bezier: no GetKeyFrames on object")
+        log.warning("[MFlow] apply_bezier: no GetKeyFrames on object")
         return False
     try:
         sd = get_kf()
     except Exception as e:
-        print(f"[MFlow] apply_bezier: GetKeyFrames failed: {e}")
+        log.warning(f"[MFlow] apply_bezier: GetKeyFrames failed: {e}")
         return False
 
     if not isinstance(sd, dict) or len(sd) < 2:
-        print(f"[MFlow] apply_bezier: < 2 keyframes")
+        log.warning(f"[MFlow] apply_bezier: < 2 keyframes")
         return False
 
     all_times = _numeric_times(sd)
     if len(all_times) < 2:
-        print(f"[MFlow] apply_bezier: < 2 numeric keyframes (non-numeric keys ignored)")
+        log.warning(f"[MFlow] apply_bezier: < 2 numeric keyframes (non-numeric keys ignored)")
         return False
     n = len(all_times)
     i0 = max(0, kf_from - 1)
@@ -446,7 +470,7 @@ def apply_bezier(spline, h1: list, h2: list, kf_from: int = 1, kf_to: int = 0) -
         ta, tb = float(ka), float(kb)
         dt = tb - ta
         if abs(dt) < 1e-12:
-            print(f"[MFlow] apply_bezier: zero-duration seg [{seg_i+1}→{seg_i+2}] skipped")
+            log.warning(f"[MFlow] apply_bezier: zero-duration seg [{seg_i+1}→{seg_i+2}] skipped")
             continue
 
         # ── Point2D ──
@@ -456,7 +480,7 @@ def apply_bezier(spline, h1: list, h2: list, kf_from: int = 1, kf_to: int = 0) -
             dv = dx if abs(dx) >= abs(dy) else dy
             tbl[ka]["RH"] = {1: h1[0]*dt,         2: h1[1]*dv}
             tbl[kb]["LH"] = {1: (h2[0]-1.0)*dt,   2: (h2[1]-1.0)*dv}
-            print(f"[MFlow] apply_bezier: Point2D seg [{seg_i+1}→{seg_i+2}] t={ta:.1f}→{tb:.1f}"
+            log.warning(f"[MFlow] apply_bezier: Point2D seg [{seg_i+1}→{seg_i+2}] t={ta:.1f}→{tb:.1f}"
                   f"  RH_off={h1[0]*dt:.2f}  LH_off={(h2[0]-1.0)*dt:.2f}")
             any_ok = True
             continue
@@ -464,14 +488,14 @@ def apply_bezier(spline, h1: list, h2: list, kf_from: int = 1, kf_to: int = 0) -
         # ── Scalar ──
         v0 = _kf_scalar(ea); v1 = _kf_scalar(eb)
         if v0 is None or v1 is None:
-            print(f"[MFlow] apply_bezier: cannot read scalar on '{name}' seg [{seg_i+1}→{seg_i+2}]")
+            log.warning(f"[MFlow] apply_bezier: cannot read scalar on '{name}' seg [{seg_i+1}→{seg_i+2}]")
             continue
         dv = v1 - v0
         rh_off = h1[0]*dt
         lh_off = (h2[0]-1.0)*dt
         tbl[ka]["RH"] = {1: rh_off, 2: h1[1]*dv}
         tbl[kb]["LH"] = {1: lh_off, 2: (h2[1]-1.0)*dv}
-        print(f"[MFlow] apply_bezier: scalar seg [{seg_i+1}→{seg_i+2}] '{name}'"
+        log.warning(f"[MFlow] apply_bezier: scalar seg [{seg_i+1}→{seg_i+2}] '{name}'"
               f"  t={ta:.1f}→{tb:.1f}  v={v0:.3f}→{v1:.3f}"
               f"  RH_off={rh_off:.2f}  LH_off={lh_off:.2f}")
         any_ok = True
@@ -480,7 +504,7 @@ def apply_bezier(spline, h1: list, h2: list, kf_from: int = 1, kf_to: int = 0) -
         return False
 
     ok = _call_set_kf(spline, tbl)
-    print(f"[MFlow] apply_bezier: SetKeyFrames {'OK' if ok else 'FAILED'} on '{name}'"
+    log.warning(f"[MFlow] apply_bezier: SetKeyFrames {'OK' if ok else 'FAILED'} on '{name}'"
           f" range=[{i0+1}→{i1+1}] segs={i1-i0}")
     return ok
 
@@ -547,17 +571,38 @@ def apply_baked(spline, frames, kf_from: int = 1, kf_to: int = 0,
             if t_start <= ft <= t_end:
                 kf[int(round(ft))] = v
 
-        # Force anchors
-        kf[int(round(t_start))] = v_start
-        kf[int(round(t_end))]   = v_end
+        # Force anchors (plain floats — Fusion's SetKeyFrames crashes with nested dicts)
+        t_start_int = int(round(t_start))
+        t_end_int   = int(round(t_end))
+        kf[t_start_int] = v_start
+        kf[t_end_int]   = v_end
 
         for args in ((kf, True), (kf, False), (kf,)):
-            try: set_kf(*args); return True
-            except Exception: continue
+            try:
+                set_kf(*args)
+                # "Magnetism": flatten the boundary tangents so the baked curve
+                # enters/exits horizontally — same effect spring/elastic get
+                # naturally from their shape. Uses the proven SetData path
+                # (same as apply_overframe) — NOT a nested dict inside
+                # SetKeyFrames, which crashes Fusion's Python bridge.
+                handle_dt = max(1.0, (t_end_int - t_start_int) * 0.15)
+                try:
+                    _write_handle(spline, t_start_int, "RH",
+                                  t_start_int + handle_dt, v_start)
+                except Exception:
+                    pass
+                try:
+                    _write_handle(spline, t_end_int, "LH",
+                                  t_end_int - handle_dt, v_end)
+                except Exception:
+                    pass
+                return True
+            except Exception:
+                continue
         return False
 
     except Exception as e:
-        print(f"[MFlow] apply_baked exception: {e}")
+        log.warning(f"[MFlow] apply_baked exception: {e}")
         return False
 
 
@@ -603,21 +648,21 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
     # ── 1. Read existing keyframe structure ───────────────────────────────
     get_kf_fn = getattr(spline, "GetKeyFrames", None)
     if not callable(get_kf_fn):
-        print("[MFlow] apply_overframe: no GetKeyFrames on object")
+        log.warning("[MFlow] apply_overframe: no GetKeyFrames on object")
         return False
     try:
         sd = get_kf_fn()
     except Exception as e:
-        print(f"[MFlow] apply_overframe: GetKeyFrames failed: {e}")
+        log.warning(f"[MFlow] apply_overframe: GetKeyFrames failed: {e}")
         return False
     if not isinstance(sd, dict) or len(sd) < 2:
-        print(f"[MFlow] apply_overframe: need ≥2 keyframes, got {len(sd) if isinstance(sd, dict) else 0}")
+        log.warning(f"[MFlow] apply_overframe: need ≥2 keyframes, got {len(sd) if isinstance(sd, dict) else 0}")
         return False
 
     all_times = _numeric_times(sd)
     n = len(all_times)
     if n < 2:
-        print(f"[MFlow] apply_overframe: < 2 numeric keyframes")
+        log.warning(f"[MFlow] apply_overframe: < 2 numeric keyframes")
         return False
     i0 = max(0, kf_from - 1)
     i1 = (n - 1) if kf_to == 0 else min(n - 1, kf_to - 1)
@@ -626,18 +671,18 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
     t0, t1 = float(k0), float(k1)
     dt = t1 - t0
     if abs(dt) < 1e-12:
-        print("[MFlow] apply_overframe: zero-duration range")
+        log.warning("[MFlow] apply_overframe: zero-duration range")
         return False
 
     e0, e1 = sd[k0], sd[k1]
     v0 = _kf_scalar(e0)
     v1 = _kf_scalar(e1)
     if v0 is None or v1 is None:
-        print("[MFlow] apply_overframe: cannot read scalar keyframe values")
+        log.warning("[MFlow] apply_overframe: cannot read scalar keyframe values")
         return False
     dv   = v1 - v0
     name = getattr(spline, "Name", "?")
-    print(f"[MFlow] apply_overframe: '{name}'  t={t0:.0f}→{t1:.0f}  "
+    log.warning(f"[MFlow] apply_overframe: '{name}'  t={t0:.0f}→{t1:.0f}  "
           f"v={v0:.4f}→{v1:.4f}  okf_pts={len(of_points)}")
 
     def dn_t(tn): return t0 + tn * dt
@@ -656,14 +701,14 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
         ft_k = int(round(ft))
         # Skip points that would collapse onto an existing endpoint
         if ft_k == end0 or ft_k == end1:
-            print(f"[MFlow] apply_overframe: skip OKF point t={p.t:.3f} "
+            log.warning(f"[MFlow] apply_overframe: skip OKF point t={p.t:.3f} "
                   f"— frame {ft_k} collides with endpoint")
             skipped += 1
             continue
         tbl[ft_k] = {1: float(fv)}   # {1: value} is the Fusion scalar kf format
 
     ok = _call_set_kf(spline, tbl)
-    print(f"[MFlow] apply_overframe: SetKeyFrames {'OK' if ok else 'FAILED'}"
+    log.warning(f"[MFlow] apply_overframe: SetKeyFrames {'OK' if ok else 'FAILED'}"
           f"  skipped={skipped}/{len(of_points)}")
     if not ok:
         return False
@@ -692,7 +737,7 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
             if wrote:
                 handles_ok += 1
             else:
-                print(f"[MFlow] apply_overframe: RH handle FAILED at frame {ft0s:.1f}")
+                log.warning(f"[MFlow] apply_overframe: RH handle FAILED at frame {ft0s:.1f}")
         if lh:
             handles_expected += 1
             wrote = _write_handle(spline, ft1s, "LH",
@@ -701,7 +746,7 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
             if wrote:
                 handles_ok += 1
             else:
-                print(f"[MFlow] apply_overframe: LH handle FAILED at frame {ft1s:.1f}")
+                log.warning(f"[MFlow] apply_overframe: LH handle FAILED at frame {ft1s:.1f}")
 
-    print(f"[MFlow] apply_overframe: handles {handles_ok}/{handles_expected}  → DONE")
+    log.warning(f"[MFlow] apply_overframe: handles {handles_ok}/{handles_expected}  → DONE")
     return True
