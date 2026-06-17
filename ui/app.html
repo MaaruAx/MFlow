@@ -762,6 +762,10 @@ input[type=number]{-moz-appearance:textfield}
             <input class="cp-sl" id="sl-cata" type="range" min="1" max="400" value="80" oninput="onCatenarySlider()">
             <span class="cp-val" id="vl-cata">0.80</span>
           </div>
+          <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
+            <button class="tog on" id="btn-catdir-in"  onclick="setCatReverse(false)" data-i18n="cp.elastic_in">← IN</button>
+            <button class="tog"    id="btn-catdir-out" onclick="setCatReverse(true)"  data-i18n="cp.elastic_out">OUT →</button>
+          </div>
         </div>
 
         <div id="cp-pulse" style="display:none">
@@ -780,6 +784,10 @@ input[type=number]{-moz-appearance:textfield}
             <span class="cp-lbl" data-i18n="cp.sharpness">sharpness</span>
             <input class="cp-sl" id="sl-pn" type="range" min="10" max="100" value="40" oninput="onPulseSlider()">
             <span class="cp-val" id="vl-pn">4.0</span>
+          </div>
+          <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
+            <button class="tog on" id="btn-pulsedir-in"  onclick="setPulseReverse(false)" data-i18n="cp.elastic_in">← IN</button>
+            <button class="tog"    id="btn-pulsedir-out" onclick="setPulseReverse(true)"  data-i18n="cp.elastic_out">OUT →</button>
           </div>
         </div>
 
@@ -800,6 +808,10 @@ input[type=number]{-moz-appearance:textfield}
             <input class="cp-sl" id="sl-nseed" type="range" min="0" max="999" value="42" oninput="onNoiseSlider()">
             <span class="cp-val" id="vl-nseed">42</span>
           </div>
+          <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
+            <button class="tog on" id="btn-noisedir-in"  onclick="setNoiseReverse(false)" data-i18n="cp.elastic_in">← IN</button>
+            <button class="tog"    id="btn-noisedir-out" onclick="setNoiseReverse(true)"  data-i18n="cp.elastic_out">OUT →</button>
+          </div>
         </div>
 
         <div id="cp-resonance" style="display:none">
@@ -818,6 +830,10 @@ input[type=number]{-moz-appearance:textfield}
             <span class="cp-lbl" data-i18n="cp.natural_omega">natural ω₀</span>
             <input class="cp-sl" id="sl-romega0" type="range" min="5" max="200" value="80" oninput="onResSlider()">
             <span class="cp-val" id="vl-romega0">8.0</span>
+          </div>
+          <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
+            <button class="tog on" id="btn-resdir-in"  onclick="setResReverse(false)" data-i18n="cp.elastic_in">← IN</button>
+            <button class="tog"    id="btn-resdir-out" onclick="setResReverse(true)"  data-i18n="cp.elastic_out">OUT →</button>
           </div>
         </div>
 
@@ -1039,6 +1055,14 @@ input[type=number]{-moz-appearance:textfield}
         <div class="s-lbl">FPS for baking <span class="s-muted-val">(spring / elastic)</span></div>
         <input class="s-inp" id="s-fps" type="number" value="24" min="1" max="240" style="width:80px">
       </div>
+      <div class="s-row">
+        <div class="s-lbl">Keyframe density <span id="s-bakedens-val" class="s-muted-val">1x (1 keyframe/frame)</span></div>
+        <div class="cp-row" style="margin:0">
+          <input class="cp-sl" type="range" id="s-bakedens" min="1" max="8" step="1" value="1"
+            oninput="_updateSliderFill(this.id,1,8,+this.value);$('s-bakedens-val').textContent=this.value+'x ('+this.value+' keyframe'+(this.value>1?'s':'')+'/frame)';">
+        </div>
+        <div class="s-muted-val" style="margin-top:2px">EXPERIMENTAL — above 1x writes sub-frame keyframes for smoother high-frequency curves (bounce/pulse/resonance/noise). Verify the result in Fusion before relying on it for delivery.</div>
+      </div>
     </div>
     <div class="s-section">
       <div class="s-section-label">Behavior</div>
@@ -1207,15 +1231,19 @@ let bounceGamma   = 4.0;
 let bounceOmega   = 6.0;
 let bounceDir     = 'ceiling'; // 'ceiling' | 'floor'
 let catA          = 0.8;
+let catReverse     = false;
 let pulseOmega1   = 8.0;
 let pulseOmega2   = 2.0;
 let pulseN        = 4.0;
+let pulseReverse  = false;
 let noiseFreq     = 2.0;
 let noiseAmp      = 0.5;
 let noiseSeed     = 42;
+let noiseReverse  = false;
 let resGamma      = 2.0;
 let resOmega      = 8.0;
 let resOmega0     = 8.0;
+let resReverse    = false;
 let autoApply     = false;
 let allPresets    = [];
 let selIdx        = -1;
@@ -1595,13 +1623,13 @@ function pushState() {
     if (!backend) return;
     backend.set_curve_state(JSON.stringify({
       h1, h2, mode, of_points:okfPoints,
-      phys_zeta:physZeta, phys_omega_n:physOmegaN,
+      phys_zeta:physZeta, phys_omega_n:physOmegaN, phys_flipped:_physFlipped,
       el_amplitude:elAmp, el_period:elPeriod, el_direction:elDirection,
       bounce_gamma:bounceGamma, bounce_omega:bounceOmega, bounce_dir:bounceDir,
-      catenary_a:catA,
-      pulse_omega1:pulseOmega1, pulse_omega2:pulseOmega2, pulse_n:pulseN,
-      noise_freq:noiseFreq, noise_amp:noiseAmp, noise_seed:noiseSeed,
-      res_gamma:resGamma, res_omega:resOmega, res_omega0:resOmega0
+      catenary_a:catA, catenary_reverse:catReverse,
+      pulse_omega1:pulseOmega1, pulse_omega2:pulseOmega2, pulse_n:pulseN, pulse_reverse:pulseReverse,
+      noise_freq:noiseFreq, noise_amp:noiseAmp, noise_seed:noiseSeed, noise_reverse:noiseReverse,
+      res_gamma:resGamma, res_omega:resOmega, res_omega0:resOmega0, res_reverse:resReverse
     }));
   }, 80);
 }
@@ -1835,7 +1863,7 @@ function updateLookup() {
   } else if (isElastic()) {
     for (let i=0; i<=LN; i++) {
       let v = elDirection==='out' ? evalElasticOut(i/LN, elAmp, elPeriod) : evalElastic(i/LN, elAmp, elPeriod);
-      lookup[i] = _physFlipped ? 1-v : v;
+      lookup[i] = _physFlipped ? v*0.5 : v;
     }
   } else if (isBounce()) {
     for (let i=0; i<=LN; i++) {
@@ -1844,14 +1872,17 @@ function updateLookup() {
     }
   } else if (isCatenary()) {
     for (let i=0; i<=LN; i++) lookup[i] = evalCatenaryJs(i/LN, catA);
+    if (catReverse) lookup = lookup.slice().reverse().map(v=>1-v);
   } else if (isPulse()) {
     const raw=[];
     for (let i=0; i<=LN; i++) raw.push(Math.sin(pulseOmega1*Math.PI*i/LN)*Math.pow(Math.abs(Math.sin(pulseOmega2*Math.PI*i/LN)),pulseN));
     const rmin=Math.min(...raw), rmax=Math.max(...raw), rng=(rmax-rmin)||1;
     for (let i=0; i<=LN; i++) lookup[i]=(raw[i]-rmin)/rng;
+    if (pulseReverse) lookup = lookup.slice().reverse().map(v=>1-v);
   } else if (isNoise()) {
     const vals=_evalNoiseCurve(LN, noiseFreq, noiseAmp, noiseSeed);
     for (let i=0; i<=LN; i++) lookup[i]=vals[i];
+    if (noiseReverse) lookup = lookup.slice().reverse().map(v=>1-v);
   } else if (isResonance()) {
     const raw=[];
     for (let i=0; i<=LN; i++) {
@@ -1861,6 +1892,7 @@ function updateLookup() {
     }
     const rmin=Math.min(...raw), rmax=Math.max(...raw), rng=(rmax-rmin)||1;
     for (let i=0; i<=LN; i++) lookup[i]=(raw[i]-rmin)/rng;
+    if (resReverse) lookup = lookup.slice().reverse().map(v=>1-v);
   } else {
     for (let i=0; i<=LN; i++)
       lookup[i] = okfActive ? evalOKF(i/LN) : evalBz(i/LN,h1[0],h1[1],h2[0],h2[1]);
@@ -1949,7 +1981,9 @@ function drawElasticCurve(col) {
   ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
   for (let i=0; i<=N; i++) {
     const raw = elDirection==='out' ? evalElasticOut(i/N, elAmp, elPeriod) : evalElastic(i/N, elAmp, elPeriod);
-    const val=_physFlipped?1-raw:raw;
+    // Flipped: scale toward the midpoint instead of mirroring — settling at 0.5
+    // instead of jumping to the opposite extreme (which looked broken for 'out').
+    const val=_physFlipped ? raw*0.5 : raw;
     const p=elToPx(i/N, val);
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
   }
@@ -1973,10 +2007,12 @@ function drawBounceCurve(col) {
   drawCapsule(gh.x,gh.y,'y',col,'decay'); drawCapsule(oh.x,oh.y,'x',col,'freq');
 }
 function drawCatenaryCurve(col) {
-  const N=200;
+  const N=200, raw=[];
+  for (let i=0; i<=N; i++) raw.push(evalCatenaryJs(i/N, catA));
+  const arr = catReverse ? raw.slice().reverse().map(v=>1-v) : raw;
   ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
   for (let i=0; i<=N; i++) {
-    const p=toPx(i/N, evalCatenaryJs(i/N, catA));
+    const p=toPx(i/N, arr[i]);
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
   }
   ctx.stroke();
@@ -1985,18 +2021,21 @@ function drawPulseCurve(col) {
   const N=200, raw=[];
   for (let i=0; i<=N; i++) raw.push(Math.sin(pulseOmega1*Math.PI*i/N)*Math.pow(Math.abs(Math.sin(pulseOmega2*Math.PI*i/N)),pulseN));
   const rmin=Math.min(...raw), rmax=Math.max(...raw), rng=(rmax-rmin)||1;
+  let arr=[]; for (let i=0;i<=N;i++) arr.push((raw[i]-rmin)/rng);
+  if (pulseReverse) arr = arr.slice().reverse().map(v=>1-v);
   ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
   for (let i=0; i<=N; i++) {
-    const p=toPx(i/N, (raw[i]-rmin)/rng);
+    const p=toPx(i/N, arr[i]);
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
   }
   ctx.stroke();
 }
 function drawNoiseCurve(col) {
   const N=200, vals=_evalNoiseCurve(N, noiseFreq, noiseAmp, noiseSeed);
+  const arr = noiseReverse ? vals.slice().reverse().map(v=>1-v) : vals;
   ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
   for (let i=0; i<=N; i++) {
-    const p=toPx(i/N, vals[i]);
+    const p=toPx(i/N, arr[i]);
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
   }
   ctx.stroke();
@@ -2009,9 +2048,11 @@ function drawResonanceCurve(col) {
     raw.push(A*Math.cos(resOmega*t)+B*Math.exp(-resGamma*t)*Math.cos(resOmega0*t));
   }
   const rmin=Math.min(...raw), rmax=Math.max(...raw), rng=(rmax-rmin)||1;
+  let arr=[]; for (let i=0;i<=N;i++) arr.push((raw[i]-rmin)/rng);
+  if (resReverse) arr = arr.slice().reverse().map(v=>1-v);
   ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
   for (let i=0; i<=N; i++) {
-    const p=toPx(i/N, (raw[i]-rmin)/rng);
+    const p=toPx(i/N, arr[i]);
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
   }
   ctx.stroke();
@@ -2215,7 +2256,11 @@ function syncCatenarySliders() {
   $('sl-cata').value = Math.round(catA*100);
   $('vl-cata').textContent = catA.toFixed(2);
   _updateSliderFill('sl-cata', 1, 400, Math.round(catA*100));
+  const bi=$('btn-catdir-in'), bo=$('btn-catdir-out');
+  if(bi) bi.classList.toggle('on', !catReverse);
+  if(bo) bo.classList.toggle('on', catReverse);
 }
+function setCatReverse(rev) { catReverse=rev; syncCatenarySliders(); pushState(); }
 
 function onPulseSlider() {
   pulseOmega1 = $('sl-pw1').value / 10;
@@ -2233,7 +2278,11 @@ function syncPulseSliders() {
   _updateSliderFill('sl-pw1', 10, 200, Math.round(pulseOmega1*10));
   _updateSliderFill('sl-pw2',  5, 100, Math.round(pulseOmega2*10));
   _updateSliderFill('sl-pn',  10, 100, Math.round(pulseN*10));
+  const bi=$('btn-pulsedir-in'), bo=$('btn-pulsedir-out');
+  if(bi) bi.classList.toggle('on', !pulseReverse);
+  if(bo) bo.classList.toggle('on', pulseReverse);
 }
+function setPulseReverse(rev) { pulseReverse=rev; syncPulseSliders(); pushState(); }
 
 function onNoiseSlider() {
   noiseFreq = $('sl-nfreq').value / 10;
@@ -2251,7 +2300,11 @@ function syncNoiseSliders() {
   _updateSliderFill('sl-nfreq',  5, 200, Math.round(noiseFreq*10));
   _updateSliderFill('sl-namp',   5, 100, Math.round(noiseAmp*100));
   _updateSliderFill('sl-nseed',  0, 999, noiseSeed);
+  const bi=$('btn-noisedir-in'), bo=$('btn-noisedir-out');
+  if(bi) bi.classList.toggle('on', !noiseReverse);
+  if(bo) bo.classList.toggle('on', noiseReverse);
 }
+function setNoiseReverse(rev) { noiseReverse=rev; syncNoiseSliders(); pushState(); }
 
 function onResSlider() {
   resGamma  = $('sl-rgamma').value  / 10;
@@ -2269,7 +2322,11 @@ function syncResSliders() {
   _updateSliderFill('sl-rgamma',  5, 200, Math.round(resGamma*10));
   _updateSliderFill('sl-romega',  5, 200, Math.round(resOmega*10));
   _updateSliderFill('sl-romega0', 5, 200, Math.round(resOmega0*10));
+  const bi=$('btn-resdir-in'), bo=$('btn-resdir-out');
+  if(bi) bi.classList.toggle('on', !resReverse);
+  if(bo) bo.classList.toggle('on', resReverse);
 }
+function setResReverse(rev) { resReverse=rev; syncResSliders(); pushState(); }
 
 // ═══════════════════════════════════════════════════════════════
 // § 17. CONTEXT MENU
@@ -2294,10 +2351,10 @@ function resetCurve() {
   physZeta=0.3; physOmegaN=8.0;
   elAmp=1.0; elPeriod=0.3; elDirection='in';
   bounceGamma=4.0; bounceOmega=6.0; bounceDir='ceiling';
-  catA=1.0;
-  pulseOmega1=8.0; pulseOmega2=2.0; pulseN=4.0;
-  noiseFreq=2.0; noiseAmp=0.5; noiseSeed=42;
-  resGamma=2.0; resOmega=8.0; resOmega0=8.0;
+  catA=0.8; catReverse=false;
+  pulseOmega1=8.0; pulseOmega2=2.0; pulseN=4.0; pulseReverse=false;
+  noiseFreq=2.0; noiseAmp=0.5; noiseSeed=42; noiseReverse=false;
+  resGamma=2.0; resOmega=8.0; resOmega0=8.0; resReverse=false;
   _physFlipped=false;
   syncSpringSliders(); syncElasticSliders();
   syncBounceSliders(); syncCatenarySliders(); syncPulseSliders();
@@ -2434,20 +2491,27 @@ function drawCard(cv, preset) {
       const g=params.gamma||4,om=params.omega||6,fl=params.direction==='floor';
       for(let i=0;i<=N;i++){let v=evalBounceJs(i/N,g,om);if(fl)v=1-v;const px=mg+i/N*cw,py=(mg+ch)-v*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
     } else if (preset.library==='catenary') {
-      for(let i=0;i<=N;i++){const v=evalCatenaryJs(i/N,params.a||1);const px=mg+i/N*cw,py=(mg+ch)-v*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
+      let arr=[];for(let i=0;i<=N;i++)arr.push(evalCatenaryJs(i/N,params.a||1));
+      if(params.reverse)arr=arr.slice().reverse().map(v=>1-v);
+      for(let i=0;i<=N;i++){const px=mg+i/N*cw,py=(mg+ch)-arr[i]*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
     } else if (preset.library==='pulse') {
       const o1=params.omega1||8,o2=params.omega2||2,pn=params.n||4;
       const raw=[];for(let i=0;i<=N;i++)raw.push(Math.sin(o1*Math.PI*i/N)*Math.pow(Math.abs(Math.sin(o2*Math.PI*i/N)),pn));
       const rmin=Math.min(...raw),rmax=Math.max(...raw),rng2=(rmax-rmin)||1;
-      for(let i=0;i<=N;i++){const v=(raw[i]-rmin)/rng2;const px=mg+i/N*cw,py=(mg+ch)-v*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
+      let arr=[];for(let i=0;i<=N;i++)arr.push((raw[i]-rmin)/rng2);
+      if(params.reverse)arr=arr.slice().reverse().map(v=>1-v);
+      for(let i=0;i<=N;i++){const px=mg+i/N*cw,py=(mg+ch)-arr[i]*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
     } else if (preset.library==='noise') {
-      const vals=_evalNoiseCurve(N,params.freq||2,params.amp||0.5,params.seed||42);
+      let vals=_evalNoiseCurve(N,params.freq||2,params.amp||0.5,params.seed||42);
+      if(params.reverse)vals=vals.slice().reverse().map(v=>1-v);
       for(let i=0;i<=N;i++){const px=mg+i/N*cw,py=(mg+ch)-vals[i]*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
     } else if (preset.library==='resonance') {
       const g=params.gamma||2,om=params.omega||8,om0=params.omega0||8;
       const raw=[];for(let i=0;i<=N;i++){const t=i/N,den=Math.abs(om0**2-om**2),A=Math.min(1/Math.max(den,0.5),5),B=-A;raw.push(A*Math.cos(om*t)+B*Math.exp(-g*t)*Math.cos(om0*t));}
       const rmin=Math.min(...raw),rmax=Math.max(...raw),rng2=(rmax-rmin)||1;
-      for(let i=0;i<=N;i++){const v=(raw[i]-rmin)/rng2;const px=mg+i/N*cw,py=(mg+ch)-v*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
+      let arr=[];for(let i=0;i<=N;i++)arr.push((raw[i]-rmin)/rng2);
+      if(params.reverse)arr=arr.slice().reverse().map(v=>1-v);
+      for(let i=0;i<=N;i++){const px=mg+i/N*cw,py=(mg+ch)-arr[i]*ch;i===0?x.moveTo(px,py):x.lineTo(px,py);}
     }
     x.stroke(); return;
   }
@@ -2464,10 +2528,10 @@ function selectPreset(idx) {
   if (isSpring()  && p.params) { if(p.params.zeta!=null)physZeta=p.params.zeta; if(p.params.omega_n!=null)physOmegaN=p.params.omega_n; syncSpringSliders(); }
   if (isElastic() && p.params) { if(p.params.amplitude!=null)elAmp=p.params.amplitude; if(p.params.period!=null)elPeriod=p.params.period; if(p.params.direction)elDirection=p.params.direction; syncElasticSliders(); }
   if (isBounce()  && p.params) { if(p.params.gamma!=null)bounceGamma=p.params.gamma; if(p.params.omega!=null)bounceOmega=p.params.omega; if(p.params.direction)bounceDir=p.params.direction; syncBounceSliders(); }
-  if (isCatenary()&& p.params) { if(p.params.a!=null)catA=p.params.a; syncCatenarySliders(); }
-  if (isPulse()   && p.params) { if(p.params.omega1!=null)pulseOmega1=p.params.omega1; if(p.params.omega2!=null)pulseOmega2=p.params.omega2; if(p.params.n!=null)pulseN=p.params.n; syncPulseSliders(); }
-  if (isNoise()   && p.params) { if(p.params.freq!=null)noiseFreq=p.params.freq; if(p.params.amp!=null)noiseAmp=p.params.amp; if(p.params.seed!=null)noiseSeed=p.params.seed; syncNoiseSliders(); }
-  if (isResonance()&&p.params) { if(p.params.gamma!=null)resGamma=p.params.gamma; if(p.params.omega!=null)resOmega=p.params.omega; if(p.params.omega0!=null)resOmega0=p.params.omega0; syncResSliders(); }
+  if (isCatenary()&& p.params) { if(p.params.a!=null)catA=p.params.a; if(p.params.reverse!=null)catReverse=!!p.params.reverse; syncCatenarySliders(); }
+  if (isPulse()   && p.params) { if(p.params.omega1!=null)pulseOmega1=p.params.omega1; if(p.params.omega2!=null)pulseOmega2=p.params.omega2; if(p.params.n!=null)pulseN=p.params.n; if(p.params.reverse!=null)pulseReverse=!!p.params.reverse; syncPulseSliders(); }
+  if (isNoise()   && p.params) { if(p.params.freq!=null)noiseFreq=p.params.freq; if(p.params.amp!=null)noiseAmp=p.params.amp; if(p.params.seed!=null)noiseSeed=p.params.seed; if(p.params.reverse!=null)noiseReverse=!!p.params.reverse; syncNoiseSliders(); }
+  if (isResonance()&&p.params) { if(p.params.gamma!=null)resGamma=p.params.gamma; if(p.params.omega!=null)resOmega=p.params.omega; if(p.params.omega0!=null)resOmega0=p.params.omega0; if(p.params.reverse!=null)resReverse=!!p.params.reverse; syncResSliders(); }
   setLibrary(p.library||'easing'); pushState();
   document.querySelectorAll('.pcard').forEach(c => {
     const ci=+c.dataset.idx, active=ci===idx, pc=MODE_COLORS[(allPresets[ci]||{}).library]||'#26233a';
@@ -2487,10 +2551,10 @@ function saveCurrentPreset() {
     if (isSpring())    p.params={zeta:physZeta, omega_n:physOmegaN};
     if (isElastic())   p.params={amplitude:elAmp, period:elPeriod, direction:elDirection};
     if (isBounce())    p.params={gamma:bounceGamma, omega:bounceOmega, direction:bounceDir};
-    if (isCatenary())  p.params={a:catA};
-    if (isPulse())     p.params={omega1:pulseOmega1, omega2:pulseOmega2, n:pulseN};
-    if (isNoise())     p.params={freq:noiseFreq, amp:noiseAmp, seed:noiseSeed};
-    if (isResonance()) p.params={gamma:resGamma, omega:resOmega, omega0:resOmega0};
+    if (isCatenary())  p.params={a:catA, reverse:catReverse};
+    if (isPulse())     p.params={omega1:pulseOmega1, omega2:pulseOmega2, n:pulseN, reverse:pulseReverse};
+    if (isNoise())     p.params={freq:noiseFreq, amp:noiseAmp, seed:noiseSeed, reverse:noiseReverse};
+    if (isResonance()) p.params={gamma:resGamma, omega:resOmega, omega0:resOmega0, reverse:resReverse};
     backend.save_preset(JSON.stringify(p));
   });
 }
@@ -2991,6 +3055,7 @@ function saveSettings() {
     dvr_path:  $('s-dvr').value,
     python_path:$('s-py').value,
     bake_fps:  +$('s-fps').value||24,
+    bake_density: +($('s-bakedens').value)||1,
     always_on_top: $('s-aot').checked,
     auto_apply:    $('s-aa2').checked,
     gpu_acceleration:$('s-gpu').checked,
@@ -3027,6 +3092,9 @@ function _populateSettingsForm(s) {
   const setV=(id,v)=>{const el=$(id);if(el&&v!=null)el.value=v;};
   const setC=(id,v)=>{const el=$(id);if(el&&v!=null)el.checked=v;};
   setV('s-dvr',s.dvr_path||''); setV('s-py',s.python_path||''); setV('s-fps',s.bake_fps||24);
+  const dens=s.bake_density||1; setV('s-bakedens',dens);
+  const densVal=$('s-bakedens-val'); if(densVal) densVal.textContent=dens+'x ('+dens+' keyframe'+(dens>1?'s':'')+'/frame)';
+  _updateSliderFill('s-bakedens',1,8,dens);
   setV('s-theme',s.theme||''); cselSetValue('s-theme-wrap',s.theme||''); setC('s-aot',!!s.always_on_top); setC('s-aa2',!!s.auto_apply); setC('s-gpu',s.gpu_acceleration!==false); setC('s-auto-comp',s.auto_comp!==false);
   const cols=s.preset_cols||2; setV('s-preset-cols',cols); const zoomPct=s.ui_zoom||100; setV('s-ui-zoom',zoomPct);
   const cv=$('s-preset-cols-val');if(cv)cv.textContent=cols; const zv=$('s-ui-zoom-val');if(zv)zv.textContent=zoomPct+'%';
