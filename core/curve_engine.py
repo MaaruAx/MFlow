@@ -121,20 +121,42 @@ def eval_spring_osc(t: float, zeta: float, omega_n: float) -> float:
     )
 
 
+def _oversample(t0, t1, density=1):
+    """Return (n_samples, frame_positions) for baking.
+    density=1 (default) → exactly the same integer-frame sequence as before
+    this feature existed — zero behavior change. density>1 → extra
+    fractional-frame samples between each integer frame for smoother/more
+    accurate curves. EXPERIMENTAL: relies on Fusion's BezierSpline accepting
+    fractional-frame keyframes; verify on your system before relying on
+    density>1 for delivery work.
+    """
+    n_frames = max(1, int(round(t1 - t0)))
+    density  = max(1, int(density))
+    if density <= 1:
+        n = n_frames
+        frames = [int(round(t0)) + i for i in range(n + 1)]
+    else:
+        n = n_frames * density
+        step = (t1 - t0) / n
+        frames = [t0 + i * step for i in range(n + 1)]
+    return n, frames
+
+
 def bake_oscillator(t0: float, v0: float, t1: float, v1: float,
-                    fps: float, zeta: float = 0.3, omega_n: float = 8.0) -> list:
+                    fps: float, zeta: float = 0.3, omega_n: float = 8.0,
+                    density: int = 1) -> list:
     zeta    = max(0.01, min(0.99, zeta))
     omega_n = max(0.5, omega_n)
     # Use actual duration in seconds so omega_n (speed) changes the baked shape:
     # high omega_n = spring settles quickly within the range,
     # low omega_n  = spring barely starts within the range.
-    n = max(1, int(round(t1 - t0)))
+    n, frame_pos = _oversample(t0, t1, density)
     T = (t1 - t0) / fps          # actual duration in seconds
     result = []
     for i in range(n + 1):
         tn  = i / n
         val = eval_spring_osc(tn * T, zeta, omega_n)
-        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+        result.append((frame_pos[i], v0 + val * (v1 - v0)))
     # Force exact endpoint alignment
     result[0]  = (result[0][0],  v0)
     result[-1] = (result[-1][0], v1)
@@ -174,26 +196,30 @@ def eval_elastic_penner(t: float, amplitude: float = 1.0, period: float = 0.3) -
     return -(a * (2.0 ** (10.0 * (t - 1.0))) * math.sin(((t - 1.0) - s) * 2.0 * math.pi / p))
 
 
-def bake_elastic_penner(t0, v0, t1, v1, fps, amplitude=1.0, period=0.3):
-    n = max(1, int(round(t1 - t0)))
+def bake_elastic_penner(t0, v0, t1, v1, fps, amplitude=1.0, period=0.3, flip_to_mid=False, density=1):
+    n, frame_pos = _oversample(t0, t1, density)
     result = []
     for i in range(n + 1):
         tn  = i / n
         val = eval_elastic_penner(tn, amplitude, period)
-        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+        if flip_to_mid:
+            val *= 0.5
+        result.append((frame_pos[i], v0 + val * (v1 - v0)))
     return result
 
 
-def bake_elastic_out(t0, v0, t1, v1, fps, amplitude=1.0, period=0.3):
+def bake_elastic_out(t0, v0, t1, v1, fps, amplitude=1.0, period=0.3, flip_to_mid=False, density=1):
     """Penner easeOutElastic — settles at start, oscillates at end."""
-    n = max(1, int(round(t1 - t0)))
+    n, frame_pos = _oversample(t0, t1, density)
     result = []
     for i in range(n + 1):
         tn  = i / n
         val = elastic_out(tn, amplitude, period)
-        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+        if flip_to_mid:
+            val *= 0.5
+        result.append((frame_pos[i], v0 + val * (v1 - v0)))
     result[0]  = (result[0][0],  v0)
-    result[-1] = (result[-1][0], v1)
+    result[-1] = (result[-1][0], v1 if not flip_to_mid else v0 + 0.5 * (v1 - v0))
     return result
 
 
@@ -206,16 +232,16 @@ def eval_bounce(t: float, gamma: float = 4.0, omega: float = 6.0) -> float:
     return 1.0 - math.exp(-gamma * t) * abs(math.cos(omega * t))
 
 
-def bake_bounce(t0, v0, t1, v1, fps, gamma=4.0, omega=6.0, flipped=False):
+def bake_bounce(t0, v0, t1, v1, fps, gamma=4.0, omega=6.0, flipped=False, density=1):
     """flipped=True → floor version: starts ~1, settles at 0."""
-    n = max(1, int(round(t1 - t0)))
+    n, frame_pos = _oversample(t0, t1, density)
     result = []
     for i in range(n + 1):
         tn  = i / n
         val = eval_bounce(tn, gamma, omega)
         if flipped:
             val = 1.0 - val
-        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+        result.append((frame_pos[i], v0 + val * (v1 - v0)))
     # Force exact keyframe alignment at endpoints
     result[0]  = (result[0][0],  v0)
     result[-1] = (result[-1][0], v1)
@@ -239,12 +265,15 @@ def eval_catenary(t: float, a: float = 1.0) -> float:
     return max(0.0, min(1.0, num / den))
 
 
-def bake_catenary(t0, v0, t1, v1, fps, a=1.0):
-    n = max(1, int(round(t1 - t0)))
+def bake_catenary(t0, v0, t1, v1, fps, a=1.0, reverse=False, density=1):
+    n, frame_pos = _oversample(t0, t1, density)
+    vals = [eval_catenary(i / n, a) for i in range(n + 1)]
+    if reverse:
+        # Mirror the shape while preserving 0→1 direction: f_rev(t) = 1 - f(1-t)
+        vals = [1.0 - v for v in reversed(vals)]
     result = []
-    for i in range(n + 1):
-        val = eval_catenary(i / n, a)
-        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    for i, val in enumerate(vals):
+        result.append((frame_pos[i], v0 + val * (v1 - v0)))
     result[0]  = (result[0][0],  v0)
     result[-1] = (result[-1][0], v1)
     return result
@@ -256,15 +285,17 @@ def eval_pulse_raw(t: float, omega1: float, omega2: float, n: float) -> float:
     return math.sin(omega1 * math.pi * t) * abs(math.sin(omega2 * math.pi * t)) ** n
 
 
-def bake_pulse(t0, v0, t1, v1, fps, omega1=8.0, omega2=2.0, n=4.0):
-    frames = max(1, int(round(t1 - t0)))
-    raw = [eval_pulse_raw(i / frames, omega1, omega2, n) for i in range(frames + 1)]
+def bake_pulse(t0, v0, t1, v1, fps, omega1=8.0, omega2=2.0, n=4.0, reverse=False, density=1):
+    n_samples, frame_pos = _oversample(t0, t1, density)
+    raw = [eval_pulse_raw(i / n_samples, omega1, omega2, n) for i in range(n_samples + 1)]
     r_min, r_max = min(raw), max(raw)
     span = r_max - r_min if abs(r_max - r_min) > 1e-10 else 1.0
+    vals = [(r - r_min) / span for r in raw]
+    if reverse:
+        vals = [1.0 - v for v in reversed(vals)]
     result = []
-    for i, r in enumerate(raw):
-        val = (r - r_min) / span
-        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    for i, val in enumerate(vals):
+        result.append((frame_pos[i], v0 + val * (v1 - v0)))
     result[0]  = (result[0][0],  v0)
     result[-1] = (result[-1][0], v1)
     return result
@@ -272,14 +303,14 @@ def bake_pulse(t0, v0, t1, v1, fps, omega1=8.0, omega2=2.0, n=4.0):
 
 # ── Noise (smooth random) ─────────────────────────────────────────────────────
 
-def bake_noise(t0, v0, t1, v1, fps, freq=2.0, amp=0.5, seed=42):
+def bake_noise(t0, v0, t1, v1, fps, freq=2.0, amp=0.5, seed=42, reverse=False, density=1):
     """Smooth noise via cosine interpolation over seeded random control points."""
     import random
     rng    = random.Random(int(seed))
-    n      = max(1, int(round(t1 - t0)))
+    n, frame_pos = _oversample(t0, t1, density)
     n_ctrl = max(2, int(freq * 4) + 1)
     ctrl   = [rng.uniform(-1.0, 1.0) for _ in range(n_ctrl)]
-    result = []
+    vals = []
     for i in range(n + 1):
         t   = i / n
         pos = t * (n_ctrl - 1)
@@ -287,8 +318,12 @@ def bake_noise(t0, v0, t1, v1, fps, freq=2.0, amp=0.5, seed=42):
         frac = pos - idx
         mu2  = (1.0 - math.cos(frac * math.pi)) / 2.0
         v    = ctrl[idx] * (1.0 - mu2) + ctrl[idx + 1] * mu2
-        val  = max(0.0, min(1.0, 0.5 + v * amp))
-        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+        vals.append(max(0.0, min(1.0, 0.5 + v * amp)))
+    if reverse:
+        vals = [1.0 - v for v in reversed(vals)]
+    result = []
+    for i, val in enumerate(vals):
+        result.append((frame_pos[i], v0 + val * (v1 - v0)))
     result[0]  = (result[0][0],  v0)
     result[-1] = (result[-1][0], v1)
     return result
@@ -303,15 +338,17 @@ def eval_resonance_raw(t: float, gamma: float, omega: float, omega0: float) -> f
     return A * math.cos(omega * t) + B * math.exp(-gamma * t) * math.cos(omega0 * t)
 
 
-def bake_resonance(t0, v0, t1, v1, fps, gamma=2.0, omega=8.0, omega0=8.0):
-    n   = max(1, int(round(t1 - t0)))
+def bake_resonance(t0, v0, t1, v1, fps, gamma=2.0, omega=8.0, omega0=8.0, reverse=False, density=1):
+    n, frame_pos = _oversample(t0, t1, density)
     raw = [eval_resonance_raw(i / n, gamma, omega, omega0) for i in range(n + 1)]
     r_min, r_max = min(raw), max(raw)
     span = r_max - r_min if abs(r_max - r_min) > 1e-10 else 1.0
+    vals = [(r - r_min) / span for r in raw]
+    if reverse:
+        vals = [1.0 - v for v in reversed(vals)]
     result = []
-    for i, r in enumerate(raw):
-        val = (r - r_min) / span
-        result.append((int(round(t0)) + i, v0 + val * (v1 - v0)))
+    for i, val in enumerate(vals):
+        result.append((frame_pos[i], v0 + val * (v1 - v0)))
     result[0]  = (result[0][0],  v0)
     result[-1] = (result[-1][0], v1)
     return result
@@ -539,7 +576,7 @@ def apply_baked(spline, frames, kf_from: int = 1, kf_to: int = 0,
         all_times = _numeric_times(sd)
         if len(all_times) < 2:
             # No numeric keyframes — write directly
-            kf = {int(round(f)): v for f, v in frames}
+            kf = {(f if abs(f - round(f)) > 1e-6 else int(round(f))): v for f, v in frames}
             for args in ((kf, True), (kf,)):
                 try: set_kf(*args); return True
                 except Exception: continue
@@ -569,7 +606,10 @@ def apply_baked(spline, frames, kf_from: int = 1, kf_to: int = 0,
         for f, v in frames:
             ft = float(f)
             if t_start <= ft <= t_end:
-                kf[int(round(ft))] = v
+                # Keep fractional keys when oversampling (density>1) for extra
+                # in-between control points; integer frames stay int as before.
+                key = ft if abs(ft - round(ft)) > 1e-6 else int(round(ft))
+                kf[key] = v
 
         # Force anchors (plain floats — Fusion's SetKeyFrames crashes with nested dicts)
         t_start_int = int(round(t_start))
