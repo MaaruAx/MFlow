@@ -1,0 +1,9 @@
+[
+  {"name":"gentle in",   "library":"elastic","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amplitude":1.0,"period":0.4,"direction":"in"}},
+  {"name":"snappy in",   "library":"elastic","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amplitude":1.2,"period":0.2,"direction":"in"}},
+  {"name":"loose in",    "library":"elastic","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amplitude":1.8,"period":0.5,"direction":"in"}},
+  {"name":"gentle out",  "library":"elastic","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amplitude":1.0,"period":0.4,"direction":"out"}},
+  {"name":"snappy out",  "library":"elastic","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amplitude":1.2,"period":0.2,"direction":"out"}},
+  {"name":"loose out",   "library":"elastic","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amplitude":1.8,"period":0.5,"direction":"out"}},
+  {"name":"rubber band", "library":"elastic","h1":[0.42,0.0],"h2":[0.58,1.0],"params":{"amplitude":2.2,"period":0.35,"direction":"out"}}
+]
