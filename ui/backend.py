@@ -69,22 +69,27 @@ class Backend(QObject):
         self._mode     = "easing"
         self._phys_zeta    = 0.3
         self._phys_omega_n = 8.0
+        self._phys_flipped = False
         self._el_amplitude = 1.0
         self._el_period    = 0.3
         self._el_direction = "in"       # 'in' | 'out'
         self._bounce_gamma = 4.0
         self._bounce_omega = 6.0
         self._bounce_dir   = "ceiling"  # 'ceiling' | 'floor'
-        self._catenary_a   = 1.0
+        self._catenary_a   = 0.8
+        self._catenary_reverse = False
         self._pulse_omega1 = 8.0
         self._pulse_omega2 = 2.0
         self._pulse_n      = 4.0
+        self._pulse_reverse = False
         self._noise_freq   = 2.0
         self._noise_amp    = 0.5
         self._noise_seed   = 42
+        self._noise_reverse = False
         self._res_gamma    = 2.0
         self._res_omega    = 8.0
         self._res_omega0   = 8.0
+        self._res_reverse  = False
         self._auto_apply = False
         self._auto_timer = QTimer(self)
         self._auto_timer.setSingleShot(True)
@@ -100,6 +105,7 @@ class Backend(QObject):
         self._auto_comp = True        # auto-follow active Fusion comp
         self._switching_comp = False   # guard against re-entrant comp switches
         self._fps      = float(self._settings.get("bake_fps", 24))
+        self._bake_density = max(1, int(self._settings.get("bake_density", 1)))
         self._python_scan_cache = None  # cached result of scan_pythons()
         self._python_scan_time  = 0.0   # epoch when cache was last filled
         # Thread-safe delivery: worker threads emit this to invoke _apply_new_comp
@@ -908,6 +914,7 @@ class Backend(QObject):
         self._of_points    = d.get("of_points", [])
         self._phys_zeta    = float(d.get("phys_zeta",    self._phys_zeta))
         self._phys_omega_n = float(d.get("phys_omega_n", self._phys_omega_n))
+        self._phys_flipped = bool(d.get("phys_flipped",  self._phys_flipped))
         self._el_amplitude = float(d.get("el_amplitude", self._el_amplitude))
         self._el_period    = float(d.get("el_period",    self._el_period))
         self._el_direction = d.get("el_direction",        self._el_direction)
@@ -915,15 +922,19 @@ class Backend(QObject):
         self._bounce_omega = float(d.get("bounce_omega", self._bounce_omega))
         self._bounce_dir   = d.get("bounce_dir",          self._bounce_dir)
         self._catenary_a   = float(d.get("catenary_a",   self._catenary_a))
+        self._catenary_reverse = bool(d.get("catenary_reverse", self._catenary_reverse))
         self._pulse_omega1 = float(d.get("pulse_omega1", self._pulse_omega1))
         self._pulse_omega2 = float(d.get("pulse_omega2", self._pulse_omega2))
         self._pulse_n      = float(d.get("pulse_n",      self._pulse_n))
+        self._pulse_reverse = bool(d.get("pulse_reverse", self._pulse_reverse))
         self._noise_freq   = float(d.get("noise_freq",   self._noise_freq))
         self._noise_amp    = float(d.get("noise_amp",    self._noise_amp))
         self._noise_seed   = int(d.get("noise_seed",     self._noise_seed))
+        self._noise_reverse = bool(d.get("noise_reverse", self._noise_reverse))
         self._res_gamma    = float(d.get("res_gamma",    self._res_gamma))
         self._res_omega    = float(d.get("res_omega",    self._res_omega))
         self._res_omega0   = float(d.get("res_omega0",   self._res_omega0))
+        self._res_reverse  = bool(d.get("res_reverse",   self._res_reverse))
         if self._auto_apply and self._comp:
             self._auto_timer.start(280)   # debounce 280 ms
 
@@ -1243,43 +1254,57 @@ class Backend(QObject):
             if self._el_direction == "out":
                 frames = bake_elastic_out(t0, v0, t1, v1, fps,
                                           amplitude=self._el_amplitude,
-                                          period=self._el_period)
+                                          period=self._el_period,
+                                          flip_to_mid=self._phys_flipped,
+                                          density=self._bake_density)
             else:
                 frames = bake_elastic_penner(t0, v0, t1, v1, fps,
                                              amplitude=self._el_amplitude,
-                                             period=self._el_period)
+                                             period=self._el_period,
+                                             flip_to_mid=self._phys_flipped,
+                                             density=self._bake_density)
             return apply_baked(spline, frames, t_start=t0, t_end=t1)
         if mode in ("spring", "bounce_osc"):
             frames = bake_oscillator(t0, v0, t1, v1, fps,
                                      zeta=self._phys_zeta,
-                                     omega_n=self._phys_omega_n)
+                                     omega_n=self._phys_omega_n,
+                                     density=self._bake_density)
             return apply_baked(spline, frames, t_start=t0, t_end=t1)
         if mode == "bounce":
             frames = bake_bounce(t0, v0, t1, v1, fps,
                                  gamma=self._bounce_gamma,
                                  omega=self._bounce_omega,
-                                 flipped=(self._bounce_dir == "floor"))
+                                 flipped=(self._bounce_dir == "floor"),
+                                 density=self._bake_density)
             return apply_baked(spline, frames, t_start=t0, t_end=t1)
         if mode == "catenary":
-            frames = bake_catenary(t0, v0, t1, v1, fps, a=self._catenary_a)
+            frames = bake_catenary(t0, v0, t1, v1, fps, a=self._catenary_a,
+                                   reverse=self._catenary_reverse,
+                                   density=self._bake_density)
             return apply_baked(spline, frames, t_start=t0, t_end=t1)
         if mode == "pulse":
             frames = bake_pulse(t0, v0, t1, v1, fps,
                                 omega1=self._pulse_omega1,
                                 omega2=self._pulse_omega2,
-                                n=self._pulse_n)
+                                n=self._pulse_n,
+                                reverse=self._pulse_reverse,
+                                density=self._bake_density)
             return apply_baked(spline, frames, t_start=t0, t_end=t1)
         if mode == "noise":
             frames = bake_noise(t0, v0, t1, v1, fps,
                                 freq=self._noise_freq,
                                 amp=self._noise_amp,
-                                seed=self._noise_seed)
+                                seed=self._noise_seed,
+                                reverse=self._noise_reverse,
+                                density=self._bake_density)
             return apply_baked(spline, frames, t_start=t0, t_end=t1)
         if mode == "resonance":
             frames = bake_resonance(t0, v0, t1, v1, fps,
                                     gamma=self._res_gamma,
                                     omega=self._res_omega,
-                                    omega0=self._res_omega0)
+                                    omega0=self._res_omega0,
+                                    reverse=self._res_reverse,
+                                    density=self._bake_density)
             return apply_baked(spline, frames, t_start=t0, t_end=t1)
         return apply_bezier(spline, h1, h2, kf_from=kf_from, kf_to=kf_to)
 
@@ -1410,6 +1435,7 @@ class Backend(QObject):
     def save_settings(self, s_json):
         self._settings = json.loads(s_json)
         self._fps = float(self._settings.get("bake_fps", 24))
+        self._bake_density = max(1, int(self._settings.get("bake_density", 1)))
         _wj(settings_file(), self._settings)
         self.settings_signal.emit(s_json)
 
