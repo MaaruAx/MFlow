@@ -1767,6 +1767,12 @@ function resOmegaPos() {
   const cx = MG + CI*(resOmega-RES_OMEGA_MIN)/(RES_OMEGA_MAX-RES_OMEGA_MIN);
   return { y: toPx(0,0.5).y, x: Math.max(MG+10, Math.min(MG+CI-10, cx)) };
 }
+// Catenary handle position — single param (tension), vertical drag only
+const CAT_A_MIN=0.01, CAT_A_MAX=4.0;
+function catTensionPos() {
+  const cy = MG + CI*(1-(catA-CAT_A_MIN)/(CAT_A_MAX-CAT_A_MIN));
+  return { x: MG+CI*0.5, y: Math.max(MG+10, Math.min(MG+CI-10, cy)) };
+}
 function elAmpPos() {
   const cy = MG+CI*(elAmp-1)/2;
   return { x: MG+CI*0.12, y: Math.max(MG+10, Math.min(MG+CI-10, cy)) };
@@ -2016,6 +2022,9 @@ function drawCatenaryCurve(col) {
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
   }
   ctx.stroke();
+  const th=catTensionPos();
+  drawHandleGuide(th.x,th.y,'y',col);
+  drawCapsule(th.x,th.y,'y',col,'tension');
 }
 function drawPulseCurve(col) {
   const N=200, raw=[];
@@ -2112,7 +2121,6 @@ function drawOKFHandles(col) {
 // ═══════════════════════════════════════════════════════════════
 function hitTest(px, py) {
   const p={x:px,y:py};
-  if (isNewBaked()) return null;
   if (isSpring()) {
     const bh=spBouncePos(), dh=spDurPos();
     if (d2(p,bh)<HR2*1.8) return 'sp_bounce';
@@ -2129,6 +2137,11 @@ function hitTest(px, py) {
     const gh=resGammaPos(), oh=resOmegaPos();
     if (d2(p,gh)<HR2*1.8) return 'res_gamma';
     if (d2(p,oh)<HR2*1.8) return 'res_omega';
+    return null;
+  }
+  if (isCatenary()) {
+    const th=catTensionPos();
+    if (d2(p,th)<HR2*1.8) return 'cat_tension';
     return null;
   }
   if (isElastic()) {
@@ -2166,6 +2179,8 @@ function _processDrag(px, py) {
     resGamma=Math.max(RES_GAMMA_MIN,Math.min(RES_GAMMA_MAX, RES_GAMMA_MIN+((py-MG)/CI)*(RES_GAMMA_MAX-RES_GAMMA_MIN))); syncResSliders();
   } else if (dragging==='res_omega') {
     resOmega=Math.max(RES_OMEGA_MIN,Math.min(RES_OMEGA_MAX, RES_OMEGA_MIN+((px-MG)/CI)*(RES_OMEGA_MAX-RES_OMEGA_MIN))); syncResSliders();
+  } else if (dragging==='cat_tension') {
+    catA=Math.max(CAT_A_MIN,Math.min(CAT_A_MAX, CAT_A_MIN+(1-(py-MG)/CI)*(CAT_A_MAX-CAT_A_MIN))); syncCatenarySliders();
   } else {
     let [t,v]=fromPx(px,py);
     if (magnetEnabled && mode==='easing') { t=snapToGrid(t); v=snapToGrid(v); }
