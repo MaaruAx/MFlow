@@ -64,6 +64,8 @@ class Backend(QObject):
             except Exception as e:
                 log.debug("[Init] Could not get Fusion at startup: %s", e)
         self._watcher  = None
+        self._reconnecting = False        # guards against overlapping reconnect attempts
+        self._auto_reconnect_timer = None  # background retry timer — None when not running
         self._profiles = load_profiles()
         self._settings = _rj(settings_file())
         self._mode     = "easing"
@@ -131,6 +133,9 @@ class Backend(QObject):
         self._emit_profiles()
         # Push saved settings so JS restores theme/auto-apply/etc on startup
         self.settings_signal.emit(json.dumps(self._settings))
+        # If Resolve wasn't running when MFlow launched, keep retrying quietly
+        # instead of requiring a manual click on "Connect".
+        self._ensure_auto_reconnect()
 
     @Slot(float)
     def set_zoom_factor(self, factor: float):
@@ -249,6 +254,10 @@ class Backend(QObject):
 
     @Slot(str)
     def reconnect(self, custom_path=""):
+        if self._reconnecting:
+            log.debug("[Connect] Reconnect already in progress — skipping duplicate call")
+            return
+        self._reconnecting = True
         # Emit immediately so the UI shows "Connecting…" right away
         self.connection_changed.emit(False, "Connecting\u2026")
         try:
@@ -313,6 +322,10 @@ class Backend(QObject):
                 except Exception as exc:
                     log.error("[Connect] Exception: %s", exc, exc_info=True)
                     _self.connection_changed.emit(False, f"Connect error: {exc}")
+                finally:
+                    # Always clear the guard, regardless of outcome, so a future
+                    # attempt (manual click or auto-retry) is never permanently blocked.
+                    _self._reconnecting = False
 
         QThreadPool.globalInstance().start(_ConnectWorker())
 
@@ -321,12 +334,59 @@ class Backend(QObject):
         if comp:
             log.info("[Connect] Applying comp to watcher")
             self.set_comp(comp)
+            self._stop_auto_reconnect()
         else:
             log.warning("[Connect] No comp available — Fusion page may not be active")
             self.connection_changed.emit(
                 False,
                 "Resolve found but no active Fusion comp \u2014 "
                 "open a composition or switch to the Fusion page")
+
+    # ── Background auto-reconnect ────────────────────────────────────────────
+    # Covers two cases the one-shot startup connect (main.py) can't handle:
+    #  1. DaVinci Resolve wasn't running yet when MFlow launched.
+    #  2. Resolve was running, then got closed mid-session (watcher reports
+    #     disconnected). In both cases the UI previously required a manual
+    #     click on "Connect" — this retries quietly in the background instead.
+
+    def _ensure_auto_reconnect(self):
+        """Start the background retry loop if we're not fully connected yet
+        (resolve + comp both present) and it isn't already running."""
+        if self._resolve is not None and self._comp is not None:
+            return
+        if self._auto_reconnect_timer is not None:
+            return
+        try:
+            self._auto_reconnect_timer = QTimer(self)
+            self._auto_reconnect_timer.setInterval(6000)
+            self._auto_reconnect_timer.timeout.connect(self._auto_reconnect_tick)
+            self._auto_reconnect_timer.start()
+            log.info("[AutoReconnect] Background retry started (every 6s until connected)")
+        except Exception as e:
+            # Never let a timer setup failure take down the app — worst case
+            # the user falls back to the manual Connect button, same as before.
+            log.warning("[AutoReconnect] Could not start background retry: %s", e)
+            self._auto_reconnect_timer = None
+
+    def _auto_reconnect_tick(self):
+        try:
+            if self._resolve is not None and self._comp is not None:
+                self._stop_auto_reconnect()
+                return
+            log.debug("[AutoReconnect] Retry tick — attempting reconnect")
+            self.reconnect()
+        except Exception as e:
+            # A failed tick should never kill the timer itself — log and keep retrying.
+            log.debug("[AutoReconnect] Tick error (will retry next interval): %s", e)
+
+    def _stop_auto_reconnect(self):
+        if self._auto_reconnect_timer is not None:
+            try:
+                self._auto_reconnect_timer.stop()
+            except Exception:
+                pass
+            self._auto_reconnect_timer = None
+            log.info("[AutoReconnect] Connected — background retry stopped")
 
     def _announce_connection(self):
         if self._comp:
@@ -367,6 +427,12 @@ class Backend(QObject):
                 self.connection_changed.emit(True, "Connected")
         else:
             self.connection_changed.emit(False, "Not connected")
+            # Redundant safety net: _ensure_auto_reconnect() is a harmless no-op
+            # if already connected or already retrying, so calling it here too
+            # (in addition to js_ready/_on_disconnected) costs nothing and
+            # covers any path that reports "not connected" without having
+            # gone through those two hooks.
+            self._ensure_auto_reconnect()
 
     @Slot(int, int)
     def resize_window(self, w: int, h: int):
@@ -538,7 +604,13 @@ class Backend(QObject):
     def _on_disconnected(self):
         log.warning("[Watcher] Connection lost after repeated poll failures")
         self._fu = None
-        self.connection_changed.emit(False, "Disconnected — click Connect")
+        # Clear stale references — they point at a Resolve process that's no
+        # longer there, so any later "are we connected?" check must see None,
+        # not a dead-but-still-truthy object.
+        self._resolve = None
+        self._comp = None
+        self.connection_changed.emit(False, "Disconnected — reconnecting\u2026")
+        self._ensure_auto_reconnect()
 
     def _on_comp_scan(self, scan_result: dict):
         """Forward comp-wide scan result to JS as JSON."""
