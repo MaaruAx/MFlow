@@ -344,51 +344,82 @@ def main():
 
     # -- Step 4: Install Resolve launchers ---------------------------------
     sep()
-    print("\n[4/4] Installing Resolve launchers...\n")
+    print("\n[4/4] DaVinci Resolve integration\n")
+    print("  MFlow comes with two launchers:")
+    print("  • MFlow Studio  — MFlow.lua → Scripts/Utility   (any Resolve page, requires Studio)")
+    print("  • MFlow Free    — MFlow_Free.py → Scripts/Comp  (Fusion page only, free version)")
+    print()
+
+    yn_studio = input("  Install Studio launcher (MFlow.lua)? [Y/n]: ").strip().lower()
+    install_studio = yn_studio != 'n'
+    yn_free   = input("  Install Free launcher (MFlow_Free.py)? [Y/n]: ").strip().lower()
+    install_free   = yn_free   != 'n'
+    print()
 
     # 4a. Studio version — Scripts/Utility/ (any page, uses Lua + external process)
-    scripts_utility = find_scripts_dir()
-    if scripts_utility:
-        log(f"Studio launcher (Scripts/Utility): {scripts_utility}")
-        for fname in ("MFlow.lua", "python_path.txt"):
-            src = os.path.join(install_dir, fname)
-            if not os.path.isfile(src): src = os.path.join(HERE, fname)
-            if os.path.isfile(src):
-                _, err = safe(shutil.copy2, src, os.path.join(scripts_utility, fname))
-                if err: log(f"  Cannot copy {fname}: {err}", "WARN")
-                else:   log(f"  OK  {fname}")
-        write_mflow_path(install_dir, scripts_utility)
+    if install_studio:
+        scripts_utility = find_scripts_dir()
+        if not scripts_utility:
+            # Try to create the first candidate path
+            candidates = SCRIPTS_UTILITY.get(PLAT, [])
+            if candidates:
+                _, err = safe(os.makedirs, candidates[0], exist_ok=True)
+                scripts_utility = candidates[0] if not err else None
+        if scripts_utility:
+            log(f"Studio launcher → {scripts_utility}")
+            for fname in ("MFlow.lua", "python_path.txt"):
+                src = os.path.join(install_dir, fname)
+                if not os.path.isfile(src):
+                    src = os.path.join(HERE, fname)
+                if os.path.isfile(src):
+                    _, err = safe(shutil.copy2, src, os.path.join(scripts_utility, fname))
+                    if err: log(f"  Cannot copy {fname}: {err}", "WARN")
+                    else:   log(f"  OK  {fname}")
+            write_mflow_path(install_dir, scripts_utility)
+        else:
+            log("Could not find or create Scripts/Utility — copy MFlow.lua manually", "WARN")
+            for d in SCRIPTS_UTILITY.get(PLAT, []):
+                log(f"  {d}", "")
     else:
-        log("Scripts/Utility not found - copy MFlow.lua manually", "WARN")
-        for d in SCRIPTS_UTILITY.get(PLAT, []):
-            log(f"  {d}", "")
+        log("Studio launcher skipped")
 
     # 4b. Free version — Scripts/Comp/ (Fusion page only, uses injected 'app')
-    scripts_comp = find_scripts_comp()
-    if scripts_comp:
-        log(f"\nFree launcher (Scripts/Comp):    {scripts_comp}")
-        for fname in ("MFlow_Free.py",):
-            src = os.path.join(install_dir, fname)
-            if not os.path.isfile(src): src = os.path.join(HERE, fname)
-            if os.path.isfile(src):
-                _, err = safe(shutil.copy2, src, os.path.join(scripts_comp, fname))
-                if err: log(f"  Cannot copy {fname}: {err}", "WARN")
-                else:   log(f"  OK  {fname}")
-            else:
-                log(f"  Not found: {fname}", "WARN")
-        write_mflow_path(install_dir, scripts_comp)
+    if install_free:
+        scripts_comp = find_scripts_comp()
+        if not scripts_comp:
+            candidates = SCRIPTS_COMP.get(PLAT, [])
+            if candidates:
+                _, err = safe(os.makedirs, candidates[0], exist_ok=True)
+                scripts_comp = candidates[0] if not err else None
+        if scripts_comp:
+            log(f"Free launcher   → {scripts_comp}")
+            for fname in ("MFlow_Free.py",):
+                src = os.path.join(install_dir, fname)
+                if not os.path.isfile(src):
+                    src = os.path.join(HERE, fname)
+                if os.path.isfile(src):
+                    _, err = safe(shutil.copy2, src, os.path.join(scripts_comp, fname))
+                    if err: log(f"  Cannot copy {fname}: {err}", "WARN")
+                    else:   log(f"  OK  {fname}")
+                else:
+                    log(f"  Not found: {fname}", "WARN")
+            write_mflow_path(install_dir, scripts_comp)
+        else:
+            log("Could not find or create Scripts/Comp — copy MFlow_Free.py manually", "WARN")
+            for d in SCRIPTS_COMP.get(PLAT, []):
+                log(f"  {d}", "")
     else:
-        log("\nScripts/Comp not found - copy MFlow_Free.py manually", "WARN")
-        for d in SCRIPTS_COMP.get(PLAT, []):
-            log(f"  {d}", "")
+        log("Free launcher skipped")
 
     # -- Summary ------------------------------------------------------------
     sep("=")
     print(f"\n  Python:   {python_exe}")
     print(f"  MFlow:    {install_dir}")
     print()
-    print("  Studio (any page):  Workspace > Scripts > MFlow")
-    print("  Free   (Fusion pg): Scripts > Comp > MFlow_Free")
+    if install_studio:
+        print("  Studio (any page):  Workspace > Scripts > MFlow")
+    if install_free:
+        print("  Free   (Fusion pg): Scripts > Comp > MFlow_Free")
     print()
     print(f"  Log:      {os.path.join(os.path.expanduser('~'), '.mflow', 'mflow.log')}")
     print()

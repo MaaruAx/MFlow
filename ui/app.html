@@ -11,7 +11,7 @@
   --base:#121217;--surface:#191724;--overlay:#1f1d2e;
   --muted:#6e6a86;--text:#e0def4;
   --subtle:color-mix(in srgb, var(--muted) 65%, var(--text));
-  --love:#eb6f92;--gold:#f6c177;--rose:#ebbcba;
+  --love:#eb6f92;--gold:#f6c177;--rose:#c4756a;
   --foam:#9ccfd8;--iris:#c4a7e7;
   --border:#26233a;--hl-low:#28253d;--hl-med:#3a3750;--hl-high:#524f67;
   --accent:#9ccfd8;--r:3px;
@@ -84,6 +84,11 @@ body.compact #preset-panel,body.compact #right-panel,body.compact #params-sideba
 body.compact #comp-selector{display:none!important}
 body.compact #curve-wrap{flex:1}
 body.compact #kf-range-widget{display:none!important}
+/* Panels button toggles preset-panel/right-panel, which are already force-hidden above —
+   keeping it visible would be a dead control. Extras dropdown duplicates the EASING/SPRING/
+   ELASTIC/BOUNCE toolbar buttons it sits next to, so it goes too for a tighter compact bar. */
+body.compact #btn-panels{display:none!important}
+body.compact .extras-dd{display:none!important}
 
 /* ── Params sidebar ── */
 #params-sidebar{position:absolute;left:0;top:0;bottom:0;width:0;overflow:hidden;z-index:50;
@@ -521,7 +526,7 @@ input[type=number]{-moz-appearance:textfield}
 <div id="titlebar">
   <span id="appname"><span id="nm">M</span><span id="nf">Flow</span></span>
   <span class="badge" id="badge-fluid" data-i18n="badge.fluid">FLUID</span>
-  <span id="version">v2.4.0</span>
+  <span id="version">v2.5.0</span>
   <div class="spacer"></div>
   <div id="conn-row">
     <div id="conn-dot"></div>
@@ -963,7 +968,7 @@ input[type=number]{-moz-appearance:textfield}
         <div class="col-row"><span>Spring</span>   <div class="clr-swatch" id="sw-spring"    style="background:#f6c177" onclick="_openModePicker('spring',event)"    title="Click to edit"></div></div>
         <div class="col-row"><span>Elastic</span>  <div class="clr-swatch" id="sw-elastic"   style="background:#eb6f92" onclick="_openModePicker('elastic',event)"   title="Click to edit"></div></div>
         <div class="col-row"><span>OKF</span>      <div class="clr-swatch" id="sw-overframe" style="background:#c4a7e7" onclick="_openModePicker('overframe',event)" title="Click to edit"></div></div>
-        <div class="col-row"><span>Bounce</span>    <div class="clr-swatch" id="sw-bounce"    style="background:#ebbcba" onclick="_openModePicker('bounce',event)"    title="Click to edit"></div></div>
+        <div class="col-row"><span>Bounce</span>    <div class="clr-swatch" id="sw-bounce"    style="background:#c4756a" onclick="_openModePicker('bounce',event)"    title="Click to edit"></div></div>
         <div class="col-row"><span>Catenary</span>  <div class="clr-swatch" id="sw-catenary"  style="background:#31748f" onclick="_openModePicker('catenary',event)"  title="Click to edit"></div></div>
         <div class="col-row"><span>Pulse</span>     <div class="clr-swatch" id="sw-pulse"     style="background:#e0def4" onclick="_openModePicker('pulse',event)"     title="Click to edit"></div></div>
         <div class="col-row"><span>Noise</span>     <div class="clr-swatch" id="sw-noise"     style="background:#908caa" onclick="_openModePicker('noise',event)"     title="Click to edit"></div></div>
@@ -973,7 +978,7 @@ input[type=number]{-moz-appearance:textfield}
       <input type="hidden" id="sc-spring"    value="#f6c177">
       <input type="hidden" id="sc-elastic"   value="#eb6f92">
       <input type="hidden" id="sc-overframe" value="#c4a7e7">
-      <input type="hidden" id="sc-bounce"    value="#ebbcba">
+      <input type="hidden" id="sc-bounce"    value="#c4756a">
       <input type="hidden" id="sc-catenary"  value="#31748f">
       <input type="hidden" id="sc-pulse"     value="#e0def4">
       <input type="hidden" id="sc-noise"     value="#908caa">
@@ -1173,7 +1178,7 @@ let CS=380, MG=30, CI=CS-2*MG, CELLS=10;
 const SP_Y_MAX=1.5, SP_OM_MIN=0.5, SP_OM_MAX=30.0, SP_T_DISPLAY=5.0;
 const EL_Y_MIN=-1.2, EL_Y_MAX=1.3, EL_Y_RNG=EL_Y_MAX-EL_Y_MIN;
 const LN=256, ANIM_DUR=1400;
-let MODE_COLORS = { easing:'#9ccfd8', spring:'#f6c177', elastic:'#eb6f92', overframe:'#c4a7e7', bounce:'#ebbcba', catenary:'#31748f', pulse:'#e0def4', noise:'#908caa', resonance:'#f4a261' };
+let MODE_COLORS = { easing:'#9ccfd8', spring:'#f6c177', elastic:'#eb6f92', overframe:'#c4a7e7', bounce:'#c4756a', catenary:'#31748f', pulse:'#e0def4', noise:'#908caa', resonance:'#f4a261' };
 let _activeTheme = '';  // tracks loaded theme name — prevents MODE_PALETTE from overriding theme colors
 const MODE_PALETTE = {
   easing:    {'--hl-med':'#3a3750','--hl-low':'#28253d'},
@@ -1199,7 +1204,7 @@ function _getNodePalette() {
     MODE_COLORS.spring    || '#f6c177',
     MODE_COLORS.elastic   || '#eb6f92',
     MODE_COLORS.overframe || '#c4a7e7',
-    MODE_COLORS.bounce    || '#ebbcba',
+    MODE_COLORS.bounce    || '#c4756a',
     MODE_COLORS.catenary  || '#31748f',
     MODE_COLORS.pulse     || '#e0def4',
     MODE_COLORS.noise     || '#908caa',
@@ -1606,6 +1611,14 @@ function toggleCompact() {
   const th = $('s-theme') ? $('s-theme').value : '';
   document.body.className = (compact?'compact ':'')+th;
   if (backend) backend.resize_window(compact?460:940, compact?480:580);
+  if (compact) {
+    // Panels button and Extras dropdown are hidden by CSS in compact mode —
+    // close them too so an open menu doesn't reappear stuck-open if the
+    // person leaves compact mode later.
+    closePanelMenu();
+    closeExtrasModeDD();
+    closeExtrasLibDD();
+  }
 }
 function toggleMaximize() { if(backend) backend.toggle_maximize(); }
 function setPreviewShape(s) { _pvShape = s; }
@@ -3114,7 +3127,7 @@ function _populateSettingsForm(s) {
   const cols=s.preset_cols||2; setV('s-preset-cols',cols); const zoomPct=s.ui_zoom||100; setV('s-ui-zoom',zoomPct);
   const cv=$('s-preset-cols-val');if(cv)cv.textContent=cols; const zv=$('s-ui-zoom-val');if(zv)zv.textContent=zoomPct+'%';
   _updateSliderFill('s-preset-cols',1,5,cols); _updateSliderFill('s-ui-zoom',70,150,zoomPct);
-  if (s.mode_colors) { setV('sc-easing',s.mode_colors.easing||'#9ccfd8'); setV('sc-spring',s.mode_colors.spring||'#f6c177'); setV('sc-elastic',s.mode_colors.elastic||'#eb6f92'); setV('sc-overframe',s.mode_colors.overframe||'#c4a7e7'); setV('sc-bounce',s.mode_colors.bounce||'#ebbcba'); setV('sc-catenary',s.mode_colors.catenary||'#31748f'); setV('sc-pulse',s.mode_colors.pulse||'#e0def4'); setV('sc-noise',s.mode_colors.noise||'#908caa'); setV('sc-resonance',s.mode_colors.resonance||'#f4a261'); }
+  if (s.mode_colors) { setV('sc-easing',s.mode_colors.easing||'#9ccfd8'); setV('sc-spring',s.mode_colors.spring||'#f6c177'); setV('sc-elastic',s.mode_colors.elastic||'#eb6f92'); setV('sc-overframe',s.mode_colors.overframe||'#c4a7e7'); setV('sc-bounce',s.mode_colors.bounce||'#c4756a'); setV('sc-catenary',s.mode_colors.catenary||'#31748f'); setV('sc-pulse',s.mode_colors.pulse||'#e0def4'); setV('sc-noise',s.mode_colors.noise||'#908caa'); setV('sc-resonance',s.mode_colors.resonance||'#f4a261'); }
   if (s.language) { const sl=$('s-lang'); if(sl){sl.value=s.language;sl.dataset.current=s.language;} cselSetValue('s-lang-wrap',s.language); }
 }
 function applySettingsUI(s) {

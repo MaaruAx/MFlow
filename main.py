@@ -190,7 +190,7 @@ def main():
 
     app = QApplication(sys.argv)
     app.setApplicationName("MFlow")
-    app.setApplicationVersion("2.4.0")
+    app.setApplicationVersion("2.5.0")
 
     # ── Ícono en barra de tareas (Windows) ───────────────────────────────────
     # Sin AppUserModelID, Windows agrupa el exe bajo el ícono del launcher de
@@ -198,7 +198,7 @@ def main():
     if sys.platform == "win32":
         import ctypes
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            "MMarket.MFlow.2.4.0"
+            "MFlow.MFlow.2.5.0"
         )
     app.setWindowIcon(QIcon(_resource("MFlow.ico")))
 
