@@ -89,6 +89,11 @@ body.compact #kf-range-widget{display:none!important}
    ELASTIC/BOUNCE toolbar buttons it sits next to, so it goes too for a tighter compact bar. */
 body.compact #btn-panels{display:none!important}
 body.compact .extras-dd{display:none!important}
+/* Compact: keep the switch itself but drop its text label, and drop the
+   FLUID badge + version tag next to the logo — both are pure decoration
+   that compact mode is meant to trim. */
+body.compact #aa-lbl{display:none!important}
+body.compact #badge-fluid,body.compact #version{display:none!important}
 
 /* ── Params sidebar ── */
 #params-sidebar{position:absolute;left:0;top:0;bottom:0;width:0;overflow:hidden;z-index:50;
