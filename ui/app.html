@@ -870,7 +870,7 @@ input[type=number]{-moz-appearance:textfield}
 <!-- ═══════════════════ BOTTOM BAR ═══════════════════ -->
 <div id="bottom-bar">
   <span id="status-msg">Ready</span>
-  <div id="kf-range-widget">
+  <div id="kf-range-widget" style="display:none">
     <div id="kfr-curves-col">
       <div id="kfr-curves-num">—</div>
       <div id="kfr-curves-lbl">Curves</div>
@@ -1083,6 +1083,7 @@ input[type=number]{-moz-appearance:textfield}
         <label class="s-check"><input type="checkbox" id="s-auto-comp" checked onchange="setAutoComp(this.checked)"> Auto-follow active composition <span class="s-muted-val">(recommended)</span></label>
         <label class="s-check"><input type="checkbox" id="s-gpu" checked> GPU acceleration <span class="s-muted-val">(disable if UI freezes on startup)</span></label>
         <label class="s-check"><input type="checkbox" id="s-ghotkey" onchange="setGlobalHotkey(this.checked)"> Global Ctrl+R triggers Scan All <span class="s-muted-val">(works even when MFlow isn't focused — Windows only)</span></label>
+        <label class="s-check"><input type="checkbox" id="s-use-playhead" onchange="setUseManualRange(this.checked)"> Use manual FROM/TO range <span class="s-muted-val">(otherwise Apply automatically targets the playhead's keyframe segment — when checked, the FROM/TO controls reappear in the bottom bar)</span></label>
       </div>
     </div>
     <div class="s-section s-section-last">
@@ -2854,6 +2855,17 @@ function setGlobalHotkey(v) {
     try { backend.set_global_hotkey_enabled(v); } catch(e) {}
   }
 }
+function setUseManualRange(manualChecked) {
+  // Checkbox reads "Use manual FROM/TO range" — checked means manual mode,
+  // the inverse of the backend's use_playhead flag. When checked, the
+  // FROM/TO widget reappears in the bottom bar (its normal working spot);
+  // when unchecked, it hides and Apply targets the playhead instead.
+  if (backend && backend.set_use_playhead) {
+    try { backend.set_use_playhead(!manualChecked); } catch(e) {}
+  }
+  const widget = $('kf-range-widget');
+  if (widget) widget.style.display = manualChecked ? 'flex' : 'none';
+}
 
 function toggleCompMenu() {
   const menu = $('comp-menu');
@@ -3129,6 +3141,7 @@ function saveSettings() {
     gpu_acceleration:$('s-gpu').checked,
     auto_comp:$('s-auto-comp')?$('s-auto-comp').checked:true,
     global_scan_hotkey:$('s-ghotkey')?$('s-ghotkey').checked:false,
+    use_playhead:$('s-use-playhead')?!$('s-use-playhead').checked:true,
     theme:     $('s-theme').value,
     language:  $('s-lang') ? $('s-lang').value : 'en',
     preset_cols:+($('s-preset-cols').value)||2,
@@ -3165,6 +3178,14 @@ function _populateSettingsForm(s) {
   const densVal=$('s-bakedens-val'); if(densVal) densVal.textContent=dens+'x ('+dens+' keyframe'+(dens>1?'s':'')+'/frame)';
   _updateSliderFill('s-bakedens',1,8,dens);
   setV('s-theme',s.theme||''); cselSetValue('s-theme-wrap',s.theme||''); setC('s-aot',!!s.always_on_top); setC('s-aa2',!!s.auto_apply); setC('s-gpu',s.gpu_acceleration!==false); setC('s-auto-comp',s.auto_comp!==false); setC('s-ghotkey',!!s.global_scan_hotkey);
+  { // use_playhead defaults to true (matches the backend's default) when the
+    // setting was never saved, so "manual mode" defaults to UNCHECKED.
+    const manualMode = (s.use_playhead === undefined) ? false : !s.use_playhead;
+    setC('s-use-playhead', manualMode);
+    const _row=$('kfr-settings-row'), _w=$('kf-range-widget');
+    if(_row) _row.style.opacity = manualMode ? '1' : '0.45';
+    if(_w) _w.style.pointerEvents = manualMode ? 'auto' : 'none';
+  }
   const cols=s.preset_cols||2; setV('s-preset-cols',cols); const zoomPct=s.ui_zoom||100; setV('s-ui-zoom',zoomPct);
   const cv=$('s-preset-cols-val');if(cv)cv.textContent=cols; const zv=$('s-ui-zoom-val');if(zv)zv.textContent=zoomPct+'%';
   _updateSliderFill('s-preset-cols',1,5,cols); _updateSliderFill('s-ui-zoom',70,150,zoomPct);
