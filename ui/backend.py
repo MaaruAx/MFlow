@@ -16,7 +16,8 @@ from core.curve_engine    import (apply_bezier, apply_baked, apply_steps,
                                    apply_overframe, bake_oscillator,
                                    bake_elastic_penner, bake_elastic_out,
                                    bake_bounce, bake_catenary, bake_pulse,
-                                   bake_noise, bake_resonance, OverframePoint)
+                                   bake_noise, bake_resonance, OverframePoint,
+                                   _numeric_times)
 
 
 def _rj(path):
@@ -103,6 +104,11 @@ class Backend(QObject):
         self._sel_tools = {}          # {tool_name: {inp_id: meta}} — comp scan selection
         self._kf_from  = 1           # 1-based start keyframe index (1 = first)
         self._kf_to    = 0           # 1-based end keyframe index (0 = last)
+        self._use_playhead = bool(self._settings.get("use_playhead", True))
+        # When True, apply targets only the keyframe segment the playhead
+        # currently sits inside (per spline, since each input can have a
+        # different keyframe layout) — self._kf_from/_kf_to above are ignored
+        # for the duration of that apply and restored immediately after.
         self._spline_clipboard = None  # {tool, input, keyframes}
         self._auto_comp = True        # auto-follow active Fusion comp
         self._switching_comp = False   # guard against re-entrant comp switches
@@ -604,11 +610,13 @@ class Backend(QObject):
     def _on_disconnected(self):
         log.warning("[Watcher] Connection lost after repeated poll failures")
         self._fu = None
-        # Clear stale references — they point at a Resolve process that's no
-        # longer there, so any later "are we connected?" check must see None,
-        # not a dead-but-still-truthy object.
+        # Clear the resolve reference — it points at a dead process, and the
+        # reconnect guard `_ensure_auto_reconnect` checks `self._resolve is None`
+        # to decide whether to start retrying.
+        # We deliberately DO NOT clear self._comp here: keeping the stale
+        # reference costs nothing (all call sites wrap it in try/except) and
+        # avoids breaking Ctrl+Z during the brief reconnect window.
         self._resolve = None
-        self._comp = None
         self.connection_changed.emit(False, "Disconnected — reconnecting\u2026")
         self._ensure_auto_reconnect()
 
@@ -1052,6 +1060,88 @@ class Backend(QObject):
         self._auto_comp = enabled
         log.info("[AutoComp] Auto-follow %s", "enabled" if enabled else "disabled")
 
+    @Slot(bool)
+    def set_use_playhead(self, enabled: bool):
+        """Toggle playhead-driven apply range. When on, the manual from/to
+        range (set_kf_range, now tucked into Settings) is ignored and the
+        apply targets whichever keyframe segment the playhead is inside."""
+        self._use_playhead = bool(enabled)
+        self._settings["use_playhead"] = self._use_playhead
+        try:
+            _wj(settings_file(), self._settings)
+        except Exception as e:
+            log.warning("[Playhead] Could not persist setting: %s", e)
+        log.info("[Playhead] Playhead-driven range %s",
+                  "enabled" if self._use_playhead else "disabled")
+
+    def _playhead_segment(self, spline):
+        """Find which two consecutive keyframes the playhead currently sits
+        between, on THIS spline's own keyframe times (each input can have a
+        different keyframe layout, so this is computed per-spline, not once
+        per apply). Returns (kf_from, kf_to) as 1-based ordinal indices —
+        same convention set_kf_range already uses — or None if the playhead
+        isn't inside any segment (before the first keyframe, after the last,
+        or fewer than 2 keyframes total)."""
+        playhead = None
+        try:
+            playhead = float(self._comp.GetAttrs().get("COMPN_CurrentTime"))
+        except Exception:
+            # Fallback: same defensive pattern as undo_resolve/redo_resolve —
+            # self._comp may be momentarily stale during a reconnect window.
+            try:
+                comp = self._fu.GetCurrentComp() if self._fu else None
+                if comp:
+                    playhead = float(comp.GetAttrs().get("COMPN_CurrentTime"))
+            except Exception:
+                playhead = None
+        if playhead is None:
+            log.debug("[Playhead] Could not read current time")
+            return None
+
+        try:
+            kf = spline.GetKeyFrames()
+            times = _numeric_times(kf) if kf else []
+        except Exception as e:
+            log.debug("[Playhead] GetKeyFrames failed: %s", e)
+            times = []
+        if len(times) < 2:
+            return None
+
+        for i in range(len(times) - 1):
+            t0, t1 = float(times[i]), float(times[i + 1])
+            if t0 <= playhead <= t1:
+                return (i + 1, i + 2)   # 1-based, matches set_kf_range's convention
+        return None
+
+    @Slot(bool)
+    def set_global_hotkey_enabled(self, enabled: bool):
+        """Toggle the global Ctrl+R -> Scan All hotkey (Windows only).
+        Persists immediately so it survives restarts, and applies live via
+        the window's RegisterHotKey/UnregisterHotKey wrapper — no restart
+        needed either way."""
+        enabled = bool(enabled)
+        self._settings["global_scan_hotkey"] = enabled
+        try:
+            _wj(settings_file(), self._settings)
+        except Exception as e:
+            log.warning("[Hotkey] Could not persist setting: %s", e)
+        try:
+            if enabled:
+                ok = False
+                if self._win is not None and hasattr(self._win, "_register_global_hotkey"):
+                    ok = self._win._register_global_hotkey()
+                if not ok:
+                    self.status_changed.emit(
+                        "Global Ctrl+R unavailable here (Windows only, "
+                        "or already bound by another app)", "var(--love)")
+            else:
+                if self._win is not None and hasattr(self._win, "_unregister_global_hotkey"):
+                    self._win._unregister_global_hotkey()
+        except Exception as e:
+            # A failed toggle must never take down Settings or the app —
+            # worst case the hotkey silently stays in its previous state.
+            log.warning("[Hotkey] Toggle failed: %s", e)
+
     # ── Presets ───────────────────────────────────────────────────────────────
 
     @Slot(str)
@@ -1111,13 +1201,26 @@ class Backend(QObject):
 
     @Slot()
     def undo_resolve(self):
-        """Forward Ctrl+Z from MFlow window to Resolve's comp undo."""
+        """Forward Ctrl+Z from MFlow window to Resolve's comp undo.
+        Tries self._comp first; falls back to fu.GetCurrentComp() if that
+        fails (covers the brief window after watcher disconnect before reconnect)."""
         if self._comp:
             try:
                 self._comp.Undo()
-                log.debug("[Undo] comp.Undo() called")
+                log.debug("[Undo] comp.Undo() OK")
+                return
             except Exception as e:
-                log.debug("[Undo] comp.Undo() failed: %s", e)
+                log.debug("[Undo] comp.Undo() failed (%s) — trying fu fallback", e)
+        # Fallback: ask Fusion for the current comp directly
+        if self._fu:
+            try:
+                comp = self._fu.GetCurrentComp()
+                if comp:
+                    comp.Undo()
+                    log.debug("[Undo] comp.Undo() via fu.GetCurrentComp() OK")
+                    self._comp = comp   # opportunistically refresh stale ref
+            except Exception as e:
+                log.debug("[Undo] fu fallback Undo failed: %s", e)
 
     @Slot()
     def redo_resolve(self):
@@ -1125,9 +1228,19 @@ class Backend(QObject):
         if self._comp:
             try:
                 self._comp.Redo()
-                log.debug("[Redo] comp.Redo() called")
+                log.debug("[Redo] comp.Redo() OK")
+                return
             except Exception as e:
-                log.debug("[Redo] comp.Redo() failed: %s", e)
+                log.debug("[Redo] comp.Redo() failed (%s) — trying fu fallback", e)
+        if self._fu:
+            try:
+                comp = self._fu.GetCurrentComp()
+                if comp:
+                    comp.Redo()
+                    log.debug("[Redo] comp.Redo() via fu.GetCurrentComp() OK")
+                    self._comp = comp
+            except Exception as e:
+                log.debug("[Redo] fu fallback Redo failed: %s", e)
 
     def _do_apply(self, all_inputs=None, scope="single"):
         # Legacy call from auto-apply timer passes all_inputs bool — normalise
@@ -1194,6 +1307,8 @@ class Backend(QObject):
 
         applied = 0
         no_spline = 0
+        no_segment = 0   # playhead mode: inputs skipped because the playhead
+                          # wasn't inside any keyframe segment on that spline
         failed = 0
         tool_names = []
         try:
@@ -1207,7 +1322,27 @@ class Backend(QObject):
                         no_spline += 1
                         log.warning(f"[MFlow] _do_apply: no BezierSpline for '{inp_id}' on '{tool_obj.Name}'")
                         continue
-                    if self._apply_one(spline, fps):
+                    if self._use_playhead:
+                        seg = self._playhead_segment(spline)
+                        if seg is None:
+                            no_segment += 1
+                            log.info("[Playhead] '%s' on '%s' — playhead not "
+                                     "inside a keyframe segment, skipped",
+                                     inp_id, tool_obj.Name)
+                            continue
+                        # Temporarily borrow kf_from/kf_to for just this one
+                        # spline's apply, then restore — playhead mode must
+                        # never permanently overwrite the manual range the
+                        # user has configured in Settings.
+                        _saved_from, _saved_to = self._kf_from, self._kf_to
+                        self._kf_from, self._kf_to = seg
+                        try:
+                            ok = self._apply_one(spline, fps)
+                        finally:
+                            self._kf_from, self._kf_to = _saved_from, _saved_to
+                    else:
+                        ok = self._apply_one(spline, fps)
+                    if ok:
                         applied += 1
                     else:
                         failed += 1
@@ -1221,7 +1356,12 @@ class Backend(QObject):
 
         names_str = ", ".join(tool_names) if tool_names else "?"
         if applied:
-            self.apply_done.emit(True, f"Applied to {applied} input(s) on: {names_str}")
+            extra = f" ({no_segment} skipped — playhead outside their keyframe range)" if no_segment else ""
+            self.apply_done.emit(True, f"Applied to {applied} input(s) on: {names_str}{extra}")
+        elif no_segment > 0 and failed == 0 and no_spline == 0:
+            self.apply_done.emit(False,
+                "Playhead isn't inside a keyframe segment \u2014 move it between "
+                "two keyframes on the curve you want to edit, then try again.")
         elif no_spline > 0 and failed == 0:
             self.apply_done.emit(False,
                 f"No BezierSpline found on {no_spline} input(s). "
