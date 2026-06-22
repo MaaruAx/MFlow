@@ -3182,9 +3182,8 @@ function _populateSettingsForm(s) {
     // setting was never saved, so "manual mode" defaults to UNCHECKED.
     const manualMode = (s.use_playhead === undefined) ? false : !s.use_playhead;
     setC('s-use-playhead', manualMode);
-    const _row=$('kfr-settings-row'), _w=$('kf-range-widget');
-    if(_row) _row.style.opacity = manualMode ? '1' : '0.45';
-    if(_w) _w.style.pointerEvents = manualMode ? 'auto' : 'none';
+    const _w=$('kf-range-widget');
+    if(_w) _w.style.display = manualMode ? 'flex' : 'none';
   }
   const cols=s.preset_cols||2; setV('s-preset-cols',cols); const zoomPct=s.ui_zoom||100; setV('s-ui-zoom',zoomPct);
   const cv=$('s-preset-cols-val');if(cv)cv.textContent=cols; const zv=$('s-ui-zoom-val');if(zv)zv.textContent=zoomPct+'%';
