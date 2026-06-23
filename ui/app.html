@@ -1573,11 +1573,13 @@ function setMode(m) {
     // Default theme: apply per-mode background tints from MODE_PALETTE
     Object.entries(MODE_PALETTE[m] || {}).forEach(([k,v]) => document.body.style.setProperty(k,v));
   } else {
-    // Custom theme: remove any stale MODE_PALETTE overrides so theme values show through
+    // Custom theme: restore the theme's hl values explicitly.
+    // Calling removeProperty would expose the dark :root fallback (Rose Pine
+    // purple) regardless of the active theme — defeats the whole point.
     ['--hl-low','--hl-med','--hl-high'].forEach(k => {
-      // Only remove if the theme itself didn't set the value (i.e. it came from MODE_PALETTE)
-      const fromTheme = _CSS_DEFAULTS[k];
-      if (!fromTheme) document.body.style.removeProperty(k);
+      const themeVal = _CSS_DEFAULTS[k];
+      if (themeVal) document.body.style.setProperty(k, themeVal);
+      else document.body.style.removeProperty(k);
     });
   }
   pushState();
@@ -3284,6 +3286,9 @@ function applyThemeJSON(data) {
     const vn='--'+k.replace(/_/g,'-');
     if(vn==='--subtle') return; // derived via color-mix() in CSS — never override
     document.body.style.setProperty(vn,v);
+    // Register in _CSS_DEFAULTS so setMode's MODE_PALETTE guard knows
+    // this value came from the theme and must not be removed on mode switch.
+    _CSS_DEFAULTS[vn] = v;
   });
   if (data.mode_colors) {
     Object.assign(MODE_COLORS,data.mode_colors);
