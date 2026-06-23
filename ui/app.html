@@ -89,6 +89,7 @@ body.compact #kf-range-widget{display:none!important}
    ELASTIC/BOUNCE toolbar buttons it sits next to, so it goes too for a tighter compact bar. */
 body.compact #btn-panels{display:none!important}
 body.compact .extras-dd{display:none!important}
+body.compact #btn-aall{display:none!important}
 /* Compact: keep the switch itself but drop its text label, and drop the
    FLUID badge + version tag next to the logo — both are pure decoration
    that compact mode is meant to trim. */
@@ -892,7 +893,7 @@ input[type=number]{-moz-appearance:textfield}
     </div>
   </div>
   <button id="btn-aall" onclick="applySelected()" data-i18n="bottom.apply_selected">APPLY SELECTED</button>
-  <button id="btn-apply" onclick="backend&&backend.apply_curve()" data-i18n="bottom.apply">▶ APPLY</button>
+  <button id="btn-apply" onclick="applyWithModifiers(event)" data-i18n="bottom.apply">▶ APPLY</button>
 </div>
 </div>
 
@@ -1084,6 +1085,7 @@ input[type=number]{-moz-appearance:textfield}
         <label class="s-check"><input type="checkbox" id="s-gpu" checked> GPU acceleration <span class="s-muted-val">(disable if UI freezes on startup)</span></label>
         <label class="s-check"><input type="checkbox" id="s-ghotkey" onchange="setGlobalHotkey(this.checked)"> Global Ctrl+R triggers Scan All <span class="s-muted-val">(works even when MFlow isn't focused — Windows only)</span></label>
         <label class="s-check"><input type="checkbox" id="s-use-playhead" onchange="setUseManualRange(this.checked)"> Use manual FROM/TO range <span class="s-muted-val">(otherwise Apply automatically targets the playhead's keyframe segment — when checked, the FROM/TO controls reappear in the bottom bar)</span></label>
+        <label class="s-check" id="s-precise-row"><input type="checkbox" id="s-precise-playhead" onchange="if(backend&&backend.set_precise_playhead)try{backend.set_precise_playhead(this.checked);}catch(_){}"> Precise playhead mode <span class="s-muted-val">(require playhead to be strictly between two keyframes — off by default, snaps to nearest keyframes)</span></label>
       </div>
     </div>
     <div class="s-section s-section-last">
@@ -1389,6 +1391,9 @@ document.addEventListener('DOMContentLoaded', () => {
   ], 'square');
 
     window.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, {passive:false});
+    // Block the native QWebEngine/Chromium context menu everywhere — the canvas
+    // has its own custom menu (onCtx), everything else should show nothing.
+    document.addEventListener('contextmenu', e => e.preventDefault());
   // Forward Ctrl+Z / Ctrl+Shift+Z to Resolve's comp undo when no input is focused
   document.addEventListener('keydown', e => {
     if (e.ctrlKey && e.key.toLowerCase() === 'z' && !e.target.closest('input,textarea,[contenteditable]')) {
@@ -2772,6 +2777,24 @@ function _nodeColor(name) {
   return _nodeColors[name];
 }
 function _clearNodeColors() { Object.keys(_nodeColors).forEach(k=>delete _nodeColors[k]); _lastNodeColorIdx=-1; }
+function _refreshNodeColors() {
+  // After a theme change, MODE_COLORS has new values but existing .tool-hdr
+  // and .inp-row DOM nodes still have the old color hardcoded as an inline
+  // style via setProperty('--node-col', ...). Clear the cache and re-walk
+  // the rendered DOM to apply the updated palette — no backend scan needed.
+  _clearNodeColors();
+  document.querySelectorAll('#params-tree .tool-hdr').forEach(hdr => {
+    const name = hdr.textContent.trim();
+    if (!name) return;
+    const col = _nodeColor(name);
+    hdr.style.setProperty('--node-col', col);
+    let sib = hdr.nextElementSibling;
+    while (sib && !sib.classList.contains('tool-hdr')) {
+      if (sib.classList.contains('inp-row')) sib.style.setProperty('--node-col', col);
+      sib = sib.nextElementSibling;
+    }
+  });
+}
 function renderParamsTree(data) {
   const tree=$('params-tree'), ph=$('params-ph');
   tree.innerHTML='';
@@ -2865,6 +2888,12 @@ function setUseManualRange(manualChecked) {
   }
   const widget = $('kf-range-widget');
   if (widget) widget.style.display = manualChecked ? 'flex' : 'none';
+  // Precise mode only applies in playhead mode — dim it when manual is active
+  const preciseRow = $('s-precise-row');
+  if (preciseRow) {
+    preciseRow.style.opacity = manualChecked ? '0.4' : '1';
+    preciseRow.style.pointerEvents = manualChecked ? 'none' : 'auto';
+  }
 }
 
 function toggleCompMenu() {
@@ -3042,6 +3071,24 @@ function applySelected() {
   if (hasSel) backend.apply_curve_selected();
   // No fallback — button is disabled when nothing is selected
 }
+function applyWithModifiers(e) {
+  if (!backend) return;
+  // Modifier keys only have meaning in playhead mode — in manual FROM/TO
+  // mode they're ignored and the normal apply is used.
+  const inPlayheadMode = !($('s-use-playhead') && $('s-use-playhead').checked);
+  if (!inPlayheadMode || (!e.ctrlKey && !e.altKey && !e.shiftKey)) {
+    backend.apply_curve();
+    return;
+  }
+  // Ctrl  → all segments BEHIND (first keyframe up to and including playhead's segment)
+  // Alt   → all segments AHEAD  (playhead's segment up to the last keyframe)
+  // Shift → all segments across the entire keyframe range
+  const scope = e.shiftKey ? 'all'
+              : e.ctrlKey  ? 'playhead_behind'
+              : e.altKey   ? 'playhead_ahead'
+              :               'single';
+  try { backend.apply_curve_playhead(scope); } catch(_) { backend.apply_curve(); }
+}
 
 // ═══════════════════════════════════════════════════════════════
 // § 24. KF RANGE WIDGET
@@ -3142,6 +3189,7 @@ function saveSettings() {
     auto_comp:$('s-auto-comp')?$('s-auto-comp').checked:true,
     global_scan_hotkey:$('s-ghotkey')?$('s-ghotkey').checked:false,
     use_playhead:$('s-use-playhead')?!$('s-use-playhead').checked:true,
+    precise_playhead:$('s-precise-playhead')?$('s-precise-playhead').checked:false,
     theme:     $('s-theme').value,
     language:  $('s-lang') ? $('s-lang').value : 'en',
     preset_cols:+($('s-preset-cols').value)||2,
@@ -3184,6 +3232,9 @@ function _populateSettingsForm(s) {
     setC('s-use-playhead', manualMode);
     const _w=$('kf-range-widget');
     if(_w) _w.style.display = manualMode ? 'flex' : 'none';
+    setC('s-precise-playhead', !!s.precise_playhead);
+    const _pr=$('s-precise-row');
+    if(_pr){ _pr.style.opacity=manualMode?'0.4':'1'; _pr.style.pointerEvents=manualMode?'none':'auto'; }
   }
   const cols=s.preset_cols||2; setV('s-preset-cols',cols); const zoomPct=s.ui_zoom||100; setV('s-ui-zoom',zoomPct);
   const cv=$('s-preset-cols-val');if(cv)cv.textContent=cols; const zv=$('s-ui-zoom-val');if(zv)zv.textContent=zoomPct+'%';
@@ -3258,7 +3309,7 @@ function applyThemeJSON(data) {
     Object.entries(data.interface_colors).forEach(([k,v])=>{ document.body.style.setProperty('--'+k,v); _CSS_DEFAULTS['--'+k]=v; });
   }
   ['base','surface','overlay','border','text','muted'].forEach(k=>{ const v=_readCSSColor('--'+k); if(v){const sw=$('sw-cc-'+k);if(sw)sw.style.background=v;} });
-  requestAnimationFrame(()=>{ _refreshThemeColors(); setMode(mode); scheduleDraw(); });
+  requestAnimationFrame(()=>{ _refreshThemeColors(); _refreshNodeColors(); setMode(mode); scheduleDraw(); });
 }
 function renderThemeOptions(themes) {
   const opts = [{value:'',text:'Default'}].concat(themes.map(t=>({value:t.name,text:t.name})));
