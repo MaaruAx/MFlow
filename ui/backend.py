@@ -105,6 +105,10 @@ class Backend(QObject):
         self._kf_from  = 1           # 1-based start keyframe index (1 = first)
         self._kf_to    = 0           # 1-based end keyframe index (0 = last)
         self._use_playhead = bool(self._settings.get("use_playhead", True))
+        self._precise_playhead = bool(self._settings.get("precise_playhead", False))
+        # precise_playhead=False (default): if playhead is outside all segments,
+        # snap to the nearest pair (closest keyframe boundary) instead of doing nothing.
+        # precise_playhead=True: require the playhead to be strictly inside a segment.
         # When True, apply targets only the keyframe segment the playhead
         # currently sits inside (per spline, since each input can have a
         # different keyframe layout) — self._kf_from/_kf_to above are ignored
@@ -1062,9 +1066,7 @@ class Backend(QObject):
 
     @Slot(bool)
     def set_use_playhead(self, enabled: bool):
-        """Toggle playhead-driven apply range. When on, the manual from/to
-        range (set_kf_range, now tucked into Settings) is ignored and the
-        apply targets whichever keyframe segment the playhead is inside."""
+        """Toggle playhead-driven apply range."""
         self._use_playhead = bool(enabled)
         self._settings["use_playhead"] = self._use_playhead
         try:
@@ -1073,6 +1075,20 @@ class Backend(QObject):
             log.warning("[Playhead] Could not persist setting: %s", e)
         log.info("[Playhead] Playhead-driven range %s",
                   "enabled" if self._use_playhead else "disabled")
+
+    @Slot(bool)
+    def set_precise_playhead(self, enabled: bool):
+        """When True, the playhead must be strictly inside a segment.
+        When False (default), snaps to the nearest segment if the playhead
+        is outside all segment boundaries — more forgiving for quick edits."""
+        self._precise_playhead = bool(enabled)
+        self._settings["precise_playhead"] = self._precise_playhead
+        try:
+            _wj(settings_file(), self._settings)
+        except Exception as e:
+            log.warning("[Playhead] Could not persist precise setting: %s", e)
+        log.info("[Playhead] Precise mode %s",
+                  "ON" if self._precise_playhead else "OFF (fuzzy snap)")
 
     def _playhead_segment(self, spline):
         """Find which two consecutive keyframes the playhead currently sits
@@ -1112,6 +1128,83 @@ class Backend(QObject):
             if t0 <= playhead <= t1:
                 return (i + 1, i + 2)   # 1-based, matches set_kf_range's convention
         return None
+
+    def _playhead_segments(self, spline, scope):
+        """Like _playhead_segment but returns a LIST of (kf_from, kf_to) pairs
+        according to scope:
+          'single'         — only the pair containing the playhead (same as _playhead_segment)
+          'playhead_behind'— all pairs from the first to the one containing the playhead
+          'playhead_ahead' — all pairs from the one containing the playhead to the last
+          'all'            — all consecutive pairs across the full keyframe range
+        Returns [] if the playhead is outside all segments (for 'single'/'behind'/'ahead')
+        or if there are fewer than 2 keyframes.
+        """
+        playhead = None
+        try:
+            playhead = float(self._comp.GetAttrs().get("COMPN_CurrentTime"))
+        except Exception:
+            try:
+                comp = self._fu.GetCurrentComp() if self._fu else None
+                if comp:
+                    playhead = float(comp.GetAttrs().get("COMPN_CurrentTime"))
+            except Exception:
+                pass
+        try:
+            kf = spline.GetKeyFrames()
+            times = _numeric_times(kf) if kf else []
+        except Exception:
+            times = []
+        n = len(times)
+        if n < 2:
+            return []
+        all_pairs = [(i + 1, i + 2) for i in range(n - 1)]
+        if scope == 'all':
+            return all_pairs
+        # Find which segment the playhead sits in
+        seg_idx = None
+        if playhead is not None:
+            for i in range(n - 1):
+                if float(times[i]) <= playhead <= float(times[i + 1]):
+                    seg_idx = i
+                    break
+        if seg_idx is None:
+            if self._precise_playhead or playhead is None:
+                return []   # strict mode: playhead must be inside a segment
+            # Fuzzy mode (default): snap to the nearest segment boundary.
+            # This is the "closest keyframes" behaviour — if the playhead is
+            # before the first keyframe we use the first segment; if it's after
+            # the last we use the last segment.
+            if playhead <= float(times[0]):
+                seg_idx = 0
+            elif playhead >= float(times[-1]):
+                seg_idx = n - 2
+            else:
+                # Between two non-consecutive keyframes shouldn't happen once
+                # the strict loop above runs, but handle it defensively.
+                best, best_i = float('inf'), 0
+                for i in range(n - 1):
+                    mid = (float(times[i]) + float(times[i+1])) / 2
+                    d = abs(playhead - mid)
+                    if d < best:
+                        best, best_i = d, i
+                seg_idx = best_i
+            log.debug("[Playhead] Fuzzy snap: playhead=%.1f snapped to segment %d→%d",
+                      playhead, seg_idx+1, seg_idx+2)
+        if scope == 'single':
+            return [all_pairs[seg_idx]]
+        if scope == 'playhead_behind':
+            return all_pairs[:seg_idx + 1]
+        if scope == 'playhead_ahead':
+            return all_pairs[seg_idx:]
+        return [all_pairs[seg_idx]]   # safe fallback
+
+    @Slot(str)
+    def apply_curve_playhead(self, scope: str = "single"):
+        """Apply the current curve to multiple keyframe segments determined by
+        the playhead position and the requested scope (single/playhead_behind/
+        playhead_ahead/all). Each spline gets its own segment list computed
+        independently so tools with different keyframe layouts all work correctly."""
+        self._do_apply(scope=scope)
 
     @Slot(bool)
     def set_global_hotkey_enabled(self, enabled: bool):
@@ -1323,29 +1416,42 @@ class Backend(QObject):
                         log.warning(f"[MFlow] _do_apply: no BezierSpline for '{inp_id}' on '{tool_obj.Name}'")
                         continue
                     if self._use_playhead:
-                        seg = self._playhead_segment(spline)
-                        if seg is None:
+                        # scope may be 'single','playhead_behind','playhead_ahead','all'
+                        ph_scope = scope if scope in (
+                            'single','playhead_behind','playhead_ahead','all'
+                        ) else 'single'
+                        segs = self._playhead_segments(spline, ph_scope)
+                        if not segs:
                             no_segment += 1
                             log.info("[Playhead] '%s' on '%s' — playhead not "
                                      "inside a keyframe segment, skipped",
                                      inp_id, tool_obj.Name)
                             continue
-                        # Temporarily borrow kf_from/kf_to for just this one
-                        # spline's apply, then restore — playhead mode must
-                        # never permanently overwrite the manual range the
-                        # user has configured in Settings.
+                        # Collapse the list of segments into a single contiguous
+                        # range (first segment's kf_from → last segment's kf_to)
+                        # and issue ONE apply call, not N.  Calling apply_bezier
+                        # N times on the same spline accumulates handle mutations
+                        # across reads — each call reads back the spline AFTER the
+                        # previous write, causing LH/RH offsets to compound and
+                        # pushing values out of range (visible as a red node on
+                        # PolyPath / normalized parameters).
                         _saved_from, _saved_to = self._kf_from, self._kf_to
-                        self._kf_from, self._kf_to = seg
+                        self._kf_from = segs[0][0]
+                        self._kf_to   = segs[-1][1]
                         try:
                             ok = self._apply_one(spline, fps)
                         finally:
                             self._kf_from, self._kf_to = _saved_from, _saved_to
+                        if ok:
+                            applied += 1
+                        else:
+                            failed += 1
                     else:
                         ok = self._apply_one(spline, fps)
-                    if ok:
-                        applied += 1
-                    else:
-                        failed += 1
+                        if ok:
+                            applied += 1
+                        else:
+                            failed += 1
             self._comp.Unlock()
             self._comp.EndUndo(True)
         except Exception as e:
@@ -1648,6 +1754,8 @@ class Backend(QObject):
         self._settings = json.loads(s_json)
         self._fps = float(self._settings.get("bake_fps", 24))
         self._bake_density = max(1, int(self._settings.get("bake_density", 1)))
+        self._use_playhead = bool(self._settings.get("use_playhead", True))
+        self._precise_playhead = bool(self._settings.get("precise_playhead", False))
         _wj(settings_file(), self._settings)
         self.settings_signal.emit(s_json)
 
