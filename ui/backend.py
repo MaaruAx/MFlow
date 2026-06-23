@@ -342,9 +342,11 @@ class Backend(QObject):
     def _apply_new_comp(self, comp):
         """Called on the Qt main thread after a background reconnect succeeds."""
         if comp:
+            # Stop the retry timer FIRST — before set_comp → _announce_connection
+            # has a chance to call _ensure_auto_reconnect again.
+            self._stop_auto_reconnect()
             log.info("[Connect] Applying comp to watcher")
             self.set_comp(comp)
-            self._stop_auto_reconnect()
         else:
             log.warning("[Connect] No comp available — Fusion page may not be active")
             self.connection_changed.emit(
@@ -383,10 +385,16 @@ class Backend(QObject):
             if self._resolve is not None and self._comp is not None:
                 self._stop_auto_reconnect()
                 return
+            # Also skip if a reconnect attempt is already in flight — the
+            # worker thread clears _reconnecting in its finally block before
+            # _apply_new_comp runs on the main thread, creating a window where
+            # comp is still None but an attempt is already connecting.
+            if self._reconnecting:
+                log.debug("[AutoReconnect] Tick skipped — reconnect already in flight")
+                return
             log.debug("[AutoReconnect] Retry tick — attempting reconnect")
             self.reconnect()
         except Exception as e:
-            # A failed tick should never kill the timer itself — log and keep retrying.
             log.debug("[AutoReconnect] Tick error (will retry next interval): %s", e)
 
     def _stop_auto_reconnect(self):
