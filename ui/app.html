@@ -1000,6 +1000,9 @@ input[type=number]{-moz-appearance:textfield}
         <div class="col-row"><span>Border</span>  <div class="clr-swatch" id="sw-cc-border"  style="background:#26233a" onclick="_openVarPicker('border','sw-cc-border',event)"   title="Click to edit"></div><input type="hidden" id="sc-cc-border"  value="#26233a"></div>
         <div class="col-row"><span>Text</span>    <div class="clr-swatch" id="sw-cc-text"    style="background:#e0def4" onclick="_openVarPicker('text','sw-cc-text',event)"       title="Click to edit"></div><input type="hidden" id="sc-cc-text"    value="#e0def4"></div>
         <div class="col-row"><span>Muted</span>   <div class="clr-swatch" id="sw-cc-muted"   style="background:#6e6a86" onclick="_openVarPicker('muted','sw-cc-muted',event)"     title="Click to edit"></div><input type="hidden" id="sc-cc-muted"   value="#6e6a86"></div>
+        <div class="col-row"><span>Hl Low</span>  <div class="clr-swatch" id="sw-cc-hl-low"  style="background:#28253d" onclick="_openVarPicker('hl-low','sw-cc-hl-low',event)"   title="Click to edit"></div><input type="hidden" id="sc-cc-hl-low"  value="#28253d"></div>
+        <div class="col-row"><span>Hl Med</span>  <div class="clr-swatch" id="sw-cc-hl-med"  style="background:#3a3750" onclick="_openVarPicker('hl-med','sw-cc-hl-med',event)"   title="Click to edit"></div><input type="hidden" id="sc-cc-hl-med"  value="#3a3750"></div>
+        <div class="col-row"><span>Hl High</span> <div class="clr-swatch" id="sw-cc-hl-high" style="background:#524f67" onclick="_openVarPicker('hl-high','sw-cc-hl-high',event)" title="Click to edit"></div><input type="hidden" id="sc-cc-hl-high" value="#524f67"></div>
         <div class="col-row"><span>Grid lines</span><div class="clr-swatch" id="sw-cc-grid"  style="background:#1c1a28" onclick="_openVarPicker('grid','sw-cc-grid',event)"       title="Click to edit"></div><input type="hidden" id="sc-cc-grid"    value="#1c1a28"></div>
       </div>
       <div class="s-section-label" style="margin-top:12px;margin-bottom:6px">Grid Details</div>
@@ -1294,7 +1297,10 @@ let _pvShape = 'square';
 let _TC = { base:'#121217', surface:'#191724', overlay:'#1f1d2e', border:'#26233a' };
 const _CSS_DEFAULTS = {
   '--base':'#121217','--surface':'#191724','--overlay':'#1f1d2e',
-  '--border':'#26233a','--text':'#e0def4','--muted':'#6e6a86'
+  '--border':'#26233a','--text':'#e0def4','--muted':'#6e6a86',
+  // hl vars: explicit defaults so _readCSSColor never falls through to the
+  // :root and picks up stale Rosé Pine values in non-Rosé-Pine contexts.
+  '--hl-low':'#28253d','--hl-med':'#3a3750','--hl-high':'#524f67'
 };
 function _readCSSColor(cssVar) {
   const inline = document.body.style.getPropertyValue(cssVar);
@@ -2984,17 +2990,15 @@ function doSaveTheme() {
   const name = ($('save-theme-name').value || '').trim();
   if (!name) { $('save-theme-name').focus(); return; }
   const author = ($('save-theme-author').value || '').trim();
-  const vars=['--base','--surface','--overlay','--muted','--subtle','--text',
-              '--love','--gold','--rose','--pine','--foam','--iris','--border','--hl-low','--hl-med','--hl-high'];
+  const baseVars=['--base','--surface','--overlay','--muted','--subtle','--text',
+                  '--love','--gold','--rose','--pine','--foam','--iris','--border'];
+  const hlVars=['--hl-low','--hl-med','--hl-high'];
   const colors={};
-  vars.forEach(v=>{const val=document.body.style.getPropertyValue(v)||_readCSSColor(v);if(val)colors[v.slice(2).replace(/-/g,'_')]=val;});
-  const ifaceColors={};
-  ['base','surface','overlay','border','text','muted'].forEach(k=>{
-    const v=document.body.style.getPropertyValue('--'+k);if(v&&v.trim())ifaceColors[k]=v.trim();
-  });
+  baseVars.forEach(v=>{const val=document.body.style.getPropertyValue(v)||_readCSSColor(v);if(val)colors[v.slice(2).replace(/-/g,'_')]=val;});
+  // hl vars from _CSS_DEFAULTS — same reason as exportTheme: body.style may carry MODE_PALETTE tints
+  hlVars.forEach(v=>{const val=_CSS_DEFAULTS[v];if(val)colors[v.slice(2).replace(/-/g,'_')]=val;});
   const data={name,author,version:1,colors,mode_colors:{...MODE_COLORS},
-    grid_colors:{grid:GRID_COLOR,cross:CROSS_COLOR,handle_fill:HANDLE_FILL,edge:EDGE_COLOR},
-    interface_colors:ifaceColors};
+    grid_colors:{grid:GRID_COLOR,cross:CROSS_COLOR,handle_fill:HANDLE_FILL,edge:EDGE_COLOR}};
   if (backend && backend.save_theme) {
     try { backend.save_theme(name, JSON.stringify(data)); } catch(e) {}
   }
@@ -3150,16 +3154,16 @@ function _kfrRender() {
 // § 25. SETTINGS
 // ═══════════════════════════════════════════════════════════════
 function openSettings() {
-  // Snapshot current state for Cancel
+  // Snapshot current state for Cancel — includes hl vars so cancel restores them correctly
   _settingsSnap = {
-    vars: ['--base','--surface','--overlay','--border','--text','--muted'].reduce((a,v)=>{a[v]=document.body.style.getPropertyValue(v)||'';return a;},{}),
+    vars: ['--base','--surface','--overlay','--border','--text','--muted','--hl-low','--hl-med','--hl-high'].reduce((a,v)=>{a[v]=document.body.style.getPropertyValue(v)||'';return a;},{}),
     modeColors: {...MODE_COLORS},
     gridColors: {grid:GRID_COLOR, cross:CROSS_COLOR, handleFill:HANDLE_FILL, edge:EDGE_COLOR}
   };
   // Sync mode color swatches
   Object.entries(MODE_COLORS).forEach(([k,v])=>{ const sw=$('sw-'+k); if(sw) sw.style.background=v; });
-  // Sync interface color swatches
-  ['base','surface','overlay','border','text','muted'].forEach(k=>{
+  // Sync interface + hl color swatches
+  ['base','surface','overlay','border','text','muted','hl-low','hl-med','hl-high'].forEach(k=>{
     const v=_cpCanonHex(document.body.style.getPropertyValue('--'+k)||_readCSSColor('--'+k)||'');
     if (v&&v!=='#000000') { const sw=$('sw-cc-'+k); if(sw) sw.style.background=v; const sc=$('sc-cc-'+k); if(sc) sc.value=v; }
   });
@@ -3179,7 +3183,9 @@ function cancelSettings() {
 }
 function saveSettings() {
   const ifaceColors={};
+  // hl vars are read from _CSS_DEFAULTS (not body.style) to avoid capturing MODE_PALETTE tints
   ['base','surface','overlay','border','text','muted'].forEach(k=>{ const v=document.body.style.getPropertyValue('--'+k); if(v&&v.trim()) ifaceColors[k]=v.trim(); });
+  ['hl-low','hl-med','hl-high'].forEach(k=>{ const v=_CSS_DEFAULTS['--'+k]; if(v&&v.trim()) ifaceColors[k]=v.trim(); });
   const s={
     dvr_path:  $('s-dvr').value,
     python_path:$('s-py').value,
@@ -3272,8 +3278,15 @@ function applySettingsUI(s) {
 function resetColors() {
   ['--base','--surface','--overlay','--border','--text','--muted'].forEach(v=>document.body.style.removeProperty(v));
   const defs={base:'#121217',surface:'#191724',overlay:'#1f1d2e',border:'#26233a',text:'#e0def4',muted:'#6e6a86'};
+  const hlDefs={'hl-low':'#28253d','hl-med':'#3a3750','hl-high':'#524f67'};
   GRID_COLOR='#1c1a28'; CROSS_COLOR='#1f1d2e'; HANDLE_FILL='#121217'; EDGE_COLOR='#26233a';
   for (const[k,v] of Object.entries(defs)) liveVar('--'+k,v);
+  // Reset hl vars explicitly — liveVar keeps body.style and _CSS_DEFAULTS in sync
+  for (const[k,v] of Object.entries(hlDefs)) {
+    liveVar('--'+k,v);
+    const sw=$('sw-cc-'+k); if(sw) sw.style.background=v;
+    const sc=$('sc-cc-'+k); if(sc) sc.value=v;
+  }
   scheduleDraw();
 }
 
@@ -3313,7 +3326,7 @@ function applyThemeJSON(data) {
   if (data.interface_colors) {
     Object.entries(data.interface_colors).forEach(([k,v])=>{ document.body.style.setProperty('--'+k,v); _CSS_DEFAULTS['--'+k]=v; });
   }
-  ['base','surface','overlay','border','text','muted'].forEach(k=>{ const v=_readCSSColor('--'+k); if(v){const sw=$('sw-cc-'+k);if(sw)sw.style.background=v;} });
+  ['base','surface','overlay','border','text','muted','hl-low','hl-med','hl-high'].forEach(k=>{ const v=_readCSSColor('--'+k); if(v){const sw=$('sw-cc-'+k);if(sw)sw.style.background=v; const sc=$('sc-cc-'+k);if(sc)sc.value=v;} });
   requestAnimationFrame(()=>{ _refreshThemeColors(); _refreshNodeColors(); setMode(mode); scheduleDraw(); });
 }
 function renderThemeOptions(themes) {
@@ -3346,10 +3359,17 @@ function rescanPython() {
 // ═══════════════════════════════════════════════════════════════
 function exportTheme() {
   const nm=$('s-theme'), name=(nm&&nm.value?nm.value:'Custom Theme');
-  const vars=['--base','--surface','--overlay','--muted','--subtle','--text','--love','--gold','--rose','--pine','--foam','--iris','--border','--hl-low','--hl-med','--hl-high'];
-  const colors={}; vars.forEach(v=>{const val=document.body.style.getPropertyValue(v)||_readCSSColor(v);if(val)colors[v.slice(2).replace(/-/g,'_')]=val;});
-  const ifaceColors={}; ['base','surface','overlay','border','text','muted'].forEach(k=>{const v=document.body.style.getPropertyValue('--'+k);if(v&&v.trim())ifaceColors[k]=v.trim();});
-  const data={name,author:'',version:1,colors,mode_colors:{...MODE_COLORS},grid_colors:{grid:GRID_COLOR,cross:CROSS_COLOR,handle_fill:HANDLE_FILL,edge:EDGE_COLOR},interface_colors:ifaceColors};
+  // Standard vars read from body.style (user overrides) or _CSS_DEFAULTS fallback
+  const baseVars=['--base','--surface','--overlay','--muted','--subtle','--text','--love','--gold','--rose','--pine','--foam','--iris','--border'];
+  // hl vars read exclusively from _CSS_DEFAULTS — body.style may carry MODE_PALETTE
+  // tints that were never set by the user or a theme, corrupting the export.
+  const hlVars=['--hl-low','--hl-med','--hl-high'];
+  const colors={};
+  baseVars.forEach(v=>{const val=document.body.style.getPropertyValue(v)||_readCSSColor(v);if(val)colors[v.slice(2).replace(/-/g,'_')]=val;});
+  hlVars.forEach(v=>{const val=_CSS_DEFAULTS[v];if(val)colors[v.slice(2).replace(/-/g,'_')]=val;});
+  // interface_colors omitted — it is a strict subset of colors (base/surface/overlay/border/text/muted)
+  // and having both fields caused stale values to persist across theme switches.
+  const data={name,author:'',version:1,colors,mode_colors:{...MODE_COLORS},grid_colors:{grid:GRID_COLOR,cross:CROSS_COLOR,handle_fill:HANDLE_FILL,edge:EDGE_COLOR}};
   if(backend&&backend.export_theme_dialog){backend.export_theme_dialog(name,JSON.stringify(data));}else{_downloadJSON('MFlow_theme_'+name.replace(/\s+/g,'_')+'.json',data);}
   setStatus(t('status.theme_exported'),'var(--accent)');
 }
