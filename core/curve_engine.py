@@ -293,9 +293,17 @@ def bake_pulse(t0, v0, t1, v1, fps, omega1=8.0, omega2=2.0, n=4.0, reverse=False
     vals = [(r - r_min) / span for r in raw]
     if reverse:
         vals = [1.0 - v for v in reversed(vals)]
-    result = []
-    for i, val in enumerate(vals):
-        result.append((frame_pos[i], v0 + val * (v1 - v0)))
+    # Additive linear correction: instead of a hard snap at the endpoints
+    # (which creates a frame-to-frame discontinuity), add an offset that
+    # linearly blends from (0 - vals[0]) at t=0 to (1 - vals[-1]) at t=1.
+    # This makes the curve naturally pass through v0 and v1 while preserving
+    # the interior shape as much as possible.
+    n_pts = len(vals)
+    start_err = -vals[0]
+    end_err   = 1.0 - vals[-1]
+    vals = [v + (1.0 - i/(n_pts-1))*start_err + (i/(n_pts-1))*end_err
+            for i, v in enumerate(vals)]
+    result = [(frame_pos[i], v0 + val * (v1 - v0)) for i, val in enumerate(vals)]
     result[0]  = (result[0][0],  v0)
     result[-1] = (result[-1][0], v1)
     return result
@@ -321,9 +329,13 @@ def bake_noise(t0, v0, t1, v1, fps, freq=2.0, amp=0.5, seed=42, reverse=False, d
         vals.append(max(0.0, min(1.0, 0.5 + v * amp)))
     if reverse:
         vals = [1.0 - v for v in reversed(vals)]
-    result = []
-    for i, val in enumerate(vals):
-        result.append((frame_pos[i], v0 + val * (v1 - v0)))
+    # Additive linear correction for smooth endpoint alignment
+    n_pts = len(vals)
+    start_err = -vals[0]
+    end_err   = 1.0 - vals[-1]
+    vals = [v + (1.0 - i/(n_pts-1))*start_err + (i/(n_pts-1))*end_err
+            for i, v in enumerate(vals)]
+    result = [(frame_pos[i], v0 + val * (v1 - v0)) for i, val in enumerate(vals)]
     result[0]  = (result[0][0],  v0)
     result[-1] = (result[-1][0], v1)
     return result
@@ -346,9 +358,13 @@ def bake_resonance(t0, v0, t1, v1, fps, gamma=2.0, omega=8.0, omega0=8.0, revers
     vals = [(r - r_min) / span for r in raw]
     if reverse:
         vals = [1.0 - v for v in reversed(vals)]
-    result = []
-    for i, val in enumerate(vals):
-        result.append((frame_pos[i], v0 + val * (v1 - v0)))
+    # Additive linear correction for smooth endpoint alignment
+    n_pts = len(vals)
+    start_err = -vals[0]
+    end_err   = 1.0 - vals[-1]
+    vals = [v + (1.0 - i/(n_pts-1))*start_err + (i/(n_pts-1))*end_err
+            for i, v in enumerate(vals)]
+    result = [(frame_pos[i], v0 + val * (v1 - v0)) for i, val in enumerate(vals)]
     result[0]  = (result[0][0],  v0)
     result[-1] = (result[-1][0], v1)
     return result
