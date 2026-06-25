@@ -467,8 +467,21 @@ def _call_set_kf(obj, tbl) -> bool:
     # Three signatures: True=force-create, False=update-existing, no arg=default.
     # PolyPath Displacement splines only accept (tbl, False) — not True.
     for args in ((tbl, True), (tbl, False), (tbl,)):
-        try: fn(*args); return True
-        except Exception: continue
+        try:
+            fn(*args)
+            # Immediately read back the spline state. This forces Resolve to
+            # flush its internal cache and consolidate the written handles into
+            # the displayed spline. Without this call some spline types (notably
+            # PolyPath → Displacement BezierSplines) visually update only one
+            # handle on the first write, even though SetKeyFrames returns OK.
+            try:
+                gfn = getattr(obj, "GetKeyFrames", None)
+                if callable(gfn): gfn()
+            except Exception:
+                pass
+            return True
+        except Exception:
+            continue
     return False
 
 
