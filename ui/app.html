@@ -578,37 +578,23 @@ input[type=number]{-moz-appearance:textfield}
   </div>
   <div style="position:relative">
     <button class="icon-btn" id="btn-panels" onclick="togglePanelMenu()" data-tip="Panels">
-      <svg viewBox="0 0 14 12" fill="none" width="13" height="13">
-        <rect x="1" y="1" width="5" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/>
-        <rect x="8" y="1" width="5" height="10" rx="1" stroke="currentColor" stroke-width="1.2"/>
-      </svg>
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 21H3v-8h8v8Zm8 0h-4v-2h4v2ZM5 19h4v-4H5v4Zm10 0h-2v-4h2v4Zm6 0h-2v-4h2v4Zm-2-4h-4v-2h4v2Zm-8-4H3V3h8v8Zm10 0h-8V3h8v8ZM5 9h4V5H5v4Zm10 0h4V5h-4v4Z"/></svg>
     </button>
     <!-- Panel menu — items have IDs so toggleSidebar can update their text (BUG 1 fix) -->
     <div id="panel-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;
       background:var(--overlay);border:1px solid var(--hl-med);border-radius:var(--r);
       min-width:185px;z-index:400;box-shadow:0 4px 16px rgba(0,0,0,.5);padding:3px 0">
-      <div class="ctx-item" id="pm-hide-left"  onclick="toggleSidebar('left');closePanelMenu()">◀ Hide Presets</div>
-      <div class="ctx-item" id="pm-hide-right" onclick="toggleSidebar('right');closePanelMenu()">▶ Hide Preview</div>
+      <div class="ctx-item" id="pm-hide-left"  onclick="toggleSidebar('left');closePanelMenu()"><svg style="width:11px;height:11px;vertical-align:middle;margin-right:5px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M8 13v-2h2v2H8Zm2-2V9h2v2h-2Zm0 4v-2h2v2h-2Zm2-6V7h2v2h-2Zm0 8v-2h2v2h-2Zm2-10V5h2v2h-2Zm0 12v-2h2v2h-2Z"/></svg>Hide Presets</div>
+      <div class="ctx-item" id="pm-hide-right" onclick="toggleSidebar('right');closePanelMenu()"><svg style="width:11px;height:11px;vertical-align:middle;margin-right:5px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M16 13v-2h-2v2h2Zm-2-2V9h-2v2h2Zm0 4v-2h-2v2h2Zm-2-6V7h-2v2h2Zm0 8v-2h-2v2h2ZM10 7V5H8v2h2Zm0 12v-2H8v2h2Z"/></svg>Hide Preview</div>
       <div style="height:1px;background:var(--border);margin:3px 0"></div>
-      <div class="ctx-item" onclick="popOut('left');closePanelMenu()">⊞ Float Presets</div>
-      <div class="ctx-item" onclick="popOut('right');closePanelMenu()">⊞ Float Preview</div>
-      <div class="ctx-item" onclick="popOut('curve');closePanelMenu()">⊞ Float Curve</div>
-      <div style="height:1px;background:var(--border);margin:3px 0"></div>
-      <div class="ctx-item" onclick="backend&&backend.open_external_dock('left','Presets');closePanelMenu()">↗ Presets — external window</div>
-      <div class="ctx-item" onclick="backend&&backend.open_external_dock('right','Preview');closePanelMenu()">↗ Preview — external window</div>
-      <div class="ctx-item" onclick="backend&&backend.open_external_dock('curve','Curve');closePanelMenu()">↗ Curve — external window</div>
+      <div class="ctx-item" onclick="backend&&backend.open_external_dock('left','Presets');closePanelMenu()"><svg style="width:11px;height:11px;vertical-align:middle;margin-right:5px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M17 21H5v-2h12v2ZM5 19H3V7h2v12Zm14 0h-2v-6h2v6Zm-8-4H9v-2h2v2Zm2-2h-2v-2h2v2Zm2-2h-2V9h2v2Zm6 0h-2V7h-2V5h-4V3h8v8Zm-4-2h-2V7h2v2Zm-6-2H5V5h6v2Z"/></svg>Presets — external window</div>
+      <div class="ctx-item" onclick="backend&&backend.open_external_dock('right','Preview');closePanelMenu()"><svg style="width:11px;height:11px;vertical-align:middle;margin-right:5px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M17 21H5v-2h12v2ZM5 19H3V7h2v12Zm14 0h-2v-6h2v6Zm-8-4H9v-2h2v2Zm2-2h-2v-2h2v2Zm2-2h-2V9h2v2Zm6 0h-2V7h-2V5h-4V3h8v8Zm-4-2h-2V7h2v2Zm-6-2H5V5h6v2Z"/></svg>Preview — external window</div>
+      <div class="ctx-item" onclick="backend&&backend.open_external_dock('curve','Curve');closePanelMenu()"><svg style="width:11px;height:11px;vertical-align:middle;margin-right:5px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M17 21H5v-2h12v2ZM5 19H3V7h2v12Zm14 0h-2v-6h2v6Zm-8-4H9v-2h2v2Zm2-2h-2v-2h2v2Zm2-2h-2V9h2v2Zm6 0h-2V7h-2V5h-4V3h8v8Zm-4-2h-2V7h2v2Zm-6-2H5V5h6v2Z"/></svg>Curve — external window</div>
     </div>
   </div>
   <button id="btn-compact" onclick="toggleCompact()" data-i18n="toolbar.compact">COMPACT</button>
   <button class="icon-btn" onclick="openSettings()">
-    <svg viewBox="0 0 14 12" fill="none">
-      <line x1="1" y1="2" x2="13" y2="2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <circle cx="4" cy="2" r="1.5" fill="currentColor"/>
-      <line x1="1" y1="6" x2="13" y2="6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <circle cx="10" cy="6" r="1.5" fill="currentColor"/>
-      <line x1="1" y1="10" x2="13" y2="10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
-      <circle cx="6" cy="10" r="1.5" fill="currentColor"/>
-    </svg>
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 16h11v2H11v4H4v-4H2v-2h2v-4h7v4Zm-5 4h3v-6H6v6ZM20 6h2v2h-2v4h-7V8H2V6h11V2h7v4Zm-5 4h3V4h-3v6Z"/></svg>
   </button>
 </div>
 
@@ -675,10 +661,7 @@ input[type=number]{-moz-appearance:textfield}
     <canvas id="curve-canvas"></canvas>
     <div id="zoom-hint">scroll = zoom</div>
     <button id="flip-btn" onclick="flipAll()" data-tip="Invert curve">
-      <svg width="12" height="13" viewBox="0 0 12 13" fill="none">
-        <path d="M1.5 3.5L5.5 1L9.5 3.5M1.5 9.5L5.5 12L9.5 9.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-        <line x1="1" y1="6.5" x2="11" y2="6.5" stroke="currentColor" stroke-width="1" stroke-dasharray="2,2"/>
-      </svg>
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 16h10v2H10v4H8v-2H6v-2H4v-2h2v-2h2v-2h2v4Zm4-8H4V6h10V2h2v2h2v2h2v2h-2v2h-2v2h-2V8Z"/></svg>
     </button>
   </div>
 
@@ -1346,10 +1329,13 @@ function liveVar(v, c) {
     _TC[v.slice(2)] = c;
     scheduleDraw();
   }
-  // --subtle is derived via CSS color-mix(--muted, --text).
-  // Remove any static body-level override so the derivation stays live.
+  // --subtle is derived from --muted and --text via color-mix().
+  // Defining it in :root means var() substitution resolves at :root context,
+  // not at body context — so theme overrides of --muted/--text don't propagate
+  // into --subtle for descendant elements. Setting it explicitly on body ensures
+  // the mix always uses the current theme's --muted and --text values.
   if (v==='--muted'||v==='--text') {
-    document.body.style.removeProperty('--subtle');
+    document.body.style.setProperty('--subtle','color-mix(in srgb, var(--muted) 65%, var(--text))');
   }
 }
 /** Update a mode color + sync accent if it's the current mode, refresh cards */
@@ -1575,19 +1561,23 @@ function setMode(m) {
   if (res) res.style.display = isResonance() ? '' : 'none';
   if (non) non.style.display = (hasNoHandles()) ? 'none' : '';
   // Apply mode palette (hl-med / hl-low tint)
+  // hl vars are always restored from _CSS_DEFAULTS — they are user-customizable
+  // via the Interface Colors panel and must never be overwritten by MODE_PALETTE,
+  // even in the default theme (which would silently pin them to Rosé Pine values).
   if (!_activeTheme) {
-    // Default theme: apply per-mode background tints from MODE_PALETTE
-    Object.entries(MODE_PALETTE[m] || {}).forEach(([k,v]) => document.body.style.setProperty(k,v));
-  } else {
-    // Custom theme: restore the theme's hl values explicitly.
-    // Calling removeProperty would expose the dark :root fallback (Rose Pine
-    // purple) regardless of the active theme — defeats the whole point.
-    ['--hl-low','--hl-med','--hl-high'].forEach(k => {
-      const themeVal = _CSS_DEFAULTS[k];
-      if (themeVal) document.body.style.setProperty(k, themeVal);
-      else document.body.style.removeProperty(k);
+    // Default theme: apply per-mode tints, excluding hl which stays user-controlled
+    Object.entries(MODE_PALETTE[m] || {}).forEach(([k,v]) => {
+      if (k === '--hl-low' || k === '--hl-med' || k === '--hl-high') return;
+      document.body.style.setProperty(k, v);
     });
   }
+  // Both default and named themes: restore hl from _CSS_DEFAULTS so user
+  // customizations (and theme-defined values) are always reflected correctly
+  ['--hl-low','--hl-med','--hl-high'].forEach(k => {
+    const v = _CSS_DEFAULTS[k];
+    if (v) document.body.style.setProperty(k, v);
+    else document.body.style.removeProperty(k);
+  });
   pushState();
 }
 
@@ -2678,18 +2668,20 @@ function closePanelMenu() {
 // BUG 1 FIX: removed references to btn-hide-left/btn-hide-right (don't exist in DOM)
 //            now updates the panel menu item text instead
 function toggleSidebar(side) {
+  const SVG_LEFT  = '<svg style="width:11px;height:11px;vertical-align:middle;margin-right:5px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M8 13v-2h2v2H8Zm2-2V9h2v2h-2Zm0 4v-2h2v2h-2Zm2-6V7h2v2h-2Zm0 8v-2h2v2h-2Zm2-10V5h2v2h-2Zm0 12v-2h2v2h-2Z"/></svg>';
+  const SVG_RIGHT = '<svg style="width:11px;height:11px;vertical-align:middle;margin-right:5px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M16 13v-2h-2v2h2Zm-2-2V9h-2v2h2Zm0 4v-2h-2v2h2Zm-2-6V7h-2v2h2Zm0 8v-2h-2v2h2ZM10 7V5H8v2h2Zm0 12v-2H8v2h2Z"/></svg>';
   if (side==='left') {
     leftHidden = !leftHidden;
     const panel=$('preset-panel'), dh=$('dh-left'), item=$('pm-hide-left');
     if (panel) panel.style.display = leftHidden ? 'none' : '';
     if (dh)    dh.style.display    = leftHidden ? 'none' : '';
-    if (item)  item.textContent    = leftHidden ? '▶ Show Presets' : '◀ Hide Presets';
+    if (item)  item.innerHTML      = SVG_LEFT  + (leftHidden  ? 'Show Presets' : 'Hide Presets');
   } else {
     rightHidden = !rightHidden;
     const panel=$('right-panel'), dh=$('dh-right'), item=$('pm-hide-right');
     if (panel) panel.style.display = rightHidden ? 'none' : '';
     if (dh)    dh.style.display    = rightHidden ? 'none' : '';
-    if (item)  item.textContent    = rightHidden ? '◀ Show Preview' : '▶ Hide Preview';
+    if (item)  item.innerHTML      = SVG_RIGHT + (rightHidden ? 'Show Preview' : 'Hide Preview');
   }
 }
 
@@ -3309,12 +3301,16 @@ function applyThemeJSON(data) {
   }
   // Apply current mode accent immediately — ensures mode colors update on theme switch
   document.body.style.setProperty('--accent', MODE_COLORS[mode] || '#9ccfd8');
-  // Remove stale MODE_PALETTE overrides if theme already provides hl values via data.colors
-  // (avoids Rosé Pine purple tints bleeding into other themes)
+  // Themes without explicit hl values: preserve user-customized hl from
+  // _CSS_DEFAULTS (set by interface_colors in settings or the hl color pickers).
+  // setMode will also restore them from _CSS_DEFAULTS on the next frame, but
+  // setting them here avoids a single-frame flash of the :root fallback.
   if (!(data.colors && (data.colors.hl_low || data.colors['hl-low']))) {
-    document.body.style.removeProperty('--hl-low');
-    document.body.style.removeProperty('--hl-med');
-    document.body.style.removeProperty('--hl-high');
+    ['--hl-low','--hl-med','--hl-high'].forEach(v => {
+      const val = _CSS_DEFAULTS[v];
+      if (val) document.body.style.setProperty(v, val);
+      else document.body.style.removeProperty(v);
+    });
   }
   if (data.grid_colors) {
     const gc=data.grid_colors;
