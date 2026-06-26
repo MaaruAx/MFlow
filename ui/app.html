@@ -514,6 +514,227 @@ input[type=number]{-moz-appearance:textfield}
 .dock-btn:hover{color:var(--accent)}
 .dock-btn.close-btn:hover{color:var(--love)}
 .dock-body{flex:1;overflow:auto;min-height:0}
+
+/* ── Welcome / Help panel ──────────────────────────────────────────────────── */
+#wlc-ov{position:fixed;inset:0;z-index:900;background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center}
+#wlc-ov.hidden{display:none}
+#wlc-panel{
+  background:var(--base);border:1px solid var(--border);border-radius:6px;
+  width:560px;max-height:80vh;display:flex;flex-direction:column;
+  box-shadow:0 12px 48px rgba(0,0,0,.8);overflow:hidden;
+  font-family:'Monaspace','JetBrains Mono','Courier New',monospace}
+
+/* Header con stripe de acento */
+#wlc-hdr{
+  display:flex;align-items:center;gap:10px;padding:0 18px;height:46px;
+  background:var(--overlay);border-bottom:1px solid var(--border);
+  border-left:3px solid var(--accent);flex-shrink:0;position:relative}
+#wlc-logo{font-size:11px;font-weight:700;letter-spacing:1.5px;color:var(--accent);
+  text-transform:uppercase}
+#wlc-logo span{color:var(--muted);font-weight:400;letter-spacing:.3px;
+  margin-left:8px;font-size:10px;text-transform:none}
+#wlc-close{margin-left:auto;background:none;border:none;color:var(--muted);
+  cursor:pointer;font-size:16px;line-height:1;padding:2px 4px}
+#wlc-close:hover{color:var(--text)}
+
+/* Body */
+#wlc-body{overflow-y:auto;padding:16px;display:grid;
+  grid-template-columns:1fr 1fr;gap:12px 14px}
+#wlc-intro{grid-column:1/-1}
+
+/* Secciones */
+.wlc-sec{background:var(--overlay);border-radius:4px;
+  border:1px solid var(--border);padding:10px 12px;
+  display:flex;flex-direction:column;gap:6px}
+.wlc-sec-title{font-size:9px;font-weight:700;letter-spacing:1px;
+  color:var(--accent);text-transform:uppercase;margin-bottom:2px;
+  display:flex;align-items:center;gap:5px}
+.wlc-sec-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* Intro tip */
+#wlc-intro .wlc-sec{background:var(--surface);
+  border-left:3px solid var(--accent);border-radius:0 4px 4px 0}
+.wlc-tip{font-size:10.5px;color:var(--subtle);line-height:1.65}
+.wlc-tip b{color:var(--text);font-weight:600}
+.wlc-tip .step{color:var(--accent);font-weight:700}
+
+/* Filas de shortcuts */
+.wlc-row{display:flex;align-items:baseline;gap:7px;font-size:10px}
+.wlc-keys{flex-shrink:0;min-width:100px;display:flex;flex-wrap:wrap;gap:2px;align-items:center}
+.wlc-sep{color:var(--muted);font-size:9px}
+kbd{
+  /* Override UA monospace — force Monaspace */
+  font-family:'Monaspace','JetBrains Mono','Courier New',monospace!important;
+  background:var(--hl-low);border:1px solid var(--hl-high);border-bottom-width:2px;
+  border-radius:3px;padding:0 5px;font-size:9px;color:var(--text);
+  white-space:nowrap;line-height:18px;display:inline-block}
+.wlc-desc{color:var(--muted);line-height:1.45;font-size:10px}
+.wlc-desc b{color:var(--subtle);font-weight:600}
+.wlc-bullet{color:var(--muted);font-size:10px;line-height:1.55;
+  padding-left:10px;position:relative}
+.wlc-bullet::before{content:'·';position:absolute;left:0;color:var(--accent)}
+.wlc-bullet b{color:var(--text)}
+code.wlc-code{font-family:'Monaspace','JetBrains Mono',monospace!important;
+  font-size:9px;background:var(--hl-low);padding:1px 5px;
+  border-radius:3px;color:var(--foam)}
+
+/* Footer */
+#wlc-foot{padding:10px 18px;border-top:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;flex-shrink:0;
+  background:var(--overlay)}
+#wlc-dont-lbl{font-size:10px;color:var(--muted);display:flex;
+  align-items:center;gap:6px;cursor:pointer;user-select:none}
+#wlc-dont-lbl input{accent-color:var(--accent)}
+#btn-wlc-ok{margin-left:auto;padding:5px 20px;font-size:10px;font-weight:700;
+  letter-spacing:.5px;text-transform:uppercase;border-radius:var(--r);
+  border:1.5px solid var(--accent);color:var(--base);
+  background:var(--accent);cursor:pointer;
+  font-family:'Monaspace','JetBrains Mono',monospace}
+#btn-wlc-ok:hover{opacity:.85}
+
+/* ─── Welcome / Quick-reference overlay ────────────────────────────────────── */
+
+#wlc-ov {
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(0,0,0,.72);
+  display: flex; align-items: center; justify-content: center;
+}
+#wlc-ov.hidden { display: none; }
+
+#wlc-panel {
+  /* Inherit body font so Monaspace loaded by @font-face is used automatically */
+  font-family: inherit;
+  width: 548px; max-height: 82vh;
+  display: flex; flex-direction: column;
+  background: var(--base);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--accent);
+  border-radius: 5px;
+  box-shadow: 0 16px 56px rgba(0,0,0,.85);
+  overflow: hidden;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+#wlc-head {
+  display: flex; align-items: center; gap: 0;
+  padding: 0 16px; height: 38px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+#wlc-brand {
+  font-size: 10px; font-weight: 700; letter-spacing: 2px;
+  color: var(--accent); text-transform: uppercase; flex: 1;
+}
+#wlc-subtitle {
+  font-size: 10px; color: var(--muted); letter-spacing: .3px; margin-left: 10px;
+}
+#wlc-x {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 15px; padding: 0 0 0 12px; line-height: 1;
+}
+#wlc-x:hover { color: var(--text); }
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+#wlc-body {
+  overflow-y: auto; padding: 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+/* Workflow bar — full width, numbered steps */
+#wlc-workflow {
+  display: flex; align-items: stretch; gap: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  overflow: hidden;
+}
+.wlc-step {
+  flex: 1; display: flex; flex-direction: column;
+  padding: 8px 10px; gap: 3px; position: relative;
+}
+.wlc-step + .wlc-step { border-left: 1px solid var(--border); }
+.wlc-step-n {
+  font-size: 9px; font-weight: 700; color: var(--accent);
+  letter-spacing: .5px;
+}
+.wlc-step-label {
+  font-size: 10px; color: var(--text); font-weight: 600;
+}
+.wlc-step-hint {
+  font-size: 9px; color: var(--muted); line-height: 1.4;
+}
+
+/* 2-column grid for the four info cards */
+#wlc-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+}
+
+/* Card */
+.wlc-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 4px; overflow: hidden;
+}
+.wlc-card-head {
+  padding: 5px 10px;
+  background: var(--overlay); border-bottom: 1px solid var(--border);
+  font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  color: var(--accent); text-transform: uppercase;
+}
+.wlc-card-body { padding: 7px 10px; display: flex; flex-direction: column; gap: 4px; }
+
+/* Shortcut row */
+.wlc-row { display: flex; align-items: baseline; gap: 6px; }
+.wlc-keys { min-width: 96px; display: flex; gap: 2px; flex-wrap: wrap; flex-shrink: 0; }
+.wlc-desc { font-size: 10px; color: var(--muted); line-height: 1.35; }
+.wlc-desc b { color: var(--text); font-weight: 600; }
+
+/* kbd — force Monaspace via inherit since UA stylesheet would override */
+kbd {
+  font-family: inherit !important;
+  font-size: 9px;
+  background: var(--overlay);
+  border: 1px solid var(--hl-med);
+  border-bottom: 2px solid var(--hl-high);
+  border-radius: 3px;
+  padding: 1px 5px; line-height: 16px;
+  color: var(--text); white-space: nowrap; display: inline-block;
+}
+
+/* Tips card spans full width */
+.wlc-tips-card { grid-column: 1 / -1; }
+.wlc-tip-row {
+  font-size: 10px; color: var(--muted); line-height: 1.5;
+  padding-left: 12px; position: relative;
+}
+.wlc-tip-row::before { content: '→'; position: absolute; left: 0; color: var(--accent); }
+.wlc-tip-row b { color: var(--text); font-weight: 600; }
+.wlc-tip-code {
+  font-family: inherit;
+  font-size: 9px; background: var(--overlay); border: 1px solid var(--border);
+  padding: 0 4px; border-radius: 2px; color: var(--foam);
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+#wlc-foot {
+  padding: 9px 14px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0; background: var(--surface);
+}
+#wlc-dont-lbl {
+  font-size: 10px; color: var(--muted);
+  display: flex; align-items: center; gap: 5px;
+  cursor: pointer; user-select: none;
+}
+#wlc-dont-lbl input { accent-color: var(--accent); cursor: pointer; }
+#btn-wlc-ok {
+  margin-left: auto;
+  font-family: inherit; font-size: 10px; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase;
+  padding: 5px 18px; border-radius: var(--r);
+  background: var(--accent); color: var(--base);
+  border: none; cursor: pointer;
+}
+#btn-wlc-ok:hover { opacity: .82; }
 </style>
 </head>
 <body>
@@ -843,7 +1064,7 @@ input[type=number]{-moz-appearance:textfield}
         </div>
         <div style="padding:8px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
           <span id="scan-sel-count"></span>
-          <button id="btn-scan" onclick="doScanAll()" data-i18n="scan.button">⟳ SCAN ALL</button>
+          <button id="btn-scan" onclick="doScanAll()"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z"/></svg><span data-i18n="scan.button">SCAN ALL</span></button>
         </div>
       </div>
       <div id="inp-list" style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;border-top:1px solid var(--border);padding:4px 0;max-height:140px;overflow-y:auto"></div>
@@ -876,7 +1097,7 @@ input[type=number]{-moz-appearance:textfield}
     </div>
   </div>
   <button id="btn-aall" onclick="applySelected()" data-i18n="bottom.apply_selected">APPLY SELECTED</button>
-  <button id="btn-apply" onclick="applyWithModifiers(event)" data-i18n="bottom.apply">▶ APPLY</button>
+  <button id="btn-apply" onclick="applyWithModifiers(event)"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M9,5L11,5L11,7L16,12L11,17L11,19L9,19L9,21L7,21L7,3L9,3L9,5ZM13,17L11,17L11,15L13,15L13,17ZM15,15L13,15L13,13L15,13L15,15ZM17,13L15,13L15,11L17,11L17,13ZM15,11L13,11L13,9L15,9L15,11ZM13,9L11,7L13,7L13,9Z"/></svg><span data-i18n="bottom.apply">APPLY</span></button>
 </div>
 </div>
 
@@ -907,6 +1128,18 @@ input[type=number]{-moz-appearance:textfield}
     <div class="s-header">
       <span class="s-header-title" data-i18n="settings.title">Settings</span>
       <button class="s-header-close" onclick="saveSettings()" title="Save & close">×</button>
+    </div>
+    <!-- How to Use button — top of settings so it's always visible -->
+    <div style="padding:10px 14px 6px">
+      <button onclick="openWelcome()" style="width:100%;padding:7px 0;border-radius:var(--r);
+        border:1px solid var(--border);background:var(--overlay);color:var(--text);
+        font-size:11px;font-weight:600;letter-spacing:.3px;font-family:inherit;cursor:pointer;display:flex;
+        align-items:center;justify-content:center;gap:7px;transition:border-color .15s,color .15s"
+        onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
+        onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text)'">
+        <svg viewBox="0 0 24 24" fill="currentColor" style="width:13px;height:13px;flex-shrink:0"><path d="M11 18h2v-2h-2v2Zm1-16C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2Zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8Zm0-14c-2.21 0-4 1.79-4 4h2c0-1.1.9-2 2-2s2 .9 2 2c0 2-3 1.75-3 5h2c0-2.25 3-2.5 3-5 0-2.21-1.79-4-4-4Z"/></svg>
+        How to use MFlow
+      </button>
     </div>
     <div class="s-section">
       <div class="s-section-label" data-i18n="settings.appearance">Appearance</div>
@@ -1256,6 +1489,7 @@ let raf           = null;
 let rafT0         = null;
 let profileNames  = [];
 let activeProfile = 'Default';
+let _spaceDown = false; // tracks Space key for Space+A apply shortcut
 let leftHidden    = false;
 let rightHidden   = false;
 let _physFlipped  = false;
@@ -1388,9 +1622,32 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('contextmenu', e => e.preventDefault());
   // Forward Ctrl+Z / Ctrl+Shift+Z to Resolve's comp undo when no input is focused
   document.addEventListener('keydown', e => {
-    if (e.ctrlKey && e.key.toLowerCase() === 'z' && !e.target.closest('input,textarea,[contenteditable]')) {
+    const tag = (e.target.tagName||'').toLowerCase();
+    const editable = e.target.closest('input,textarea,[contenteditable]');
+    if (e.ctrlKey && e.key.toLowerCase() === 'z' && !editable) {
       e.preventDefault();
       if (backend) { try { e.shiftKey ? backend.redo_resolve() : backend.undo_resolve(); } catch(_) {} }
+    }
+    // Delete / Backspace — remove selected preset (no input focused)
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !editable && selIdx >= 0) {
+      e.preventDefault();
+      deleteSelectedPreset();
+    }
+    // Track Space key state for the Space+A apply shortcut
+    if (e.code === 'Space' && !editable) { _spaceDown = true; e.preventDefault(); }
+    // Space+A — apply shortcut. Space is the trigger; Ctrl and Shift control
+    // scope the same way as when clicking Apply with modifier keys held:
+    //   Space+A           → apply to segment at playhead
+    //   Ctrl+Space+A      → all segments before playhead
+    //   Shift+Space+A     → all segments
+    if (_spaceDown && e.key.toLowerCase() === 'a' && !editable) {
+      e.preventDefault();
+      applyWithModifiers({ ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: false });
+    }
+    // Escape closes the welcome overlay if open
+    if (e.key === 'Escape') {
+      const wov = $('wlc-ov');
+      if (wov && wov.style.display !== 'none') { closeWelcome(); return; }
     }
   });
   document.addEventListener('click', e => {
@@ -1450,13 +1707,17 @@ document.addEventListener('DOMContentLoaded', () => {
     setConn(false, 'Qt not available');
   }
 });
+  document.addEventListener('keyup', e => { if (e.code === 'Space') _spaceDown = false; });
 
 // ═══════════════════════════════════════════════════════════════
 // § 7. CONNECTION & STATUS
 // ═══════════════════════════════════════════════════════════════
 function setConn(ok, txt) {
   $('conn-dot').className = ok ? 'on' : '';
-  const l = $('conn-text'); l.textContent = txt;
+  const l = $('conn-text');
+  // In compact mode the titlebar is narrow — show only the first segment
+  // (e.g. "Connected") and drop " · DaVinci Resolve Studio v19" to save space.
+  l.textContent = compact ? txt.split(' · ')[0] : txt;
   l.style.color = ok ? 'var(--accent)' : 'var(--muted)';
   const btn = $('btn-conn');
   if (btn) {
@@ -2998,17 +3259,20 @@ function doSaveTheme() {
   setStatus('Theme saved: '+name, 'var(--accent)');
 }
 
+// SVG inline del botón scan — se reutiliza para los estados SCANNING y SCAN ALL
+// para no depender de data-i18n ni de textContent (que borraría el icono).
+const _SCAN_SVG = '<svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z"/></svg>';
 function doScanAll() {
   if (!backend) return;
   const btn=$('btn-scan');
-  if (btn) { btn.classList.add('scanning'); btn.textContent=t('scan.scanning'); }
+  if (btn) { btn.classList.add('scanning'); btn.innerHTML=_SCAN_SVG+'<span>'+t('scan.scanning')+'</span>'; }
   backend.scan_comp();
 }
 function renderCompScan(data) {
   _scanData=data||{};
   for (const k of Object.keys(_scanSel)) { if(!_scanData[k]) delete _scanSel[k]; }
   const btn=$('btn-scan');
-  if (btn) { btn.classList.remove('scanning'); btn.textContent=t('scan.button'); }
+  if (btn) { btn.classList.remove('scanning'); btn.innerHTML=_SCAN_SVG+'<span>'+t('scan.button')+'</span>'; }
   const tree=$('scan-tree'), ph=$('scan-ph'); if(!tree)return;
   tree.innerHTML='';
   const tools=Object.keys(_scanData);
@@ -3196,12 +3460,33 @@ function saveSettings() {
     ui_zoom:   +($('s-ui-zoom').value)||100,
     mode_colors: { easing:$('sc-easing').value||MODE_COLORS.easing, spring:$('sc-spring').value||MODE_COLORS.spring, elastic:$('sc-elastic').value||MODE_COLORS.elastic, overframe:$('sc-overframe').value||MODE_COLORS.overframe, bounce:$('sc-bounce').value||MODE_COLORS.bounce, catenary:$('sc-catenary').value||MODE_COLORS.catenary, pulse:$('sc-pulse').value||MODE_COLORS.pulse, noise:$('sc-noise').value||MODE_COLORS.noise, resonance:$('sc-resonance').value||MODE_COLORS.resonance },
     grid_colors:{grid:GRID_COLOR, cross:CROSS_COLOR, handle_fill:HANDLE_FILL, edge:EDGE_COLOR},
-    interface_colors:ifaceColors
+    interface_colors:ifaceColors,
+    sidebar_hidden:{left:leftHidden, right:rightHidden},
+    welcome_seen:!!_currentSettings.welcome_seen
   };
   if (backend) { backend.save_settings(JSON.stringify(s)); backend.set_always_on_top(s.always_on_top); }
   applySettingsUI(s); closeSettings();
 }
 function resetSettings() { if(confirm('Reset all settings?')){if(backend)backend.save_settings('{}');closeSettings();} }
+
+// ── Welcome / Quick-reference panel ─────────────────────────────────────────
+function openWelcome() {
+  const ov = document.getElementById('wlc-ov');
+  if (!ov) return;
+  // Sync the checkbox to the persisted preference
+  const chk = document.getElementById('wlc-dont-chk');
+  if (chk) chk.checked = !!(_currentSettings.welcome_seen);
+  ov.classList.remove('hidden');
+}
+function closeWelcome() {
+  const ov = document.getElementById('wlc-ov');
+  if (ov) ov.classList.add('hidden');
+}
+function onWlcDontShow(checked) {
+  // Persist immediately — user should not need to open Settings to save this
+  _currentSettings.welcome_seen = checked;
+  if (backend) backend.save_settings(JSON.stringify(_currentSettings));
+}
 /** Apply a language code — reloads i18n and re-applies DOM translations */
 function applyLanguage(code) {
   const sel = $('s-lang'); if (sel) sel.dataset.current = code;
@@ -3265,7 +3550,18 @@ function applySettingsUI(s) {
     if(gc.handle_fill){HANDLE_FILL=gc.handle_fill;const sw=$('sw-cc-handle-fill');if(sw)sw.style.background=gc.handle_fill;}
     if(gc.edge){EDGE_COLOR=gc.edge;const sw=$('sw-cc-edge');if(sw)sw.style.background=gc.edge;}
   }
+  if (s.sidebar_hidden) {
+    // Restore panel visibility without toggling — apply the saved state directly
+    // so the panels start in the same configuration as when the user last closed MFlow.
+    const sh = s.sidebar_hidden;
+    if (sh.left  !== undefined && sh.left  !== leftHidden)  toggleSidebar('left');
+    if (sh.right !== undefined && sh.right !== rightHidden) toggleSidebar('right');
+  }
   _populateSettingsForm(s); setMode(mode); // re-apply accent after settings loaded
+  // Show welcome overlay on first launch (or when the user hasn't opted out)
+  // Show welcome on first launch. setTimeout(0) is more reliable than
+  // requestAnimationFrame inside a QWebChannel signal callback.
+  if (!s.welcome_seen) setTimeout(openWelcome, 0);
 }
 function resetColors() {
   ['--base','--surface','--overlay','--border','--text','--muted'].forEach(v=>document.body.style.removeProperty(v));
@@ -3525,39 +3821,127 @@ document.addEventListener('click', e => {
 }, true);
 </script></script>
 
-<!-- HSV Color Picker (must be after </script> but before </body>) -->
-<div id="clr-picker">
-  <div id="clr-pk-head">
-    <span id="clr-pk-label">Color</span>
-    <button id="clr-pk-x" onclick="_cpClose()">&#xd7;</button>
-  </div>
-  <canvas id="clr-sv-canvas" width="182" height="160"></canvas>
-  <canvas id="clr-hue-canvas" width="182" height="12"></canvas>
-  <div id="clr-pk-bottom">
-    <div id="clr-pk-prev">
-      <div id="clr-prev-old" title="Original"></div>
-      <div id="clr-prev-new" title="Current"></div>
+<!-- HSV Color Picker (must be after </script> but before 
+<!-- ── Welcome / Help overlay ─────────────────────────────────────────────── -->
+<!-- Welcome / Quick-reference overlay -->
+<div id="wlc-ov" class="hidden">
+  <div id="wlc-panel">
+
+    <!-- Header -->
+    <div id="wlc-head">
+      <span id="wlc-brand">MFlow</span>
+      <span id="wlc-subtitle">Quick Reference</span>
+      <button id="wlc-x" onclick="closeWelcome()">&#215;</button>
     </div>
-    <input id="clr-hex-inp" type="text" maxlength="7" placeholder="#rrggbb"
-      oninput="_cpHexTyped(this.value)"
-      onkeydown="if(event.key==='Enter'){event.preventDefault();_cpApply();}if(event.key==='Escape')_cpClose()">
-  </div>
-  <div id="clr-pk-btns">
-    <button class="s-btn" onclick="_cpClose()">Cancel</button>
-    <button class="s-btn primary" onclick="_cpApply()">Apply</button>
-  </div>
-</div>
-<!-- Save Theme dialog -->
-<div id="save-theme-ov" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.6);align-items:center;justify-content:center">
-  <div style="background:var(--surface);border:1px solid var(--hl-med);border-radius:4px;padding:18px;width:300px;display:flex;flex-direction:column;gap:10px">
-    <div style="font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text)">SAVE THEME</div>
-    <input id="save-theme-name"   class="s-inp" type="text" placeholder="Theme name (required)">
-    <input id="save-theme-author" class="s-inp" type="text" placeholder="Author (optional)">
-    <div style="display:flex;gap:6px;justify-content:flex-end">
-      <button class="s-btn" onclick="$('save-theme-ov').style.display='none'">Cancel</button>
-      <button class="s-btn primary" onclick="doSaveTheme()">Save</button>
+
+    <div id="wlc-body">
+
+      <!-- Numbered workflow bar -->
+      <div id="wlc-workflow">
+        <div class="wlc-step">
+          <span class="wlc-step-n">01</span>
+          <span class="wlc-step-label">Connect</span>
+          <span class="wlc-step-hint">MFlow auto-connects to an open DaVinci Resolve session on launch.</span>
+        </div>
+        <div class="wlc-step">
+          <span class="wlc-step-n">02</span>
+          <span class="wlc-step-label">Scan</span>
+          <span class="wlc-step-hint">Click <b>Scan All</b> or press <kbd>Ctrl</kbd><kbd>R</kbd> to detect animated nodes.</span>
+        </div>
+        <div class="wlc-step">
+          <span class="wlc-step-n">03</span>
+          <span class="wlc-step-label">Select</span>
+          <span class="wlc-step-hint">Check the inputs you want to affect in the scan panel.</span>
+        </div>
+        <div class="wlc-step">
+          <span class="wlc-step-n">04</span>
+          <span class="wlc-step-label">Shape</span>
+          <span class="wlc-step-hint">Drag handles in the curve editor, or pick a preset.</span>
+        </div>
+        <div class="wlc-step">
+          <span class="wlc-step-n">05</span>
+          <span class="wlc-step-label">Apply</span>
+          <span class="wlc-step-hint">Press <b>Apply</b> to write the curve to the selected keyframes.</span>
+        </div>
+      </div>
+
+      <!-- 2-column card grid -->
+      <div id="wlc-grid">
+
+        <!-- Shortcuts -->
+        <div class="wlc-card">
+          <div class="wlc-card-head"><svg style="width:10px;height:10px;margin-right:4px;vertical-align:middle;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M20 5H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 5H5v-2h2v2zm0-3H5v-2h2v2zm0-3H5V8h2v2zm9 6h-8v-2h8v2zm0-3h-2v-2h2v2zm0-3h-2V8h2v2zm3 6h-2v-2h2v2zm0-3h-2v-2h2v2zm0-3h-2V8h2v2z"/></svg>Shortcuts</div>
+          <div class="wlc-card-body">
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>R</kbd></span><span class="wlc-desc">Scan All &mdash; works without focus</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>Z</kbd></span><span class="wlc-desc">Undo in Resolve</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>&#8679;</kbd><kbd>Z</kbd></span><span class="wlc-desc">Redo in Resolve</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Space</kbd><kbd>A</kbd></span><span class="wlc-desc">Apply — same as clicking Apply</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Delete</kbd></span><span class="wlc-desc">Remove selected preset</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Esc</kbd></span><span class="wlc-desc">Close overlay / dialog</span></div>
+          </div>
+        </div>
+
+        <!-- Apply modes -->
+        <div class="wlc-card">
+          <div class="wlc-card-head"><svg style="width:10px;height:10px;margin-right:4px;vertical-align:middle;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M9,5L11,5L11,7L16,12L11,17L11,19L9,19L9,21L7,21L7,3L9,3L9,5ZM13,17L11,17L11,15L13,15L13,17ZM15,15L13,15L13,13L15,13L15,15ZM17,13L15,13L15,11L17,11L17,13ZM15,11L13,11L13,9L15,9L15,11ZM13,9L11,7L13,7L13,9Z" fill-rule="evenodd" clip-rule="evenodd"/></svg>Apply Modes &mdash; Playhead</div>
+          <div class="wlc-card-body">
+            <div style="font-size:9px;color:var(--muted);margin-bottom:2px;letter-spacing:.3px">MOUSE</div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>click</kbd></span><span class="wlc-desc">Segment at playhead</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>click</kbd></span><span class="wlc-desc">All segments <b>before</b></span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Alt</kbd><kbd>click</kbd></span><span class="wlc-desc">All segments <b>after</b></span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Shift</kbd><kbd>click</kbd></span><span class="wlc-desc"><b>All</b> segments</span></div>
+            <div style="font-size:9px;color:var(--muted);margin-top:4px;margin-bottom:2px;letter-spacing:.3px">KEYBOARD (Space+A)</div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Space</kbd><kbd>A</kbd></span><span class="wlc-desc">Segment at playhead</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>Space</kbd><kbd>A</kbd></span><span class="wlc-desc">All segments <b>before</b></span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Shift</kbd><kbd>Space</kbd><kbd>A</kbd></span><span class="wlc-desc"><b>All</b> segments</span></div>
+          </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="wlc-card">
+          <div class="wlc-card-head"><svg style="width:10px;height:10px;margin-right:4px;vertical-align:middle;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>Presets</div>
+          <div class="wlc-card-body">
+            <div class="wlc-row"><span class="wlc-keys"><kbd>click</kbd></span><span class="wlc-desc">Load into editor</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>dbl&#8209;click</kbd></span><span class="wlc-desc">Load &amp; apply immediately</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>right&#8209;click</kbd></span><span class="wlc-desc">Rename / duplicate / delete</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Delete</kbd></span><span class="wlc-desc">Remove selected preset</span></div>
+          </div>
+        </div>
+
+        <!-- Scan panel -->
+        <div class="wlc-card">
+          <div class="wlc-card-head"><svg style="width:10px;height:10px;margin-right:4px;vertical-align:middle;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z"/></svg>Scan Panel</div>
+          <div class="wlc-card-body">
+            <div class="wlc-row"><span class="wlc-keys"><kbd>checkbox</kbd></span><span class="wlc-desc">Target that input for Apply</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>multi</kbd></span><span class="wlc-desc">Multiple inputs across nodes apply at once</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Manual</kbd></span><span class="wlc-desc">Disable Playhead in Settings for manual range</span></div>
+          </div>
+        </div>
+
+        <!-- Tips — full width -->
+        <div class="wlc-card wlc-tips-card">
+          <div class="wlc-card-head"><svg style="width:10px;height:10px;margin-right:4px;vertical-align:middle;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"/></svg>Tips</div>
+          <div class="wlc-card-body" style="display:grid;grid-template-columns:1fr 1fr;gap:3px 12px">
+            <div class="wlc-tip-row"><b>Invert</b> flips the curve vertically — turns ease-in into ease-out instantly.</div>
+            <div class="wlc-tip-row">The <b>Panels</b> menu lets you hide or tear off panels into separate windows.</div>
+            <div class="wlc-tip-row">Themes live in <span class="wlc-tip-code">~/.mflow/themes/</span> — export one from Settings to see the JSON format.</div>
+            <div class="wlc-tip-row"><b>Auto Apply</b> writes the curve on every handle drag, without pressing Apply.</div>
+          </div>
+        </div>
+
+      </div><!-- #wlc-grid -->
+    </div><!-- #wlc-body -->
+
+    <!-- Footer -->
+    <div id="wlc-foot">
+      <label id="wlc-dont-lbl">
+        <input type="checkbox" id="wlc-dont-chk" onchange="onWlcDontShow(this.checked)">
+        Don&rsquo;t show on startup
+      </label>
+      <button id="btn-wlc-ok" onclick="closeWelcome()">Got it</button>
     </div>
-  </div>
-</div>
+
+  </div><!-- #wlc-panel -->
+</div><!-- #wlc-ov -->
 </body>
 </html>
