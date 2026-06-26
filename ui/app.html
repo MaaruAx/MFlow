@@ -1064,7 +1064,7 @@ kbd {
         </div>
         <div style="padding:8px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
           <span id="scan-sel-count"></span>
-          <button id="btn-scan" onclick="doScanAll()"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z"/></svg><span data-i18n="scan.button">SCAN ALL</span></button>
+          <button id="btn-scan" onclick="doScanAll()"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z"/></svg><span id="scan-btn-lbl">SCAN ALL</span></button>
         </div>
       </div>
       <div id="inp-list" style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;border-top:1px solid var(--border);padding:4px 0;max-height:140px;overflow-y:auto"></div>
@@ -1097,7 +1097,7 @@ kbd {
     </div>
   </div>
   <button id="btn-aall" onclick="applySelected()" data-i18n="bottom.apply_selected">APPLY SELECTED</button>
-  <button id="btn-apply" onclick="applyWithModifiers(event)"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M9,5L11,5L11,7L16,12L11,17L11,19L9,19L9,21L7,21L7,3L9,3L9,5ZM13,17L11,17L11,15L13,15L13,17ZM15,15L13,15L13,13L15,13L15,15ZM17,13L15,13L15,11L17,11L17,13ZM15,11L13,11L13,9L15,9L15,11ZM13,9L11,7L13,7L13,9Z"/></svg><span data-i18n="bottom.apply">APPLY</span></button>
+  <button id="btn-apply" onclick="applyWithModifiers(event)"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M9,5L11,5L11,7L16,12L11,17L11,19L9,19L9,21L7,21L7,3L9,3L9,5ZM13,17L11,17L11,15L13,15L13,17ZM15,15L13,15L13,13L15,13L15,15ZM17,13L15,13L15,11L17,11L17,13ZM15,11L13,11L13,9L15,9L15,11ZM13,9L11,7L13,7L13,9Z"/></svg><span id="apply-btn-lbl">APPLY</span></button>
 </div>
 </div>
 
@@ -1356,6 +1356,11 @@ function applyI18n() {
     const v = T[el.dataset.i18n];
     if (v !== undefined) el.textContent = v;
   });
+  // Update buttons whose labels use IDs instead of data-i18n (SVG icons live in the button)
+  const scanLbl  = document.getElementById('scan-btn-lbl');
+  const applyLbl = document.getElementById('apply-btn-lbl');
+  if (scanLbl  && T['scan.button'])  scanLbl.textContent  = T['scan.button'];
+  if (applyLbl && T['bottom.apply']) applyLbl.textContent = T['bottom.apply'];
   document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
     const v = T[el.dataset.i18nPlaceholder];
     if (v !== undefined) el.placeholder = v;
@@ -1489,9 +1494,9 @@ let raf           = null;
 let rafT0         = null;
 let profileNames  = [];
 let activeProfile = 'Default';
-let _spaceDown = false; // tracks Space key for Space+A apply shortcut
 let leftHidden    = false;
 let rightHidden   = false;
+let _aKeyDown     = false; // tracks A key for A+ArrowDown apply chord
 let _physFlipped  = false;
 let _syncingModeLib = false;
 // KF range: _kfrTo=0 means "last" (displays as ∞)
@@ -1633,16 +1638,20 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       deleteSelectedPreset();
     }
-    // Track Space key state for the Space+A apply shortcut
-    if (e.code === 'Space' && !editable) { _spaceDown = true; e.preventDefault(); }
-    // Space+A — apply shortcut. Space is the trigger; Ctrl and Shift control
-    // scope the same way as when clicking Apply with modifier keys held:
-    //   Space+A           → apply to segment at playhead
-    //   Ctrl+Space+A      → all segments before playhead
-    //   Shift+Space+A     → all segments
-    if (_spaceDown && e.key.toLowerCase() === 'a' && !editable) {
+    // A+ArrowDown apply chord. A is held as a trigger; ArrowDown fires the action.
+    // Ctrl and Shift pass through as scope modifiers (same as clicking Apply):
+    //   A+↓            → segment at playhead
+    //   Ctrl+A+↓       → all segments before playhead
+    //   Shift+A+↓      → all segments
+    if (e.key.toLowerCase() === 'a' && !editable) _aKeyDown = true;
+    if (_aKeyDown && e.key === 'ArrowDown' && !editable) {
       e.preventDefault();
       applyWithModifiers({ ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: false });
+    }
+    // Ctrl+R — scan all (also handled by Python global hotkey for out-of-focus use)
+    if (e.ctrlKey && e.key.toLowerCase() === 'r' && !editable) {
+      e.preventDefault();
+      doScanAll();
     }
     // Escape closes the welcome overlay if open
     if (e.key === 'Escape') {
@@ -1707,7 +1716,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setConn(false, 'Qt not available');
   }
 });
-  document.addEventListener('keyup', e => { if (e.code === 'Space') _spaceDown = false; });
+  document.addEventListener('keyup', e => { if (e.key.toLowerCase() === 'a') _aKeyDown = false; });
 
 // ═══════════════════════════════════════════════════════════════
 // § 7. CONNECTION & STATUS
@@ -3259,20 +3268,26 @@ function doSaveTheme() {
   setStatus('Theme saved: '+name, 'var(--accent)');
 }
 
-// SVG inline del botón scan — se reutiliza para los estados SCANNING y SCAN ALL
-// para no depender de data-i18n ni de textContent (que borraría el icono).
-const _SCAN_SVG = '<svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z"/></svg>';
 function doScanAll() {
   if (!backend) return;
-  const btn=$('btn-scan');
-  if (btn) { btn.classList.add('scanning'); btn.innerHTML=_SCAN_SVG+'<span>'+t('scan.scanning')+'</span>'; }
+  const btn = $('btn-scan');
+  if (btn) {
+    btn.classList.add('scanning');
+    // Only update the label span — never rewrite innerHTML so the SVG stays intact
+    const lbl = document.getElementById('scan-btn-lbl');
+    if (lbl) lbl.textContent = t('scan.scanning');
+  }
   backend.scan_comp();
 }
 function renderCompScan(data) {
   _scanData=data||{};
   for (const k of Object.keys(_scanSel)) { if(!_scanData[k]) delete _scanSel[k]; }
   const btn=$('btn-scan');
-  if (btn) { btn.classList.remove('scanning'); btn.innerHTML=_SCAN_SVG+'<span>'+t('scan.button')+'</span>'; }
+  if (btn) {
+    btn.classList.remove('scanning');
+    const lbl = document.getElementById('scan-btn-lbl');
+    if (lbl) lbl.textContent = t('scan.button');
+  }
   const tree=$('scan-tree'), ph=$('scan-ph'); if(!tree)return;
   tree.innerHTML='';
   const tools=Object.keys(_scanData);
@@ -3875,7 +3890,7 @@ document.addEventListener('click', e => {
             <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>R</kbd></span><span class="wlc-desc">Scan All &mdash; works without focus</span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>Z</kbd></span><span class="wlc-desc">Undo in Resolve</span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>&#8679;</kbd><kbd>Z</kbd></span><span class="wlc-desc">Redo in Resolve</span></div>
-            <div class="wlc-row"><span class="wlc-keys"><kbd>Space</kbd><kbd>A</kbd></span><span class="wlc-desc">Apply — same as clicking Apply</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>A</kbd><kbd>↓</kbd></span><span class="wlc-desc">Apply — same as clicking Apply</span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Delete</kbd></span><span class="wlc-desc">Remove selected preset</span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Esc</kbd></span><span class="wlc-desc">Close overlay / dialog</span></div>
           </div>
@@ -3890,10 +3905,10 @@ document.addEventListener('click', e => {
             <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>click</kbd></span><span class="wlc-desc">All segments <b>before</b></span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Alt</kbd><kbd>click</kbd></span><span class="wlc-desc">All segments <b>after</b></span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Shift</kbd><kbd>click</kbd></span><span class="wlc-desc"><b>All</b> segments</span></div>
-            <div style="font-size:9px;color:var(--muted);margin-top:4px;margin-bottom:2px;letter-spacing:.3px">KEYBOARD (Space+A)</div>
-            <div class="wlc-row"><span class="wlc-keys"><kbd>Space</kbd><kbd>A</kbd></span><span class="wlc-desc">Segment at playhead</span></div>
-            <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>Space</kbd><kbd>A</kbd></span><span class="wlc-desc">All segments <b>before</b></span></div>
-            <div class="wlc-row"><span class="wlc-keys"><kbd>Shift</kbd><kbd>Space</kbd><kbd>A</kbd></span><span class="wlc-desc"><b>All</b> segments</span></div>
+            <div style="font-size:9px;color:var(--muted);margin-top:4px;margin-bottom:2px;letter-spacing:.3px">KEYBOARD (A + ↓)</div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>A</kbd><kbd>↓</kbd></span><span class="wlc-desc">Segment at playhead</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>A</kbd><kbd>↓</kbd></span><span class="wlc-desc">All segments <b>before</b></span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Shift</kbd><kbd>A</kbd><kbd>↓</kbd></span><span class="wlc-desc"><b>All</b> segments</span></div>
           </div>
         </div>
 
