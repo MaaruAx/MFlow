@@ -76,7 +76,7 @@ _setup_env()
 try:
     from PySide6.QtWidgets import QApplication, QMainWindow
     from PySide6.QtWebEngineWidgets import QWebEngineView
-    from PySide6.QtWebEngineCore import QWebEngineSettings
+    from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineSettings
     from PySide6.QtWebChannel import QWebChannel
     from PySide6.QtCore import Qt, QUrl, QTimer, QAbstractNativeEventFilter
     from PySide6.QtGui import QColor, QIcon
@@ -98,6 +98,19 @@ def _resource(relative):
 # Arbitrary id for our single registered hotkey — only needs to be unique
 # within this process, since RegisterHotKey scopes ids per-HWND.
 HOTKEY_ID_SCAN_ALL = 1
+
+
+class _LoggedPage(QWebEnginePage):
+    """QWebEnginePage subclass that forwards JS console.log/warn/error output
+    to the Python logger so keyboard events and JS errors are visible in
+    ~/.mflow/mflow.log without needing browser DevTools."""
+
+    _JS_LEVELS = {0: log.info, 1: log.warning, 2: log.error, 3: log.debug}
+
+    def javaScriptConsoleMessage(self, level, message, line_number, source_id):
+        fn = self._JS_LEVELS.get(int(level), log.debug)
+        src = (source_id or '').split('/')[-1] or 'js'
+        fn('[JS %s:%d] %s', src, line_number, message)
 
 
 class _GlobalHotkeyFilter(QAbstractNativeEventFilter):
@@ -140,9 +153,17 @@ class MFlowWindow(QMainWindow):
                                       # does not hold a strong ref in PySide6
 
         self._view = QWebEngineView()
+        # _LoggedPage forwards JS console output to the Python log
+        self._view.setPage(_LoggedPage(self._view))
         self.setCentralWidget(self._view)
         # Eliminates white flash before CSS loads — must be set before loadUrl()
         self._view.page().setBackgroundColor(QColor("#121217"))
+
+        # Disable the built-in Ctrl+R → Reload shortcut at the Qt level so the
+        # JS keydown listener receives the event instead of the browser eating it.
+        for _act in (QWebEnginePage.WebAction.Reload,
+                     QWebEnginePage.WebAction.ReloadAndBypassCache):
+            self._view.page().action(_act).setEnabled(False)
 
         s = self._view.settings()
         s.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
