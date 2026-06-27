@@ -1496,7 +1496,7 @@ let profileNames  = [];
 let activeProfile = 'Default';
 let leftHidden    = false;
 let rightHidden   = false;
-let _aKeyDown     = false; // tracks A key for A+ArrowDown apply chord
+const _keysHeld = new Set(); // physical keys currently held (e.code), used for multi-key chords
 let _physFlipped  = false;
 let _syncingModeLib = false;
 // KF range: _kfrTo=0 means "last" (displays as ∞)
@@ -1638,18 +1638,32 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       deleteSelectedPreset();
     }
-    // A+ArrowDown apply chord. A is held as a trigger; ArrowDown fires the action.
-    // Ctrl and Shift pass through as scope modifiers (same as clicking Apply):
-    //   A+↓            → segment at playhead
-    //   Ctrl+A+↓       → all segments before playhead
-    //   Shift+A+↓      → all segments
-    if (e.key.toLowerCase() === 'a' && !editable) _aKeyDown = true;
-    if (_aKeyDown && e.key === 'ArrowDown' && !editable) {
+    // Track physical keys held for multi-key chords.
+    // e.code ('KeyA', 'ArrowDown', ...) is layout-independent and more
+    // reliable than e.key for chord detection in QWebEngineView.
+    _keysHeld.add(e.code);
+
+    // Log every keydown so failures are visible in the Python log via
+    // javaScriptConsoleMessage. Shows code, modifiers, editable state and
+    // current chord set — enough to diagnose why a shortcut didn't fire.
+    console.log('[KEY] down code=' + e.code
+      + ' ctrl=' + e.ctrlKey + ' shift=' + e.shiftKey + ' alt=' + e.altKey
+      + ' editable=' + !!editable
+      + ' held=[' + Array.from(_keysHeld).join(',') + ']');
+
+    // A + ArrowDown — apply chord:
+    //   A + ↓              → segment at playhead
+    //   Ctrl + A + ↓       → all segments before playhead
+    //   Shift + A + ↓      → all segments
+    if (_keysHeld.has('KeyA') && _keysHeld.has('ArrowDown') && !editable) {
+      console.log('[KEY] A+ArrowDown chord fired — calling applyWithModifiers');
       e.preventDefault();
       applyWithModifiers({ ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: false });
     }
-    // Ctrl+R — scan all (also handled by Python global hotkey for out-of-focus use)
-    if (e.ctrlKey && e.key.toLowerCase() === 'r' && !editable) {
+    // Ctrl+R — Scan All. QWebEnginePage's Reload action is disabled in
+    // main.py so this event now reaches JS instead of reloading the page.
+    if (e.ctrlKey && e.code === 'KeyR' && !editable) {
+      console.log('[KEY] Ctrl+R fired — calling doScanAll');
       e.preventDefault();
       doScanAll();
     }
@@ -1716,7 +1730,11 @@ document.addEventListener('DOMContentLoaded', () => {
     setConn(false, 'Qt not available');
   }
 });
-  document.addEventListener('keyup', e => { if (e.key.toLowerCase() === 'a') _aKeyDown = false; });
+  document.addEventListener('keyup', e => {
+    _keysHeld.delete(e.code);
+    console.log('[KEY] up code=' + e.code + ' held=[' + Array.from(_keysHeld).join(',') + ']');
+  });
+  window.addEventListener('blur', () => { _keysHeld.clear(); console.log('[KEY] window blur — _keysHeld cleared'); });
 
 // ═══════════════════════════════════════════════════════════════
 // § 7. CONNECTION & STATUS
