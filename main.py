@@ -108,14 +108,16 @@ class _LoggedPage(QWebEnginePage):
     _JS_LEVELS = {0: log.info, 1: log.warning, 2: log.error, 3: log.debug}
 
     def javaScriptConsoleMessage(self, level, message, line_number, source_id):
-        fn = self._JS_LEVELS.get(int(level), log.debug)
+        # PySide6 passes level as JavaScriptConsoleMessageLevel enum, not int.
+        # Use .value to get 0=info, 1=warning, 2=error.
+        fn = self._JS_LEVELS.get(level.value, log.debug)
         src = (source_id or '').split('/')[-1] or 'js'
         fn('[JS %s:%d] %s', src, line_number, message)
 
 
 class _GlobalHotkeyFilter(QAbstractNativeEventFilter):
-    """Catches WM_HOTKEY messages registered via user32.RegisterHotKey so the
-    Scan All shortcut (Ctrl+R) works even when MFlow's window doesn't have OS
+    """Catches WM_HOTKEY messages registered via user32.RegisterHotKey so
+    global shortcuts work even when MFlow's window doesn't have OS
     focus. Windows-only — RegisterHotKey is never called on other platforms,
     so this filter simply never receives a matching message there and is a
     harmless no-op. Defensive on every line: a malformed/unexpected native
@@ -123,7 +125,7 @@ class _GlobalHotkeyFilter(QAbstractNativeEventFilter):
     def __init__(self, hotkey_id, callback):
         super().__init__()
         self._hotkey_id = hotkey_id
-        self._callback = callback
+        self._callback  = callback
 
     def nativeEventFilter(self, eventType, message):
         try:
@@ -246,20 +248,16 @@ class MFlowWindow(QMainWindow):
             return False
         try:
             import ctypes
-            MOD_CONTROL = 0x0002
+            MOD_CONTROL  = 0x0002
+            MOD_NOREPEAT = 0x4000
             VK_R = 0x52
-            # Pass NULL (None) as hwnd so WM_HOTKEY is posted to the calling
-            # thread's message queue — this is more reliable with Qt's event
-            # loop than tying the message to a specific window handle.
-            ok = ctypes.windll.user32.RegisterHotKey(None, HOTKEY_ID_SCAN_ALL, MOD_CONTROL, VK_R)
+            ok = ctypes.windll.user32.RegisterHotKey(
+                None, HOTKEY_ID_SCAN_ALL, MOD_CONTROL | MOD_NOREPEAT, VK_R)
             if not ok:
                 err = ctypes.windll.kernel32.GetLastError()
                 log.warning("[Hotkey] RegisterHotKey failed (Win32 error %d) — "
-                            "Ctrl+R may already be bound by another running app", err)
+                            "Ctrl+R may already be bound by another app", err)
                 return False
-            # Install the native filter once and keep a strong reference on
-            # self — PySide6 does not keep one, and a garbage-collected
-            # filter silently stops receiving events with no error anywhere.
             if self._hotkey_filter is None:
                 self._hotkey_filter = _GlobalHotkeyFilter(
                     HOTKEY_ID_SCAN_ALL, self._on_global_scan_hotkey)
@@ -283,6 +281,7 @@ class MFlowWindow(QMainWindow):
             # Most common cause: it was never registered (toggle was already
             # off) — not an error, just log quietly.
             log.debug("[Hotkey] Unregister skipped/failed (likely already off): %s", e)
+
 
     def _on_global_scan_hotkey(self):
         """Called from the native event filter when WM_HOTKEY fires. Windows
