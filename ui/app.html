@@ -1496,7 +1496,6 @@ let profileNames  = [];
 let activeProfile = 'Default';
 let leftHidden    = false;
 let rightHidden   = false;
-const _keysHeld = new Set(); // physical keys currently held (e.code), used for multi-key chords
 let _physFlipped  = false;
 let _syncingModeLib = false;
 // KF range: _kfrTo=0 means "last" (displays as ∞)
@@ -1638,35 +1637,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       deleteSelectedPreset();
     }
-    // Track physical keys held for multi-key chords.
-    // e.code ('KeyA', 'ArrowDown', ...) is layout-independent and more
-    // reliable than e.key for chord detection in QWebEngineView.
-    _keysHeld.add(e.code);
 
-    // Log every keydown so failures are visible in the Python log via
-    // javaScriptConsoleMessage. Shows code, modifiers, editable state and
-    // current chord set — enough to diagnose why a shortcut didn't fire.
-    console.log('[KEY] down code=' + e.code
-      + ' ctrl=' + e.ctrlKey + ' shift=' + e.shiftKey + ' alt=' + e.altKey
-      + ' editable=' + !!editable
-      + ' held=[' + Array.from(_keysHeld).join(',') + ']');
-
-    // A + ArrowDown — apply chord:
-    //   A + ↓              → segment at playhead
-    //   Ctrl + A + ↓       → all segments before playhead
-    //   Shift + A + ↓      → all segments
-    if (_keysHeld.has('KeyA') && _keysHeld.has('ArrowDown') && !editable) {
-      console.log('[KEY] A+ArrowDown chord fired — calling applyWithModifiers');
-      e.preventDefault();
-      applyWithModifiers({ ctrlKey: e.ctrlKey, shiftKey: e.shiftKey, altKey: false });
-    }
-    // Ctrl+R — Scan All. QWebEnginePage's Reload action is disabled in
-    // main.py so this event now reaches JS instead of reloading the page.
-    if (e.ctrlKey && e.code === 'KeyR' && !editable) {
-      console.log('[KEY] Ctrl+R fired — calling doScanAll');
-      e.preventDefault();
-      doScanAll();
-    }
     // Escape closes the welcome overlay if open
     if (e.key === 'Escape') {
       const wov = $('wlc-ov');
@@ -1730,11 +1701,6 @@ document.addEventListener('DOMContentLoaded', () => {
     setConn(false, 'Qt not available');
   }
 });
-  document.addEventListener('keyup', e => {
-    _keysHeld.delete(e.code);
-    console.log('[KEY] up code=' + e.code + ' held=[' + Array.from(_keysHeld).join(',') + ']');
-  });
-  window.addEventListener('blur', () => { _keysHeld.clear(); console.log('[KEY] window blur — _keysHeld cleared'); });
 
 // ═══════════════════════════════════════════════════════════════
 // § 7. CONNECTION & STATUS
@@ -3908,7 +3874,7 @@ document.addEventListener('click', e => {
             <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>R</kbd></span><span class="wlc-desc">Scan All &mdash; works without focus</span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>Z</kbd></span><span class="wlc-desc">Undo in Resolve</span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>&#8679;</kbd><kbd>Z</kbd></span><span class="wlc-desc">Redo in Resolve</span></div>
-            <div class="wlc-row"><span class="wlc-keys"><kbd>A</kbd><kbd>↓</kbd></span><span class="wlc-desc">Apply — same as clicking Apply</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Win</kbd><kbd>A</kbd></span><span class="wlc-desc">Apply — works even without MFlow focus</span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Delete</kbd></span><span class="wlc-desc">Remove selected preset</span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Esc</kbd></span><span class="wlc-desc">Close overlay / dialog</span></div>
           </div>
@@ -3923,10 +3889,10 @@ document.addEventListener('click', e => {
             <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>click</kbd></span><span class="wlc-desc">All segments <b>before</b></span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Alt</kbd><kbd>click</kbd></span><span class="wlc-desc">All segments <b>after</b></span></div>
             <div class="wlc-row"><span class="wlc-keys"><kbd>Shift</kbd><kbd>click</kbd></span><span class="wlc-desc"><b>All</b> segments</span></div>
-            <div style="font-size:9px;color:var(--muted);margin-top:4px;margin-bottom:2px;letter-spacing:.3px">KEYBOARD (A + ↓)</div>
-            <div class="wlc-row"><span class="wlc-keys"><kbd>A</kbd><kbd>↓</kbd></span><span class="wlc-desc">Segment at playhead</span></div>
-            <div class="wlc-row"><span class="wlc-keys"><kbd>Ctrl</kbd><kbd>A</kbd><kbd>↓</kbd></span><span class="wlc-desc">All segments <b>before</b></span></div>
-            <div class="wlc-row"><span class="wlc-keys"><kbd>Shift</kbd><kbd>A</kbd><kbd>↓</kbd></span><span class="wlc-desc"><b>All</b> segments</span></div>
+            <div style="font-size:9px;color:var(--muted);margin-top:4px;margin-bottom:2px;letter-spacing:.3px">KEYBOARD — global (Win+A)</div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Win</kbd><kbd>A</kbd></span><span class="wlc-desc">Apply — segment at playhead</span></div>
+            <div class="wlc-row"><span class="wlc-keys"><kbd>Win</kbd><kbd>A</kbd></span><span class="wlc-desc">Global — scope via mouse modifiers</span></div>
+            
           </div>
         </div>
 
