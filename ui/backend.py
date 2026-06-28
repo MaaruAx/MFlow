@@ -263,7 +263,7 @@ class Backend(QObject):
         self._announce_connection()
 
     @Slot(str)
-    def reconnect(self, custom_path=""):
+    def reconnect(self, custom_path="", _max_attempts=3):
         if self._reconnecting:
             log.debug("[Connect] Reconnect already in progress — skipping duplicate call")
             return
@@ -278,7 +278,10 @@ class Backend(QObject):
 
         # Run get_resolve() on a thread-pool worker so the Qt main thread (and
         # the UI) stays responsive during the IPC call (which can take 2-5 s).
+        # Background auto-reconnect passes _max_attempts=1 to avoid holding the
+        # thread for ~16 s and reduce COM-level pressure on the Windows message pump.
         _self = self
+        max_att = _max_attempts
 
         class _ConnectWorker(QRunnable):
             def run(self):
@@ -289,9 +292,9 @@ class Backend(QObject):
                     log.info("[Connect] Module search path: %s", cp or "(auto)")
 
                     resolve = None
-                    for attempt in range(3):
+                    for attempt in range(max_att):
                         if attempt > 0:
-                            log.info("[Connect] Retry %d/3 — waiting 2s…", attempt + 1)
+                            log.info("[Connect] Retry %d/%d — waiting 2s…", attempt + 1, max_att)
                             time.sleep(2)
                         resolve = get_resolve(cp)
                         if resolve:
@@ -370,10 +373,10 @@ class Backend(QObject):
             return
         try:
             self._auto_reconnect_timer = QTimer(self)
-            self._auto_reconnect_timer.setInterval(6000)
+            self._auto_reconnect_timer.setInterval(15000)
             self._auto_reconnect_timer.timeout.connect(self._auto_reconnect_tick)
             self._auto_reconnect_timer.start()
-            log.info("[AutoReconnect] Background retry started (every 6s until connected)")
+            log.info("[AutoReconnect] Background retry started (every 15s until connected)")
         except Exception as e:
             # Never let a timer setup failure take down the app — worst case
             # the user falls back to the manual Connect button, same as before.
@@ -393,7 +396,7 @@ class Backend(QObject):
                 log.debug("[AutoReconnect] Tick skipped — reconnect already in flight")
                 return
             log.debug("[AutoReconnect] Retry tick — attempting reconnect")
-            self.reconnect()
+            self.reconnect(_max_attempts=1)
         except Exception as e:
             log.debug("[AutoReconnect] Tick error (will retry next interval): %s", e)
 
