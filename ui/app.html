@@ -735,6 +735,17 @@ kbd {
   border: none; cursor: pointer;
 }
 #btn-wlc-ok:hover { opacity: .82; }
+
+/* Preset right-click context menu */
+#preset-ctx{position:fixed;z-index:700;background:var(--overlay);border:1px solid var(--hl-med);border-radius:var(--r);min-width:140px;padding:3px 0;box-shadow:0 4px 16px rgba(0,0,0,.5);display:none}
+#preset-ctx .ctx-item{padding:5px 12px;font-size:11px;cursor:pointer;color:var(--text)}
+#preset-ctx .ctx-item:hover{background:var(--hl-low)}
+#preset-ctx .ctx-sep{height:1px;background:var(--border);margin:3px 0}
+/* Preset options menu */
+#preset-opts-menu{position:absolute;top:100%;left:0;z-index:600;background:var(--overlay);border:1px solid var(--hl-med);border-radius:var(--r);min-width:160px;padding:3px 0;box-shadow:0 4px 16px rgba(0,0,0,.5);display:none}
+#preset-opts-menu.open{display:block}
+#preset-opts-menu .ctx-item{padding:5px 12px;font-size:11px;cursor:pointer;color:var(--text)}
+#preset-opts-menu .ctx-item:hover{background:var(--hl-low)}
 </style>
 </head>
 <body>
@@ -821,18 +832,6 @@ kbd {
 
 <!-- ═══════════════════ MAIN ═══════════════════ -->
 <div id="main">
-  <!-- Params sidebar (slide-over) -->
-  <div id="params-sidebar">
-    <div id="params-hdr">
-      <span class="ph-t" data-i18n="params.title">PARAMETERS</span>
-      <button class="hdr-x" onclick="toggleParams()">×</button>
-    </div>
-    <div id="params-scroll">
-      <div id="params-ph">No tool selected<br>in Resolve</div>
-      <div id="params-tree"></div>
-    </div>
-  </div>
-
   <!-- Left panel: Presets -->
   <div id="preset-panel">
     <div id="profile-row">
@@ -865,7 +864,15 @@ kbd {
       </div>
     </div>
     <div id="search-row">
-      <button id="params-toggle" onclick="toggleParams()">≡</button>
+      <div id="preset-opts-btn" style="position:relative;flex-shrink:0">
+        <button id="params-toggle" onclick="togglePresetOpts()" style="width:22px;height:22px;border-radius:var(--r);border:1px solid var(--border);background:var(--overlay);color:var(--muted);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0;font-family:inherit">&#8801;</button>
+        <div id="preset-opts-menu">
+          <div class="ctx-item" onclick="presetOptsSortAZ()">Sort A → Z</div>
+          <div class="ctx-item" onclick="presetOptsSortZA()">Sort Z → A</div>
+          <div class="ctx-item" onclick="presetOptsExport()">Export presets…</div>
+          <div class="ctx-item" onclick="presetOptsImport()">Import presets…</div>
+        </div>
+      </div>
       <input id="preset-search" type="text" placeholder="Search…" data-i18n-placeholder="presets.search_placeholder">
     </div>
     <div id="preset-scroll"><div id="preset-grid"></div></div>
@@ -965,8 +972,8 @@ kbd {
             <span class="cp-val" id="vl-bomega">6.0</span>
           </div>
           <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
-            <button class="tog on" id="btn-bdir-ceil"  onclick="setBounceDir('ceiling')" data-i18n="cp.direction_ceiling">▲ CEILING</button>
-            <button class="tog"    id="btn-bdir-floor" onclick="setBounceDir('floor')"   data-i18n="cp.direction_floor">▼ FLOOR</button>
+            <button class="tog"    id="btn-bdir-ceil"  onclick="setBounceDir('ceiling')" data-i18n="cp.direction_ceiling">▲ CEILING</button>
+            <button class="tog on" id="btn-bdir-floor" onclick="setBounceDir('floor')"   data-i18n="cp.direction_floor">▼ FLOOR</button>
           </div>
         </div>
 
@@ -1097,7 +1104,7 @@ kbd {
     </div>
   </div>
   <button id="btn-aall" onclick="applySelected()" data-i18n="bottom.apply_selected">APPLY SELECTED</button>
-  <button id="btn-apply" onclick="applyWithModifiers(event)"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" clip-rule="evenodd" d="M9,5L11,5L11,7L16,12L11,17L11,19L9,19L9,21L7,21L7,3L9,3L9,5ZM13,17L11,17L11,15L13,15L13,17ZM15,15L13,15L13,13L15,13L15,15ZM17,13L15,13L15,11L17,11L17,13ZM15,11L13,11L13,9L15,9L15,11ZM13,9L11,7L13,7L13,9Z"/></svg><span id="apply-btn-lbl">APPLY</span></button>
+  <button id="btn-apply" onclick="applyWithModifiers(event)"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 17v2H9v2H7V3h2v2h2v2h2v2h2v2h2v2h-2v2h-2v2z"/></svg><span id="apply-btn-lbl">APPLY</span></button>
 </div>
 </div>
 
@@ -1468,7 +1475,7 @@ let elPeriod      = 0.3;
 let elDirection   = 'in';    // 'in' | 'out'
 let bounceGamma   = 4.0;
 let bounceOmega   = 6.0;
-let bounceDir     = 'ceiling'; // 'ceiling' | 'floor'
+let bounceDir     = 'floor'; // 'ceiling' | 'floor'
 let catA          = 0.8;
 let catReverse     = false;
 let pulseOmega1   = 8.0;
@@ -1832,6 +1839,12 @@ function setMode(m) {
     if (v) document.body.style.setProperty(k, v);
     else document.body.style.removeProperty(k);
   });
+  // Update flip-btn icon: direction toggle for physics/baked modes, invert for easing
+  const _fb=$('flip-btn');
+  if(_fb){
+    _fb.innerHTML=_DIR_MODES.has(m)?'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 6h2v2h2v2H8v10H6V10H2V8h2V6h2V4h2v2Zm10 8h4v2h-2v2h-2v2h-2v-2h-2v-2h-2v-2h4V4h2v10Z"/></svg>':'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 16h10v2H10v4H8v-2H6v-2H4v-2h2v-2h2v-2h2v4Zm4-8H4V6h10V2h2v2h2v2h2v2h-2v2h-2v2h-2V8Z"/></svg>';
+    _fb.title=_DIR_MODES.has(m)?'Toggle Ceiling / Floor':'Invert curve';
+  }
   pushState();
 }
 
@@ -2654,8 +2667,10 @@ function toggleOvershoot()  { overshoot=!overshoot; $('zoom-hint').style.display
 function toggleMagnet()     { magnetEnabled=!magnetEnabled; closeCtx(); }
 function flipCurve()        { h1=[h1[0],1-h1[1]]; h2=[h2[0],1-h2[1]]; pushState(); }
 function flipH()            { [h1,h2]=[[1-h2[0],h2[1]],[1-h1[0],h1[1]]]; pushState(); }
+const _DIR_MODES = new Set(['spring','elastic','bounce','catenary','pulse','noise','resonance']);
+
 function flipAll() {
-  if (isPhysics()) { _physFlipped=!_physFlipped; pushState(); return; }
+  if (_DIR_MODES.has(mode)) { setBounceDir(bounceDir==='ceiling'?'floor':'ceiling'); return; }
   // True curve invert: reflect both handles through the center (0.5,0.5) —
   // flips horizontal (t) AND vertical (v) — AND swap h1/h2, since after
   // flipping, the handle that used to sit near the curve's start must now
@@ -2671,7 +2686,7 @@ function resetCurve() {
   h1=[0.42,0.0]; h2=[0.58,1.0];
   physZeta=0.3; physOmegaN=8.0;
   elAmp=1.0; elPeriod=0.3; elDirection='in';
-  bounceGamma=4.0; bounceOmega=6.0; bounceDir='ceiling';
+  bounceGamma=4.0; bounceOmega=6.0; bounceDir='floor';
   catA=0.8; catReverse=false;
   pulseOmega1=8.0; pulseOmega2=2.0; pulseN=4.0; pulseReverse=false;
   noiseFreq=2.0; noiseAmp=0.5; noiseSeed=42; noiseReverse=false;
@@ -2783,6 +2798,8 @@ function makeCard(preset, idx) {
   const nm=document.createElement('div'); nm.className='card-nm'; nm.textContent=preset.name; nm.style.color=col+'cc';
   card.appendChild(wrap); card.appendChild(sep); card.appendChild(nm);
   card.addEventListener('click', () => selectPreset(idx));
+  card.addEventListener('dblclick', () => { selectPreset(idx); applyWithModifiers({}); });
+  card.addEventListener('contextmenu', e => { e.preventDefault(); e.stopPropagation(); selectPreset(idx); _openPresetCtx(e.clientX, e.clientY); });
   requestAnimationFrame(() => drawCard(cv, preset));
   return card;
 }
@@ -2880,6 +2897,59 @@ function saveCurrentPreset() {
   });
 }
 function deleteSelectedPreset() { if(selIdx>=0&&backend) backend.delete_preset(selIdx); }
+
+// ── Preset context menu ───────────────────────────────────────────────────────
+let _ctxMenuEl = null;
+function _getCtxMenu() { return _ctxMenuEl || (_ctxMenuEl = document.getElementById('preset-ctx')); }
+function _openPresetCtx(x, y) {
+  const m=_getCtxMenu(); if(!m) return;
+  m.style.display='block';
+  const vw=window.innerWidth, vh=window.innerHeight;
+  m.style.left=(x+m.offsetWidth>vw?x-m.offsetWidth:x)+'px';
+  m.style.top=(y+m.offsetHeight>vh?y-m.offsetHeight:y)+'px';
+  const close=e=>{if(!m.contains(e.target)){m.style.display='none';document.removeEventListener('mousedown',close,true);}};
+  document.addEventListener('mousedown',close,true);
+}
+function _closePresetCtx() { const m=_getCtxMenu(); if(m) m.style.display='none'; }
+function _presetCtxDelete() { _closePresetCtx(); deleteSelectedPreset(); }
+function _presetCtxRename() {
+  _closePresetCtx();
+  if(selIdx<0||!allPresets[selIdx]) return;
+  dlgOpen('Rename preset', allPresets[selIdx].name||'', newName=>{
+    if(!newName||!newName.trim()||!backend) return;
+    const updated=Object.assign({},allPresets[selIdx],{name:newName.trim()});
+    backend.save_preset(JSON.stringify(updated));
+    backend.delete_preset(selIdx);
+  });
+}
+function _presetCtxDuplicate() {
+  _closePresetCtx();
+  if(selIdx<0||!allPresets[selIdx]||!backend) return;
+  const base=allPresets[selIdx].name||'Preset';
+  const names=new Set(allPresets.map(p=>p.name));
+  let cand=base, n=1;
+  while(names.has(cand)){cand=base+' '+n;n++;}
+  backend.save_preset(JSON.stringify(Object.assign({},allPresets[selIdx],{name:cand})));
+}
+
+// ── Preset options menu ───────────────────────────────────────────────────────
+function togglePresetOpts() {
+  const m=document.getElementById('preset-opts-menu'); if(!m) return;
+  if(m.classList.toggle('open')) {
+    const close=e=>{const b=document.getElementById('preset-opts-btn');if(!b||!b.contains(e.target)){m.classList.remove('open');document.removeEventListener('mousedown',close,true);}};
+    document.addEventListener('mousedown',close,true);
+  }
+}
+function _closePOMenu(){const m=document.getElementById('preset-opts-menu');if(m)m.classList.remove('open');}
+function presetOptsSortAZ(){_closePOMenu();if(!backend||!allPresets.length)return;[...allPresets].sort((a,b)=>a.name.localeCompare(b.name)).forEach(p=>backend.save_preset(JSON.stringify(p)));}
+function presetOptsSortZA(){_closePOMenu();if(!backend||!allPresets.length)return;[...allPresets].sort((a,b)=>b.name.localeCompare(a.name)).forEach(p=>backend.save_preset(JSON.stringify(p)));}
+function presetOptsExport(){_closePOMenu();if(allPresets.length)_downloadJSON('MFlow_presets_'+(library||'all')+'.json',allPresets);}
+function presetOptsImport(){
+  _closePOMenu();
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const arr=JSON.parse(await f.text());(Array.isArray(arr)?arr:[arr]).forEach(p=>{if(p&&p.name)backend.save_preset(JSON.stringify(p));});}catch(err){setStatus('Import failed: '+err.message,'var(--love)');}};
+  inp.click();
+}
 function _syncDeleteBtn() { const btn=$('btn-del'); if(btn) btn.disabled=(selIdx<0); }
 function _applySelectionVisual(idx) {
   document.querySelectorAll('.pcard').forEach(c => {
@@ -3942,5 +4012,12 @@ document.addEventListener('click', e => {
 
   </div><!-- #wlc-panel -->
 </div><!-- #wlc-ov -->
+<!-- Preset right-click context menu -->
+<div id="preset-ctx">
+  <div class="ctx-item" onclick="_presetCtxRename()">Rename</div>
+  <div class="ctx-item" onclick="_presetCtxDuplicate()">Duplicate</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" onclick="_presetCtxDelete()" style="color:var(--love)">Delete</div>
+</div>
 </body>
 </html>
