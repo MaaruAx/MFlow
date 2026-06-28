@@ -2915,7 +2915,7 @@ function _presetCtxDelete() { _closePresetCtx(); deleteSelectedPreset(); }
 function _presetCtxRename() {
   _closePresetCtx();
   if(selIdx<0||!allPresets[selIdx]) return;
-  dlgOpen('Rename preset', allPresets[selIdx].name||'', newName=>{
+  showDlg('Rename preset', allPresets[selIdx].name||'', newName=>{
     if(!newName||!newName.trim()||!backend) return;
     const updated=Object.assign({},allPresets[selIdx],{name:newName.trim()});
     backend.save_preset(JSON.stringify(updated));
@@ -2941,15 +2941,10 @@ function togglePresetOpts() {
   }
 }
 function _closePOMenu(){const m=document.getElementById('preset-opts-menu');if(m)m.classList.remove('open');}
-function presetOptsSortAZ(){_closePOMenu();if(!backend||!allPresets.length)return;[...allPresets].sort((a,b)=>a.name.localeCompare(b.name)).forEach(p=>backend.save_preset(JSON.stringify(p)));}
-function presetOptsSortZA(){_closePOMenu();if(!backend||!allPresets.length)return;[...allPresets].sort((a,b)=>b.name.localeCompare(a.name)).forEach(p=>backend.save_preset(JSON.stringify(p)));}
-function presetOptsExport(){_closePOMenu();if(allPresets.length)_downloadJSON('MFlow_presets_'+(library||'all')+'.json',allPresets);}
-function presetOptsImport(){
-  _closePOMenu();
-  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
-  inp.onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const arr=JSON.parse(await f.text());(Array.isArray(arr)?arr:[arr]).forEach(p=>{if(p&&p.name)backend.save_preset(JSON.stringify(p));});}catch(err){setStatus('Import failed: '+err.message,'var(--love)');}};
-  inp.click();
-}
+function presetOptsSortAZ(){_closePOMenu();if(!backend||!allPresets.length)return;const sorted=[...allPresets].sort((a,b)=>a.name.localeCompare(b.name));backend.reorder_presets(JSON.stringify(sorted));}
+function presetOptsSortZA(){_closePOMenu();if(!backend||!allPresets.length)return;const sorted=[...allPresets].sort((a,b)=>b.name.localeCompare(a.name));backend.reorder_presets(JSON.stringify(sorted));}
+function presetOptsExport(){_closePOMenu();if(backend&&backend.export_presets_dialog)backend.export_presets_dialog();}
+function presetOptsImport(){_closePOMenu();if(backend&&backend.import_presets_dialog)backend.import_presets_dialog();}
 function _syncDeleteBtn() { const btn=$('btn-del'); if(btn) btn.disabled=(selIdx<0); }
 function _applySelectionVisual(idx) {
   document.querySelectorAll('.pcard').forEach(c => {
