@@ -1071,7 +1071,7 @@ kbd {
         </div>
         <div style="padding:8px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
           <span id="scan-sel-count"></span>
-          <button id="btn-scan" onclick="doScanAll()"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z"/></svg><span id="scan-btn-lbl">SCAN ALL</span></button>
+          <button id="btn-scan" onclick="doScanAll()"><svg style="width:14px;height:14px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z"/></svg><span id="scan-btn-lbl">SCAN ALL</span></button>
         </div>
       </div>
       <div id="inp-list" style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;border-top:1px solid var(--border);padding:4px 0;max-height:140px;overflow-y:auto"></div>
@@ -1104,7 +1104,7 @@ kbd {
     </div>
   </div>
   <button id="btn-aall" onclick="applySelected()" data-i18n="bottom.apply_selected">APPLY SELECTED</button>
-  <button id="btn-apply" onclick="applyWithModifiers(event)"><svg style="width:12px;height:12px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 17v2H9v2H7V3h2v2h2v2h2v2h2v2h2v2h-2v2h-2v2z"/></svg><span id="apply-btn-lbl">APPLY</span></button>
+  <button id="btn-apply" onclick="applyWithModifiers(event)"><svg style="width:18px;height:18px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 17v2H9v2H7V3h2v2h2v2h2v2h2v2h2v2h-2v2h-2v2z"/></svg><span id="apply-btn-lbl">APPLY</span></button>
 </div>
 </div>
 
@@ -2897,6 +2897,8 @@ function saveCurrentPreset() {
   });
 }
 function deleteSelectedPreset() { if(selIdx>=0&&backend) backend.delete_preset(selIdx); }
+
+const _SCAN_SVG = '<svg style=\"width:14px;height:14px;vertical-align:middle;margin-right:4px;flex-shrink:0\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z\"/></svg>';
 
 // ── Preset context menu ───────────────────────────────────────────────────────
 let _ctxMenuEl = null;
