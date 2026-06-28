@@ -1843,6 +1843,62 @@ class Backend(QObject):
         _wj(settings_file(), self._settings)
 
     @Slot()
+
+    @Slot(str)
+    def reorder_presets(self, presets_json: str):
+        """Replace the active profile's preset list with the given JSON array.
+        Used by sort operations so no duplicates are created."""
+        try:
+            presets = json.loads(presets_json)
+            if not isinstance(presets, list):
+                return
+            from core.preset_manager import save_profiles
+            self._profiles["profiles"][self._profiles["active"]] = presets
+            save_profiles(self._profiles)
+            self.load_library(self._mode)
+        except Exception as e:
+            log.warning("[Preset] reorder_presets failed: %s", e)
+
+    @Slot()
+    def export_presets_dialog(self):
+        """Open a Save File dialog to export user presets for the active library."""
+        from core.preset_manager import active_presets, save_profiles
+        presets = [p for p in active_presets(self._profiles)
+                   if p.get("library") == self._mode]
+        if not presets:
+            self.status_changed.emit("No user presets to export", "var(--muted)")
+            return
+        path, _ = QFileDialog.getSaveFileName(
+            None, "Export Presets",
+            f"MFlow_presets_{self._mode}.json", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            _wj(path, presets)
+            self.status_changed.emit(f"Presets exported: {path}", "#9ccfd8")
+        except Exception as e:
+            self.status_changed.emit(f"Export failed: {e}", "#eb6f92")
+
+    @Slot()
+    def import_presets_dialog(self):
+        """Open a file dialog to import presets from a JSON file."""
+        path, _ = QFileDialog.getOpenFileName(
+            None, "Import Presets", "", "JSON (*.json)")
+        if not path:
+            return
+        try:
+            data = _rj(path)
+            if not isinstance(data, list):
+                self.status_changed.emit("Invalid preset file", "#eb6f92")
+                return
+            for p in data:
+                if isinstance(p, dict) and p.get("name"):
+                    self._profiles = add_preset(self._profiles, p)
+            self.load_library(self._mode)
+            self.status_changed.emit(f"Imported {len(data)} preset(s)", "#9ccfd8")
+        except Exception as e:
+            self.status_changed.emit(f"Import failed: {e}", "#eb6f92")
+
     def export_settings(self):
         path, _ = QFileDialog.getSaveFileName(
             None, "Export Settings", "fusionflow-settings.json", "JSON (*.json)")
