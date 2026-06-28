@@ -467,21 +467,8 @@ def _call_set_kf(obj, tbl) -> bool:
     # Three signatures: True=force-create, False=update-existing, no arg=default.
     # PolyPath Displacement splines only accept (tbl, False) — not True.
     for args in ((tbl, True), (tbl, False), (tbl,)):
-        try:
-            fn(*args)
-            # Immediately read back the spline state. This forces Resolve to
-            # flush its internal cache and consolidate the written handles into
-            # the displayed spline. Without this call some spline types (notably
-            # PolyPath → Displacement BezierSplines) visually update only one
-            # handle on the first write, even though SetKeyFrames returns OK.
-            try:
-                gfn = getattr(obj, "GetKeyFrames", None)
-                if callable(gfn): gfn()
-            except Exception:
-                pass
-            return True
-        except Exception:
-            continue
+        try: fn(*args); return True
+        except Exception: continue
     return False
 
 
@@ -762,7 +749,18 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
     tbl = {k: (dict(v) if isinstance(v, dict) else v) for k, v in sd.items()}
     _strip_locks(tbl)   # remove LockedY/Locked flags that block handle writes
 
+    # Remove any previously-written OKF intermediate keyframes between the
+    # two endpoints so that moving a point and re-applying does not leave
+    # stale duplicate frames in Fusion.
     end0, end1 = int(round(t0)), int(round(t1))
+    for k in list(tbl.keys()):
+        try:
+            fk = float(k)
+            if t0 < fk < t1 and int(round(fk)) not in (end0, end1):
+                del tbl[k]
+        except (TypeError, ValueError):
+            pass
+
     skipped = 0
     for p in of_points:
         ft   = dn_t(p.t)
@@ -791,7 +789,8 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
     )
     handles_ok = 0
     handles_expected = 0
-    for i in range(len(seg) - 1):
+    n_segs = len(seg) - 1
+    for i in range(n_segs):
         pt0, pv0, _, rh  = seg[i]
         pt1, pv1, lh, _  = seg[i + 1]
         seg_dt = (pt1 - pt0) * dt
@@ -800,18 +799,29 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
         ft1s = dn_t(pt1);  fv1s = dn_v(pv1)
         if rh:
             handles_expected += 1
-            wrote = _write_handle(spline, ft0s, "RH",
-                                  ft0s + rh[0] * seg_dt,
-                                  fv0s + rh[1] * seg_dv)
+            # h1 (first segment's RH) is in full-curve normalized space [0,1],
+            # NOT in segment-local space — scale by total dt/dv, not seg_dt/dv.
+            if i == 0:
+                rh_t = t0 + rh[0] * dt
+                rh_v = v0 + rh[1] * dv
+            else:
+                rh_t = ft0s + rh[0] * seg_dt
+                rh_v = fv0s + rh[1] * seg_dv
+            wrote = _write_handle(spline, ft0s, "RH", rh_t, rh_v)
             if wrote:
                 handles_ok += 1
             else:
                 log.warning(f"[MFlow] apply_overframe: RH handle FAILED at frame {ft0s:.1f}")
         if lh:
             handles_expected += 1
-            wrote = _write_handle(spline, ft1s, "LH",
-                                  ft1s + lh[0] * seg_dt,
-                                  fv1s + lh[1] * seg_dv)
+            # h2 (last segment's LH) is likewise in full-curve space.
+            if i == n_segs - 1:
+                lh_t = t0 + lh[0] * dt
+                lh_v = v0 + lh[1] * dv
+            else:
+                lh_t = ft1s + lh[0] * seg_dt
+                lh_v = fv1s + lh[1] * seg_dv
+            wrote = _write_handle(spline, ft1s, "LH", lh_t, lh_v)
             if wrote:
                 handles_ok += 1
             else:
