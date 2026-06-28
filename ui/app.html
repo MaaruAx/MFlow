@@ -968,12 +968,12 @@ kbd {
           </div>
           <div class="cp-row">
             <span class="cp-lbl" data-i18n="cp.frequency">frequency</span>
-            <input class="cp-sl" id="sl-bomega" type="range" min="5" max="120" value="60" oninput="onBounceSlider()">
+            <input class="cp-sl" id="sl-bomega" type="range" min="5" max="200" value="60" oninput="onBounceSlider()">
             <span class="cp-val" id="vl-bomega">6.0</span>
           </div>
           <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
-            <button class="tog"    id="btn-bdir-ceil"  onclick="setBounceDir('ceiling')" data-i18n="cp.direction_ceiling">▲ CEILING</button>
-            <button class="tog on" id="btn-bdir-floor" onclick="setBounceDir('floor')"   data-i18n="cp.direction_floor">▼ FLOOR</button>
+            <button class="tog"    id="btn-bdir-ceil"  onclick="setBounceDir('ceiling')" data-i18n="cp.direction_ceiling"><svg style="width:11px;height:11px;vertical-align:middle;margin-right:3px" viewBox="0 0 24 24" fill="currentColor"><path d="M17 15v-2h-2v-2h-2V9h-2v2H9v2H7v2h10Z"/></svg>CEILING</button>
+            <button class="tog on" id="btn-bdir-floor" onclick="setBounceDir('floor')"   data-i18n="cp.direction_floor"><svg style="width:11px;height:11px;vertical-align:middle;margin-right:3px" viewBox="0 0 24 24" fill="currentColor"><path d="M17 9v2h-2v2h-2v2h-2v-2H9v-2H7V9h10Z"/></svg>FLOOR</button>
           </div>
         </div>
 
@@ -1040,7 +1040,7 @@ kbd {
           <div class="cp-hint" data-i18n="cp.resonance_hint">forced oscillator — when ω ≈ ω₀ amplitude grows</div>
           <div class="cp-row" style="margin-top:6px">
             <span class="cp-lbl" data-i18n="cp.damping">damping</span>
-            <input class="cp-sl" id="sl-rgamma" type="range" min="5" max="200" value="20" oninput="onResSlider()">
+            <input class="cp-sl" id="sl-rgamma" type="range" min="5" max="200" value="8" oninput="onResSlider()">
             <span class="cp-val" id="vl-rgamma">2.0</span>
           </div>
           <div class="cp-row">
@@ -1486,7 +1486,7 @@ let noiseFreq     = 2.0;
 let noiseAmp      = 0.5;
 let noiseSeed     = 42;
 let noiseReverse  = false;
-let resGamma      = 2.0;
+let resGamma      = 0.8;
 let resOmega      = 8.0;
 let resOmega0     = 8.0;
 let resReverse    = false;
@@ -2038,7 +2038,7 @@ function spDurPos() {
 }
 // Bounce handle positions — mirror spring pattern
 const BNC_GAMMA_MIN=0.5, BNC_GAMMA_MAX=20.0;
-const BNC_OMEGA_MIN=0.5, BNC_OMEGA_MAX=12.0;
+const BNC_OMEGA_MIN=0.5, BNC_OMEGA_MAX=20.0;
 function bncGammaPos() {
   const cy = MG + CI*(bounceGamma-BNC_GAMMA_MIN)/(BNC_GAMMA_MAX-BNC_GAMMA_MIN);
   return { x: MG+CI*0.25, y: Math.max(MG+10, Math.min(MG+CI-10, cy)) };
@@ -2563,7 +2563,7 @@ function syncBounceSliders() {
   $('vl-bgamma').textContent = bounceGamma.toFixed(1);
   $('vl-bomega').textContent = bounceOmega.toFixed(1);
   _updateSliderFill('sl-bgamma', 5, 200, Math.round(bounceGamma*10));
-  _updateSliderFill('sl-bomega', 5, 120, Math.round(bounceOmega*10));
+  _updateSliderFill('sl-bomega', 5, 200, Math.round(bounceOmega*10));
   const btnC=$('btn-bdir-ceil'), btnF=$('btn-bdir-floor');
   if(btnC) btnC.classList.toggle('on', bounceDir==='ceiling');
   if(btnF) btnF.classList.toggle('on', bounceDir==='floor');
