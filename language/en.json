@@ -6,7 +6,7 @@
     "version": "2.4.0"
   },
 
-  "badge.fluid": "FLUID",
+  "badge.fluid": "STABLE",
 
   "conn.connecting": "Connecting\u2026",
   "conn.connect": "Connect",
