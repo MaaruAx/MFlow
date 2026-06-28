@@ -81,10 +81,10 @@
   "bottom.from": "से",
   "bottom.to": "तक",
   "bottom.apply_selected": "चयनित लागू करें",
-  "bottom.apply": "\u25b6 लागू करें",
+  "bottom.apply": "लागू करें",
 
   "scan.placeholder": "सभी एनिमेटेड नोड्स खोजने के लिए\nSCAN ALL पर क्लिक करें",
-  "scan.button": "\u27f3 सभी स्कैन करें",
+  "scan.button": "सभी स्कैन करें",
   "scan.scanning": "\u27f3 स्कैन हो रहा है\u2026",
 
   "settings.title": "सेटिंग्स",

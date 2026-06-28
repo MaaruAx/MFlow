@@ -111,10 +111,10 @@
   "bottom.from": "FROM",
   "bottom.to": "TO",
   "bottom.apply_selected": "APPLY SELECTED",
-  "bottom.apply": "\u25b6 APPLY",
+  "bottom.apply": "APPLY",
 
   "scan.placeholder": "Click SCAN ALL to find\nall animated nodes",
-  "scan.button": "\u27f3 SCAN ALL",
+  "scan.button": "SCAN ALL",
   "scan.scanning": "\u27f3 SCANNING\u2026",
 
   "settings.title": "Settings",

@@ -111,10 +111,10 @@
   "bottom.from": "DESDE",
   "bottom.to": "HASTA",
   "bottom.apply_selected": "APLICAR SELECCIONADOS",
-  "bottom.apply": "\u25b6 APLICAR",
+  "bottom.apply": "APLICAR",
 
   "scan.placeholder": "Haz clic en ESCANEAR TODO para encontrar\ntodos los nodos animados",
-  "scan.button": "\u27f3 ESCANEAR TODO",
+  "scan.button": "ESCANEAR TODO",
   "scan.scanning": "\u27f3 ESCANEANDO\u2026",
 
   "settings.title": "Configuración",
