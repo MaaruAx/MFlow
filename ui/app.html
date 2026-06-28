@@ -339,7 +339,7 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
 .scan-inp-kf{font-size:9px;color:var(--muted);flex-shrink:0}
 #scan-ph{font-size:10px;color:var(--muted);padding:8px 6px;text-align:center;line-height:1.6}
 #scan-sel-count{font-size:9px;color:var(--muted);text-align:center}
-#btn-apply{font-size:13px;font-weight:800;padding:6px 16px;border:1.5px solid var(--accent);
+#btn-apply{display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;padding:6px 16px;border:1.5px solid var(--accent);
   border-radius:var(--r);background:var(--accent);color:var(--base);cursor:pointer;font-family:inherit;transition:opacity .15s}
 #btn-apply:hover{opacity:.85}
 
@@ -968,8 +968,8 @@ kbd {
           </div>
           <div class="cp-row">
             <span class="cp-lbl" data-i18n="cp.frequency">frequency</span>
-            <input class="cp-sl" id="sl-bomega" type="range" min="5" max="200" value="60" oninput="onBounceSlider()">
-            <span class="cp-val" id="vl-bomega">6.0</span>
+            <input class="cp-sl" id="sl-bomega" type="range" min="5" max="200" value="110" oninput="onBounceSlider()">
+            <span class="cp-val" id="vl-bomega">11.0</span>
           </div>
           <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
             <button class="tog"    id="btn-bdir-ceil"  onclick="setBounceDir('ceiling')" data-i18n="cp.direction_ceiling"><svg style="width:11px;height:11px;vertical-align:middle;margin-right:3px" viewBox="0 0 24 24" fill="currentColor"><path d="M17 15v-2h-2v-2h-2V9h-2v2H9v2H7v2h10Z"/></svg>CEILING</button>
@@ -1104,7 +1104,7 @@ kbd {
     </div>
   </div>
   <button id="btn-aall" onclick="applySelected()" data-i18n="bottom.apply_selected">APPLY SELECTED</button>
-  <button id="btn-apply" onclick="applyWithModifiers(event)"><svg style="width:18px;height:18px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 17v2H9v2H7V3h2v2h2v2h2v2h2v2h2v2h-2v2h-2v2z"/></svg><span id="apply-btn-lbl">APPLY</span></button>
+  <button id="btn-apply" onclick="applyWithModifiers(event)"><svg style="width:13px;height:13px;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 17v2H9v2H7V3h2v2h2v2h2v2h2v2h2v2h-2v2h-2v2z"/></svg><span id="apply-btn-lbl">APPLY</span></button>
 </div>
 </div>
 
@@ -1474,7 +1474,7 @@ let elAmp         = 1.0;
 let elPeriod      = 0.3;
 let elDirection   = 'in';    // 'in' | 'out'
 let bounceGamma   = 4.0;
-let bounceOmega   = 6.0;
+let bounceOmega   = 11.0;
 let bounceDir     = 'floor'; // 'ceiling' | 'floor'
 let catA          = 0.8;
 let catReverse     = false;
@@ -2686,7 +2686,7 @@ function resetCurve() {
   h1=[0.42,0.0]; h2=[0.58,1.0];
   physZeta=0.3; physOmegaN=8.0;
   elAmp=1.0; elPeriod=0.3; elDirection='in';
-  bounceGamma=4.0; bounceOmega=6.0; bounceDir='floor';
+  bounceGamma=4.0; bounceOmega=11.0; bounceDir='floor';
   catA=0.8; catReverse=false;
   pulseOmega1=8.0; pulseOmega2=2.0; pulseN=4.0; pulseReverse=false;
   noiseFreq=2.0; noiseAmp=0.5; noiseSeed=42; noiseReverse=false;
