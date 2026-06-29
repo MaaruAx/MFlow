@@ -1464,6 +1464,9 @@ if (_DOCK_MODE) {
       // curve-wrap fills remaining height; bar is flex-shrink:0 so it stays fixed
       const cw = $('curve-wrap');
       if (cw) { cw.style.flex = '1'; cw.style.width = '100%'; cw.style.minHeight = '0'; }
+      // rAF alone isn't enough — browser needs a full layout pass after flex changes
+      // before getBoundingClientRect() returns correct dimensions in resizeCanvas()
+      setTimeout(() => { resizeCanvas(); scheduleDraw(); }, 80);
     }
   });
 }
@@ -1765,9 +1768,13 @@ document.addEventListener('DOMContentLoaded', () => {
         backend.flip_requested.connect(() => flipAll());
       } else if (_DOCK_MODE === 'curve') {
         // ── Dock window minimal init ───────────────────────────────────────
-        // Pull current curve state from backend and render it
+        // 1. Apply theme & settings so the dock matches the main window appearance
+        backend.get_settings(s => { try { applySettingsUI(JSON.parse(s)); } catch(_){} });
+        // 2. Pull current curve state and render it
         backend.get_curve_state(json => { if (json && json !== '{}') _loadDockState(json); });
-        // Live-sync: whenever main window changes the curve, mirror it here
+        // 3. Live-sync: whenever main window changes the curve, mirror it here
+        //    pushState guard prevents the dock from re-emitting set_curve_state,
+        //    so this does NOT create a feedback loop
         backend.curve_state_changed.connect(json => _loadDockState(json));
       }
     });
@@ -2015,8 +2022,9 @@ function _loadDockState(json) {
     if (s.res_omega0   != null) resOmega0   = s.res_omega0;
     if (s.res_reverse  != null) resReverse  = s.res_reverse;
     if (s.of_points)            okfPoints   = s.of_points;
-    setMode(mode);   // switch mode buttons + control panels
-    scheduleDraw();  // re-render canvas with synced state
+    setMode(mode);    // switch mode buttons + control panels (pushState guarded in dock)
+    resizeCanvas();   // ensure canvas is properly sized before drawing
+    scheduleDraw();   // re-render canvas with synced state
   } catch(e) { console.error('[dock] _loadDockState error:', e); }
 }
 
@@ -2026,7 +2034,7 @@ function pushState() {
   scheduleDraw();
   clearTimeout(_pushTimer);
   _pushTimer = setTimeout(() => {
-    if (!backend) return;
+    if (!backend || _DOCK_MODE) return;   // dock is read-only — never overwrites backend state
     backend.set_curve_state(JSON.stringify({
       h1, h2, mode, of_points:okfPoints,
       phys_zeta:physZeta, phys_omega_n:physOmegaN, phys_flipped:_physFlipped,
