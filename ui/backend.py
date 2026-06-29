@@ -47,6 +47,8 @@ class Backend(QObject):
     comp_list_updated  = Signal(str)         # JSON [{id, name, active}]
     spline_copied      = Signal(str)         # removed — kept stub for compat
     _apply_comp_sig    = Signal(object)      # internal: thread-safe cross-thread comp delivery
+    curve_state_changed = Signal(str)        # full curve state JSON — dock windows sync from this
+    flip_requested      = Signal()           # dock asks main window to run flipAll()
 
     def __init__(self, window, comp=None, fusion_app=None, resolve=None, parent=None):
         super().__init__(parent)
@@ -224,6 +226,18 @@ class Backend(QObject):
         lay = QVBoxLayout(dlg)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(view)
+
+        # Disconnect WebChannel before the dialog closes to prevent Qt freeze
+        # (QWebEngineView holds a render process; severing the channel first
+        #  avoids a deadlock during garbage collection when the dialog is closed)
+        def _cleanup_dock():
+            try:
+                view.page().setWebChannel(None)
+                view.setPage(None)
+            except Exception:
+                pass
+            self._dock_windows.pop(panel_id, None)
+        dlg.finished.connect(_cleanup_dock)
 
         dlg.show()
         self._dock_windows[panel_id] = dlg
@@ -1032,6 +1046,19 @@ class Backend(QObject):
         self._res_reverse  = bool(d.get("res_reverse",   self._res_reverse))
         if self._auto_apply and self._comp:
             self._auto_timer.start(280)   # debounce 280 ms
+        # Notify dock windows so they can mirror the main window's current curve
+        self.curve_state_changed.emit(data_json)
+        self._last_curve_json = data_json   # cache for dock init pull
+
+    @Slot(result=str)
+    def get_curve_state(self) -> str:
+        """Dock windows call this once on init to pull the latest curve state."""
+        return getattr(self, '_last_curve_json', '{}')
+
+    @Slot()
+    def request_flip(self):
+        """Dock's INVERT button: ask the main window to execute flipAll()."""
+        self.flip_requested.emit()
 
     @Slot(str, str)
     def select_input(self, tool_name, inp_id):
