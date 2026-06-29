@@ -531,6 +531,20 @@ input[type=number]{-moz-appearance:textfield}
   border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,.6);display:flex;flex-direction:column;
   min-width:180px;min-height:120px;overflow:hidden;resize:both}
 .dock-float.hidden{display:none!important}
+/* ── Dock-mode action bar (curve float) ── */
+#dock-action-bar{display:none;flex-shrink:0;padding:8px 12px;gap:10px;
+  justify-content:center;align-items:center;border-top:1px solid var(--border);
+  background:var(--surface)}
+.dab-btn{font-size:10px;font-weight:700;letter-spacing:.5px;
+  padding:5px 22px;border-radius:var(--r);cursor:pointer;font-family:inherit;
+  transition:all .18s cubic-bezier(.2,.8,.4,1)}
+.dab-invert{background:transparent;border:1px solid var(--border);color:var(--muted)}
+.dab-invert:hover{border-color:var(--accent);color:var(--accent);background:var(--hl-low)}
+.dab-invert:active{transform:scale(.95)}
+.dab-apply{background:var(--accent);border:1.5px solid var(--accent);color:var(--base);
+  display:flex;align-items:center;gap:5px}
+.dab-apply:hover{opacity:.85}
+.dab-apply:active{transform:scale(.95)}
 .dock-bar{display:flex;align-items:center;gap:5px;height:26px;padding:0 7px;flex-shrink:0;
   background:var(--base);border-bottom:1px solid var(--border);cursor:move;user-select:none}
 .dock-bar-title{font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);flex:1}
@@ -856,6 +870,7 @@ kbd {
   </button>
 </div>
 
+
 <!-- ═══════════════════ MAIN ═══════════════════ -->
 <div id="main">
   <!-- Left panel: Presets -->
@@ -917,6 +932,12 @@ kbd {
     <button id="flip-btn" onclick="flipAll()" data-tip="Invert curve">
       <svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 16h10v2H10v4H8v-2H6v-2H4v-2h2v-2h2v-2h2v4Zm4-8H4V6h10V2h2v2h2v2h2v2h-2v2h-2v2h-2V8Z"/></svg>
     </button>
+  </div>
+
+  <!-- Dock-mode action bar — hidden normally, shown when app.html is in ?dock=curve mode -->
+  <div id="dock-action-bar">
+    <button class="dab-btn dab-invert" onclick="backend&&backend.request_flip()" title="Invert / flip — executed in main window">INVERT</button>
+    <button class="dab-btn dab-apply" onclick="backend&&backend.apply_curve()"><svg style="width:11px;height:11px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 17v2H9v2H7V3h2v2h2v2h2v2h2v2h2v2h-2v2h-2v2z"/></svg>APPLY</button>
   </div>
 
   <div class="drag-divider" id="dh-right" onmousedown="startResize('right',event)"></div>
@@ -1435,6 +1456,15 @@ if (_DOCK_MODE) {
     });
     ['dh-left','dh-right'].forEach(id => { const el=$(id); if(el) el.style.display='none'; });
     const main = $('main'); if (main) { main.style.flex='1'; main.style.overflow='auto'; }
+    // Curve dock: show action bar + switch main to column so bar sits below canvas
+    if (_DOCK_MODE === 'curve') {
+      const ab = $('dock-action-bar');
+      if (ab) ab.style.display = 'flex';
+      if (main) main.style.flexDirection = 'column';
+      // curve-wrap fills remaining height; bar is flex-shrink:0 so it stays fixed
+      const cw = $('curve-wrap');
+      if (cw) { cw.style.flex = '1'; cw.style.width = '100%'; cw.style.minHeight = '0'; }
+    }
   });
 }
 
@@ -1725,10 +1755,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.closest('button,#profile-dd')) return;
         if (e.button === 0) backend.start_system_move();
       });
-      backend.js_ready();
-      setTimeout(()=>{ if(backend) refreshCompList(); }, 800);
-      // NOTE: Auto-scan removed — eliminated UI freeze on startup.
-      //       User clicks ⟳ SCAN ALL when ready.
+      if (!_DOCK_MODE) {
+        // ── Main window full init ──────────────────────────────────────────
+        backend.js_ready();
+        setTimeout(()=>{ if(backend) refreshCompList(); }, 800);
+        // NOTE: Auto-scan removed — eliminated UI freeze on startup.
+        //       User clicks ⟳ SCAN ALL when ready.
+        // When dock requests a flip, run it here (main window owns the state)
+        backend.flip_requested.connect(() => flipAll());
+      } else if (_DOCK_MODE === 'curve') {
+        // ── Dock window minimal init ───────────────────────────────────────
+        // Pull current curve state from backend and render it
+        backend.get_curve_state(json => { if (json && json !== '{}') _loadDockState(json); });
+        // Live-sync: whenever main window changes the curve, mirror it here
+        backend.curve_state_changed.connect(json => _loadDockState(json));
+      }
     });
   } else {
     setConn(false, 'Qt not available');
@@ -1943,6 +1984,42 @@ function setPreviewShape(s) { _pvShape = s; }
 // § 9. PUSH STATE — single trigger for "something changed"
 // ═══════════════════════════════════════════════════════════════
 let _pushTimer = null;
+// ── Dock state loader — called when dock window receives curve_state_changed ──
+function _loadDockState(json) {
+  try {
+    const s = typeof json === 'string' ? JSON.parse(json) : json;
+    if (!s || !s.mode) return;
+    h1 = s.h1 || h1;  h2 = s.h2 || h2;
+    mode = s.mode;
+    if (s.phys_zeta    != null) physZeta    = s.phys_zeta;
+    if (s.phys_omega_n != null) physOmegaN  = s.phys_omega_n;
+    if (s.phys_flipped != null) _physFlipped= s.phys_flipped;
+    if (s.el_amplitude != null) elAmp       = s.el_amplitude;
+    if (s.el_period    != null) elPeriod    = s.el_period;
+    if (s.el_direction)         elDirection = s.el_direction;
+    if (s.bounce_gamma != null) bounceGamma = s.bounce_gamma;
+    if (s.bounce_omega != null) bounceOmega = s.bounce_omega;
+    if (s.bounce_dir)           bounceDir   = s.bounce_dir;
+    if (s.catenary_a   != null) catA        = s.catenary_a;
+    if (s.catenary_reverse != null) catReverse = s.catenary_reverse;
+    if (s.pulse_omega1 != null) pulseOmega1 = s.pulse_omega1;
+    if (s.pulse_omega2 != null) pulseOmega2 = s.pulse_omega2;
+    if (s.pulse_n      != null) pulseN      = s.pulse_n;
+    if (s.pulse_reverse!= null) pulseReverse= s.pulse_reverse;
+    if (s.noise_freq   != null) noiseFreq   = s.noise_freq;
+    if (s.noise_amp    != null) noiseAmp    = s.noise_amp;
+    if (s.noise_seed   != null) noiseSeed   = s.noise_seed;
+    if (s.noise_reverse!= null) noiseReverse= s.noise_reverse;
+    if (s.res_gamma    != null) resGamma    = s.res_gamma;
+    if (s.res_omega    != null) resOmega    = s.res_omega;
+    if (s.res_omega0   != null) resOmega0   = s.res_omega0;
+    if (s.res_reverse  != null) resReverse  = s.res_reverse;
+    if (s.of_points)            okfPoints   = s.of_points;
+    setMode(mode);   // switch mode buttons + control panels
+    scheduleDraw();  // re-render canvas with synced state
+  } catch(e) { console.error('[dock] _loadDockState error:', e); }
+}
+
 function pushState() {
   updateLookup();
   updateStatus();
