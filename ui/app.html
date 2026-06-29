@@ -45,7 +45,8 @@ html,body{width:100%;height:100%;
 #conn-text{font-size:10px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #btn-conn{font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--r);cursor:pointer;
   border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s}
-#btn-conn:hover{border-color:var(--accent);color:var(--accent)}
+#btn-conn:hover{border-color:var(--accent);color:var(--accent);background:var(--hl-low)}
+#btn-conn:active{transform:scale(.95)}
 .wctl{width:24px;height:22px;border-radius:var(--r);border:1px solid var(--border);background:transparent;
   cursor:pointer;display:flex;align-items:center;justify-content:center;
   color:var(--muted);font-size:13px;transition:all .15s;font-family:inherit}
@@ -58,14 +59,18 @@ html,body{width:100%;height:100%;
 .tlabel{font-size:9px;font-weight:700;letter-spacing:.6px;color:var(--muted);margin-right:3px}
 .mode-btn{font-size:10px;font-weight:700;letter-spacing:.4px;padding:3px 9px;border-radius:var(--r);
   cursor:pointer;border:1px solid var(--border);color:var(--muted);background:transparent;
-  transition:all .2s;font-family:inherit}
-.mode-btn:hover{color:var(--accent);border-color:var(--accent)}
+  transition:color .18s,border-color .18s,background .18s,transform .15s cubic-bezier(.2,.8,.4,1);font-family:inherit}
+.mode-btn:hover{color:var(--accent);border-color:var(--accent);background:var(--hl-low);transform:translateY(-1px)}
+.mode-btn:active{transform:translateY(0) scale(.95)}
 .mode-btn.active{border-color:var(--accent);color:var(--accent);background:var(--hl-low)}
 .icon-btn{width:26px;height:26px;border-radius:var(--r);border:1px solid color-mix(in srgb, var(--accent), transparent 75%);
   background:var(--overlay);cursor:pointer;display:flex;align-items:center;
-  justify-content:center;transition:all .15s;color:var(--accent)}
-.icon-btn:hover{border-color:var(--accent);background:var(--hl-low)}
-.icon-btn svg{width:13px;height:13px}
+  justify-content:center;transition:all .18s cubic-bezier(.2,.8,.4,1);color:var(--accent)}
+.icon-btn:hover{border-color:var(--accent);background:var(--hl-low);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent),transparent 80%)}
+.icon-btn:hover svg{transform:scale(1.15)}
+.icon-btn:active{transform:scale(.9)}
+.icon-btn.active{border-color:var(--accent);background:var(--hl-low);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent),transparent 70%)}
+.icon-btn svg{width:13px;height:13px;transition:transform .15s cubic-bezier(.2,.8,.4,1)}
 #aa-wrap{display:flex;align-items:center;gap:4px}
 #aa-lbl{font-size:10px;color:var(--muted)}
 #aa-sw{width:28px;height:15px;background:var(--border);border-radius:8px;cursor:pointer;
@@ -76,7 +81,9 @@ html,body{width:100%;height:100%;
 #aa-sw.on::after{left:15px}
 #btn-compact{font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--r);cursor:pointer;
   border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s}
-#btn-compact.on{border-color:var(--accent);color:var(--accent)}
+#btn-compact:hover:not(.on){background:var(--hl-low);border-color:var(--hl-med);color:var(--text)}
+#btn-compact:active{transform:scale(.95)}
+#btn-compact.on{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent),transparent 70%)}
 
 /* ── Main layout ── */
 #main{display:flex;flex:1;min-height:0;position:relative;overflow:hidden}
@@ -94,7 +101,7 @@ body.compact #btn-aall{display:none!important}
    FLUID badge + version tag next to the logo — both are pure decoration
    that compact mode is meant to trim. */
 body.compact #aa-lbl{display:none!important}
-body.compact #badge-fluid,body.compact #version{display:none!important}
+body.compact #version{display:none!important}
 
 /* ── Params sidebar ── */
 #params-sidebar{position:absolute;left:0;top:0;bottom:0;width:0;overflow:hidden;z-index:50;
@@ -158,6 +165,8 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
 .lib-pill{font-size:9px;font-weight:700;letter-spacing:.5px;padding:2px 7px;border-radius:2px;
   cursor:pointer;border:1px solid var(--border);color:var(--muted);background:transparent;
   transition:all .2s;font-family:inherit}
+.lib-pill:hover:not(.active){border-color:var(--hl-med);color:var(--text);background:var(--hl-low)}
+.lib-pill:active{transform:scale(.95)}
 .lib-pill.active{border-color:var(--accent);color:var(--accent);background:var(--hl-low)}
 #search-row{display:flex;align-items:center;gap:5px;padding:6px 10px 4px}
 #params-toggle{width:22px;height:22px;border-radius:var(--r);border:1px solid var(--border);
@@ -171,16 +180,18 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
   border-radius:var(--r);cursor:pointer;border:1px solid var(--border);
   background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:4px}
-#btn-comp:hover{border-color:var(--hl-med);color:var(--text)}
+#btn-comp:hover{border-color:var(--accent);color:var(--accent);background:var(--hl-low)}
+#btn-comp:active{transform:scale(.95)}
+#btn-comp.open{border-color:var(--accent);color:var(--accent)}
 #btn-comp .comp-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0;margin-right:1px}
 #comp-menu{display:none;position:absolute;top:calc(100% + 4px);left:0;
   background:var(--overlay);border:1px solid var(--hl-med);border-radius:var(--r);
   min-width:200px;max-width:320px;z-index:400;box-shadow:0 4px 16px rgba(0,0,0,.5);padding:3px 0}
-#comp-menu.open{display:block}
+#comp-menu.open{display:block;animation:menuIn .17s cubic-bezier(.2,.8,.4,1) both}
 .comp-item{padding:5px 10px;font-size:11px;color:var(--muted);cursor:pointer;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px;
   transition:background .1s}
-.comp-item:hover{background:var(--overlay);color:var(--text)}
+.comp-item:hover{background:var(--hl-low);color:var(--accent)}
 .comp-item.active-comp{color:var(--accent)}
 .comp-item .ci-dot{width:5px;height:5px;border-radius:50%;background:var(--accent);flex-shrink:0;opacity:0}
 .comp-item.active-comp .ci-dot{opacity:1}
@@ -191,8 +202,8 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
 #preset-scroll{flex:1;overflow-y:auto}
 #preset-grid{display:grid;grid-template-columns:repeat(var(--preset-cols,2),1fr);gap:5px;padding:5px 8px}
 .pcard{border-radius:var(--r);border:1px solid var(--border);background:var(--surface);
-  cursor:pointer;overflow:hidden;display:flex;flex-direction:column;aspect-ratio:1;transition:border-color .15s}
-.pcard:hover{border-color:var(--hl-med)}
+  cursor:pointer;overflow:hidden;display:flex;flex-direction:column;aspect-ratio:1;transition:border-color .2s,transform .2s cubic-bezier(.2,.8,.4,1),background .2s,box-shadow .2s}
+.pcard:hover{border-color:var(--hl-med);background:var(--overlay);transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.22)}
 .pcard.sel{border-width:2px;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)22}
 .pcard.sel-anim{animation:cardPick .28s cubic-bezier(.2,.8,.4,1) forwards}
 @keyframes cardPick{
@@ -200,6 +211,11 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
   45% {transform:scale(1.055);box-shadow:0 0 0 4px var(--accent)44}
   100%{transform:scale(1);    box-shadow:0 0 0 0 var(--accent)}
 }
+/* ── Animation utilities ── */
+@keyframes menuIn  {from{opacity:0;transform:translateY(-5px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes cpFadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.menu-anim{animation:menuIn .17s cubic-bezier(.2,.8,.4,1) both}
+.cp-fadein {animation:cpFadeIn .18s cubic-bezier(.2,.8,.4,1) both}
 .card-wrap{flex:1;min-height:0;position:relative;overflow:hidden}
 .card-cv{position:absolute;inset:0;width:100%;height:100%}
 .card-sep{height:1px;background:var(--border);flex-shrink:0}
@@ -208,7 +224,8 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
 #preset-bottom{border-top:1px solid var(--border);padding:5px 8px;display:flex;gap:4px}
 .pa-btn{flex:1;background:transparent;border:1px solid var(--border);border-radius:var(--r);
   color:var(--muted);font-family:inherit;font-size:10px;padding:3px 0;cursor:pointer;transition:all .15s}
-.pa-btn:hover{border-color:var(--hl-med);color:var(--text)}
+.pa-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--hl-low)}
+.pa-btn:active{transform:scale(.96)}
 
 /* ── Drag dividers ── */
 .drag-divider{width:4px;cursor:col-resize;background:transparent;flex-shrink:0;
@@ -231,8 +248,8 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
   z-index:1200;min-width:120px;padding:3px 0;box-shadow:0 4px 12px #0004}
 .dd-item{display:block;width:100%;text-align:left;padding:5px 10px;
   background:transparent;border:none;cursor:pointer;font-family:inherit;
-  font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);transition:color .1s}
-.dd-item:hover{color:var(--accent);background:var(--hl-low)}
+  font-size:10px;font-weight:700;letter-spacing:.5px;color:var(--muted);transition:color .14s,background .14s,padding-left .12s}
+.dd-item:hover{color:var(--accent);background:var(--hl-low);padding-left:14px}
 .dd-item.active{color:var(--accent)}
 #zoom-hint{display:none;position:absolute;bottom:6px;left:6px;font-size:10px;
   color:var(--muted);background:var(--overlay);border:1px solid var(--border);
@@ -240,9 +257,9 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
 #ctx-menu{display:none;position:fixed;z-index:500;background:var(--overlay);
   border:1px solid var(--border);border-radius:var(--r);min-width:160px;
   padding:4px 0;box-shadow:0 4px 16px rgba(0,0,0,.5)}
-#ctx-menu.open{display:block}
-.ctx-item{padding:5px 14px;font-size:11px;color:var(--subtle);cursor:pointer;transition:background .1s}
-.ctx-item:hover{background:var(--hl-low);color:var(--text)}
+#ctx-menu.open{display:block;animation:menuIn .17s cubic-bezier(.2,.8,.4,1) both}
+.ctx-item{padding:5px 12px 5px 14px;font-size:11px;color:var(--subtle);cursor:pointer;border-left:2px solid transparent;transition:background .12s,color .12s,border-color .12s}
+.ctx-item:hover{background:var(--hl-low);color:var(--text);border-left-color:var(--accent)}
 .ctx-item.active{color:var(--accent)}
 
 /* ── Right panel ── */
@@ -310,13 +327,15 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
   background:var(--base);border-top:1px solid var(--border);padding:0 10px}
 #status-msg{font-size:10px;color:var(--muted);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #btn-aall{font-size:10px;font-weight:700;letter-spacing:.3px;padding:6px 14px;border:1.5px solid var(--accent);
-  border-radius:var(--r);background:transparent;color:var(--accent);cursor:pointer;font-family:inherit;transition:background .15s}
-#btn-aall:hover{background:var(--hl-low)}
+  border-radius:var(--r);background:transparent;color:var(--accent);cursor:pointer;font-family:inherit;transition:background .18s,transform .15s cubic-bezier(.2,.8,.4,1),box-shadow .18s}
+#btn-aall:hover{background:var(--hl-low);box-shadow:0 0 0 2px color-mix(in srgb,var(--accent),transparent 75%)}
+#btn-aall:active{transform:scale(.96)}
 
 /* ── Comp scan ── */
 #btn-scan{width:100%;font-size:11px;font-weight:700;letter-spacing:.5px;padding:7px 0;border-radius:var(--r);cursor:pointer;
-  border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s}
-#btn-scan:hover{border-color:var(--accent);color:var(--accent)}
+  border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .18s cubic-bezier(.2,.8,.4,1)}
+#btn-scan:hover{border-color:var(--accent);color:var(--accent);background:var(--hl-low)}
+#btn-scan:active{transform:scale(.97)}
 #btn-scan.scanning{border-color:var(--accent);color:var(--accent);animation:scanPulse 1s ease-in-out infinite}
 @keyframes scanPulse{0%,100%{opacity:1}50%{opacity:.5}}
 .scan-tool-hdr{font-size:9px;font-weight:700;letter-spacing:.5px;padding:5px 4px 2px;
@@ -342,6 +361,7 @@ body.compact #badge-fluid,body.compact #version{display:none!important}
 #btn-apply{display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;padding:6px 16px;border:1.5px solid var(--accent);
   border-radius:var(--r);background:var(--accent);color:var(--base);cursor:pointer;font-family:inherit;transition:opacity .15s}
 #btn-apply:hover{opacity:.85}
+#btn-apply:active{transform:scale(.96)}
 
 /* ── KF range widget ── */
 #kf-range-widget{display:flex;align-items:center;gap:6px;
@@ -501,6 +521,12 @@ input[type=number]{-moz-appearance:textfield}
   user-select:text;-webkit-user-select:text;cursor:text}
 
 /* ── Floating docks ── */
+@keyframes floatIn {from{opacity:0;transform:scale(.95) translateY(-6px)}to{opacity:1;transform:none}}
+@keyframes panelIn {from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:none}}
+@keyframes panelInR{from{opacity:0;transform:translateX(10px)}to{opacity:1;transform:none}}
+.dock-float-anim{animation:floatIn .22s cubic-bezier(.2,.8,.4,1) both}
+.panel-slide-l{animation:panelIn .2s cubic-bezier(.2,.8,.4,1) both}
+.panel-slide-r{animation:panelInR .2s cubic-bezier(.2,.8,.4,1) both}
 .dock-float{position:fixed;z-index:800;background:var(--surface);border:1px solid var(--border);
   border-radius:4px;box-shadow:0 8px 32px rgba(0,0,0,.6);display:flex;flex-direction:column;
   min-width:180px;min-height:120px;overflow:hidden;resize:both}
@@ -739,13 +765,13 @@ kbd {
 /* Preset right-click context menu */
 #preset-ctx{position:fixed;z-index:700;background:var(--overlay);border:1px solid var(--hl-med);border-radius:var(--r);min-width:140px;padding:3px 0;box-shadow:0 4px 16px rgba(0,0,0,.5);display:none}
 #preset-ctx .ctx-item{padding:5px 12px;font-size:11px;cursor:pointer;color:var(--text)}
-#preset-ctx .ctx-item:hover{background:var(--hl-low)}
+#preset-ctx .ctx-item:hover{background:var(--hl-low);color:var(--accent);border-left-color:var(--accent)}
 #preset-ctx .ctx-sep{height:1px;background:var(--border);margin:3px 0}
 /* Preset options menu */
 #preset-opts-menu{position:absolute;top:100%;left:0;z-index:600;background:var(--overlay);border:1px solid var(--hl-med);border-radius:var(--r);min-width:160px;padding:3px 0;box-shadow:0 4px 16px rgba(0,0,0,.5);display:none}
-#preset-opts-menu.open{display:block}
+#preset-opts-menu.open{display:block;animation:menuIn .17s cubic-bezier(.2,.8,.4,1) both}
 #preset-opts-menu .ctx-item{padding:5px 12px;font-size:11px;cursor:pointer;color:var(--text)}
-#preset-opts-menu .ctx-item:hover{background:var(--hl-low)}
+#preset-opts-menu .ctx-item:hover{background:var(--hl-low);color:var(--accent);border-left-color:var(--accent)}
 </style>
 </head>
 <body>
@@ -1715,9 +1741,10 @@ document.addEventListener('DOMContentLoaded', () => {
 function setConn(ok, txt) {
   $('conn-dot').className = ok ? 'on' : '';
   const l = $('conn-text');
-  // In compact mode the titlebar is narrow — show only the first segment
-  // (e.g. "Connected") and drop " · DaVinci Resolve Studio v19" to save space.
-  l.textContent = compact ? txt.split(' · ')[0] : txt;
+  l.dataset.full = txt;
+  // In compact mode strip "· DaVinci …" — regex handles any middle-dot variant
+  const shortTxt = txt.replace(/\s*\u00b7\s*.*$|\s+DaVinci\b.*/i, '').trim() || txt;
+  l.textContent = compact ? shortTxt : txt;
   l.style.color = ok ? 'var(--accent)' : 'var(--muted)';
   const btn = $('btn-conn');
   if (btn) {
@@ -1748,19 +1775,19 @@ const EXTRAS_MODES = ['catenary','pulse','noise','resonance'];
 function toggleExtrasModeDD() {
   const m = $('extras-mode-menu');
   if (!m) return;
-  const open = m.style.display !== 'none';
-  m.style.display = open ? 'none' : 'block';
-  if (!open) closeExtrasLibDD();
+  const isOpen = m.style.display !== 'none';
+  if (isOpen) { m.style.display='none'; m.classList.remove('menu-anim'); }
+  else { closeExtrasLibDD(); m.style.display='block'; m.classList.remove('menu-anim'); requestAnimationFrame(()=>m.classList.add('menu-anim')); }
 }
-function closeExtrasModeDD() { const m=$('extras-mode-menu'); if(m) m.style.display='none'; }
+function closeExtrasModeDD() { const m=$('extras-mode-menu'); if(m){m.style.display='none';m.classList.remove('menu-anim');} }
 function toggleExtrasLibDD() {
   const m = $('extras-lib-menu');
   if (!m) return;
-  const open = m.style.display !== 'none';
-  m.style.display = open ? 'none' : 'block';
-  if (!open) closeExtrasModeDD();
+  const isOpen = m.style.display !== 'none';
+  if (isOpen) { m.style.display='none'; m.classList.remove('menu-anim'); }
+  else { closeExtrasModeDD(); m.style.display='block'; m.classList.remove('menu-anim'); requestAnimationFrame(()=>m.classList.add('menu-anim')); }
 }
-function closeExtrasLibDD() { const m=$('extras-lib-menu'); if(m) m.style.display='none'; }
+function closeExtrasLibDD() { const m=$('extras-lib-menu'); if(m){m.style.display='none';m.classList.remove('menu-anim');} }
 function isSpring()    { return mode === 'spring';    }
 function isElastic()   { return mode === 'elastic';   }
 function isBounce()    { return mode === 'bounce';    }
@@ -1821,6 +1848,9 @@ function setMode(m) {
   if (nse) nse.style.display = isNoise()     ? '' : 'none';
   if (res) res.style.display = isResonance() ? '' : 'none';
   if (non) non.style.display = (hasNoHandles()) ? 'none' : '';
+  // Animate the newly revealed control panel
+  const _acp=[spr,ela,bnc,cat,pls,nse,res].find(p=>p&&p.style.display!=='none');
+  if(_acp){_acp.classList.remove('cp-fadein');requestAnimationFrame(()=>_acp.classList.add('cp-fadein'));}
   // Apply mode palette (hl-med / hl-low tint)
   // hl vars are always restored from _CSS_DEFAULTS — they are user-customizable
   // via the Interface Colors panel and must never be overwritten by MODE_PALETTE,
@@ -1896,6 +1926,14 @@ function toggleCompact() {
     closePanelMenu();
     closeExtrasModeDD();
     closeExtrasLibDD();
+  }
+  // Refresh conn label truncation after compact toggle
+  const _cl = $('conn-text');
+  if (_cl) {
+    const _ft = _cl.dataset.full || _cl.textContent;
+    _cl.dataset.full = _ft;
+    const _st = _ft.replace(/\s*\u00b7\s*.*$|\s+DaVinci\b.*/i, '').trim() || _ft;
+    _cl.textContent = compact ? _st : _ft;
   }
 }
 function toggleMaximize() { if(backend) backend.toggle_maximize(); }
@@ -2656,7 +2694,7 @@ function setResReverse(rev) { resReverse=rev; syncResSliders(); pushState(); }
 function onCtx(e) {
   e.preventDefault(); e.stopPropagation();
   const m = $('ctx-menu');
-  m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px'; m.classList.add('open');
+  m.style.left=e.clientX+'px'; m.style.top=e.clientY+'px'; m.classList.remove('open'); requestAnimationFrame(()=>m.classList.add('open'));
   $('ctx-os').textContent  = `Overshoot: ${overshoot?'ON':'OFF'}`;
   $('ctx-os').classList.toggle('active', overshoot);
   $('ctx-mag').textContent = `Magnet: ${magnetEnabled?'ON':'OFF'}`;
@@ -2905,14 +2943,14 @@ let _ctxMenuEl = null;
 function _getCtxMenu() { return _ctxMenuEl || (_ctxMenuEl = document.getElementById('preset-ctx')); }
 function _openPresetCtx(x, y) {
   const m=_getCtxMenu(); if(!m) return;
-  m.style.display='block';
+  m.style.display='block'; m.classList.remove('menu-anim'); requestAnimationFrame(()=>m.classList.add('menu-anim'));
   const vw=window.innerWidth, vh=window.innerHeight;
   m.style.left=(x+m.offsetWidth>vw?x-m.offsetWidth:x)+'px';
   m.style.top=(y+m.offsetHeight>vh?y-m.offsetHeight:y)+'px';
   const close=e=>{if(!m.contains(e.target)){m.style.display='none';document.removeEventListener('mousedown',close,true);}};
   document.addEventListener('mousedown',close,true);
 }
-function _closePresetCtx() { const m=_getCtxMenu(); if(m) m.style.display='none'; }
+function _closePresetCtx() { const m=_getCtxMenu(); if(m){m.style.display='none';m.classList.remove('menu-anim');} }
 function _presetCtxDelete() { _closePresetCtx(); deleteSelectedPreset(); }
 function _presetCtxRename() {
   _closePresetCtx();
@@ -2937,9 +2975,14 @@ function _presetCtxDuplicate() {
 // ── Preset options menu ───────────────────────────────────────────────────────
 function togglePresetOpts() {
   const m=document.getElementById('preset-opts-menu'); if(!m) return;
-  if(m.classList.toggle('open')) {
-    const close=e=>{const b=document.getElementById('preset-opts-btn');if(!b||!b.contains(e.target)){m.classList.remove('open');document.removeEventListener('mousedown',close,true);}};
-    document.addEventListener('mousedown',close,true);
+  const wasOpen=m.classList.contains('open');
+  m.classList.remove('open');
+  if(!wasOpen){
+    requestAnimationFrame(()=>{
+      m.classList.add('open');
+      const close=e=>{const b=document.getElementById('preset-opts-btn');if(!b||!b.contains(e.target)){m.classList.remove('open');document.removeEventListener('mousedown',close,true);}};
+      document.addEventListener('mousedown',close,true);
+    });
   }
 }
 function _closePOMenu(){const m=document.getElementById('preset-opts-menu');if(m)m.classList.remove('open');}
@@ -2979,11 +3022,21 @@ function deleteProfile()      { if(activeProfile&&backend) backend.delete_profil
 // § 20. PANELS & DOCK SYSTEM
 // ═══════════════════════════════════════════════════════════════
 function togglePanelMenu() {
-  const m=$('panel-menu');
-  m.style.display = m.style.display==='none' ? 'block' : 'none';
+  const m=$('panel-menu'), btn=$('btn-panels');
+  const isOpen = m.style.display !== 'none';
+  if (isOpen) {
+    m.style.display='none'; m.classList.remove('menu-anim');
+    if(btn) btn.classList.remove('active');
+  } else {
+    m.style.display='block'; m.classList.remove('menu-anim');
+    requestAnimationFrame(()=>m.classList.add('menu-anim'));
+    if(btn) btn.classList.add('active');
+  }
 }
 function closePanelMenu() {
-  const m=$('panel-menu'); if(m) m.style.display='none';
+  const m=$('panel-menu'), btn=$('btn-panels');
+  if(m){m.style.display='none';m.classList.remove('menu-anim');}
+  if(btn) btn.classList.remove('active');
 }
 
 // BUG 1 FIX: removed references to btn-hide-left/btn-hide-right (don't exist in DOM)
@@ -2994,13 +3047,19 @@ function toggleSidebar(side) {
   if (side==='left') {
     leftHidden = !leftHidden;
     const panel=$('preset-panel'), dh=$('dh-left'), item=$('pm-hide-left');
-    if (panel) panel.style.display = leftHidden ? 'none' : '';
+    if (panel) {
+      panel.style.display = leftHidden ? 'none' : '';
+      if (!leftHidden) { panel.classList.remove('panel-slide-l'); requestAnimationFrame(()=>panel.classList.add('panel-slide-l')); }
+    }
     if (dh)    dh.style.display    = leftHidden ? 'none' : '';
     if (item)  item.innerHTML      = SVG_LEFT  + (leftHidden  ? 'Show Presets' : 'Hide Presets');
   } else {
     rightHidden = !rightHidden;
     const panel=$('right-panel'), dh=$('dh-right'), item=$('pm-hide-right');
-    if (panel) panel.style.display = rightHidden ? 'none' : '';
+    if (panel) {
+      panel.style.display = rightHidden ? 'none' : '';
+      if (!rightHidden) { panel.classList.remove('panel-slide-r'); requestAnimationFrame(()=>panel.classList.add('panel-slide-r')); }
+    }
     if (dh)    dh.style.display    = rightHidden ? 'none' : '';
     if (item)  item.innerHTML      = SVG_RIGHT + (rightHidden ? 'Show Preview' : 'Hide Preview');
   }
@@ -3049,6 +3108,7 @@ function popOut(side) {
   floater.style.left=(side==='left'?60:side==='curve'?(window.innerWidth-W)/2:window.innerWidth-W-60)+'px';
   floater.style.top='60px';
   floater.classList.remove('hidden');
+  floater.classList.remove('dock-float-anim'); requestAnimationFrame(()=>floater.classList.add('dock-float-anim'));
   if (side==='curve') requestAnimationFrame(resizeCanvas);
   const dh=$(cfg.dhId); if(dh) dh.style.display='none';
   _docked[side]=false;
@@ -3218,10 +3278,16 @@ function setUseManualRange(manualChecked) {
 }
 
 function toggleCompMenu() {
-  const menu = $('comp-menu');
+  const menu = $('comp-menu'), btn = $('btn-comp');
   if (!menu) return;
   _compMenuOpen = !_compMenuOpen;
-  menu.classList.toggle('open', _compMenuOpen);
+  menu.classList.remove('open');
+  if (btn) btn.classList.toggle('open', _compMenuOpen);
+  if (_compMenuOpen) {
+    requestAnimationFrame(()=>menu.classList.add('open'));
+  } else {
+    menu.classList.remove('open');
+  }
   if (_compMenuOpen) {
     // Open dropdown: show full list for selection
     if (backend && backend.list_comps) {
@@ -3273,7 +3339,7 @@ function renderCompList(comps) {
         setTimeout(refreshCompList, 500);
       }
       _compMenuOpen = false;
-      const m = $('comp-menu'); if (m) m.classList.remove('open');
+      const m = $('comp-menu'); if (m) m.classList.remove('open'); const _bc=$('btn-comp'); if(_bc)_bc.classList.remove('open');
     };
     inner.appendChild(row);
   });
