@@ -31,10 +31,27 @@ def add_preset(state, preset):
     active_presets(state).append(copy.deepcopy(preset))
     save_profiles(state); return state
 
-def delete_preset(state, idx):
+def delete_preset(state, idx, library, n_builtin):
+    """idx is the position in the UI's (builtin + library-filtered-user) list —
+    the exact same list load_library() sends to JS. The flat active_presets(state)
+    list mixes EVERY library together in save order, so idx cannot index it
+    directly; we must walk it filtered by `library` to find the right object.
+    Returns (state, ok) — ok=False means idx pointed at a builtin (not deletable)
+    or was out of range; caller should not assume anything changed.
+    """
+    if idx < n_builtin:
+        return state, False   # builtin presets aren't part of saved data — can't delete
+    target_pos = idx - n_builtin   # position within this library's saved presets only
     p = active_presets(state)
-    if 0 <= idx < len(p): p.pop(idx); save_profiles(state)
-    return state
+    seen = 0
+    for i, pr in enumerate(p):
+        if pr.get("library") == library:
+            if seen == target_pos:
+                p.pop(i)
+                save_profiles(state)
+                return state, True
+            seen += 1
+    return state, False
 
 def new_profile(state, name):
     name = name.strip()

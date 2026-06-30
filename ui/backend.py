@@ -1301,7 +1301,10 @@ class Backend(QObject):
 
     @Slot(int)
     def delete_preset(self, idx):
-        self._profiles = delete_preset(self._profiles, idx)
+        n_builtin = len(load_builtin(self._mode))
+        self._profiles, ok = delete_preset(self._profiles, idx, self._mode, n_builtin)
+        if not ok:
+            self.status_changed.emit("Built-in presets can't be deleted", "var(--gold)")
         self.load_library(self._mode)
 
     @Slot(str)
