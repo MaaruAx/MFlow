@@ -4,7 +4,7 @@
 
 # ◈𝐌𝐅𝐋𝐎𝐖
 
-[![Version](https://img.shields.io/badge/Version-v2.4.0-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MCopy/releases)
+[![Version](https://img.shields.io/badge/Version-v2.5.0-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MCopy/releases)
 [![Status](https://img.shields.io/badge/Status-Stable-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MCopy)
 ![free](https://img.shields.io/badge/Works_on_FREE_Resolve-1a1a2e?style=for-the-badge&labelColor=1a1a2e)
 
@@ -12,7 +12,7 @@
 
 **A curve editor for DaVinci Resolve Fusion**
 
-*Shape your keyframes. Apply physics. Works on the free version of DaVinci Resolve.*
+_Shape your keyframes. Apply physics. Works on the free version of DaVinci Resolve._
 
 <br>
 
@@ -126,10 +126,10 @@ The installer finds your Python, installs dependencies, and places the launcher 
 
 Then launch from Resolve based on your license:
 
-| License | Where to launch |
-|---|---|
-| ![studio](https://img.shields.io/badge/Studio-eb6f92?style=flat-square&labelColor=26233a) | Any page → `Workspace → Scripts → MFlow` |
-| ![free](https://img.shields.io/badge/Free-9ccfd8?style=flat-square&labelColor=26233a) | Fusion page only → `Scripts → Comp → MFlow_Free` |
+| License                                                                                   | Where to launch                                  |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| ![studio](https://img.shields.io/badge/Studio-eb6f92?style=flat-square&labelColor=26233a) | Any page → `Workspace → Scripts → MFlow`         |
+| ![free](https://img.shields.io/badge/Free-9ccfd8?style=flat-square&labelColor=26233a)     | Fusion page only → `Scripts → Comp → MFlow_Free` |
 
 <details>
 <summary>
@@ -142,20 +142,22 @@ Then launch from Resolve based on your license:
 
 **Studio launcher** — copy `MFlow.lua` + `python_path.txt` to:
 
-| Platform | Path |
-|---|---|
-| ![win](https://img.shields.io/badge/Windows-9ccfd8?style=flat-square) | `%APPDATA%\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility\` |
-| ![mac](https://img.shields.io/badge/macOS-ebbcba?style=flat-square) | `~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Utility/` |
-| ![lnx](https://img.shields.io/badge/Linux-f6c177?style=flat-square) | `~/.local/share/DaVinciResolve/Fusion/Scripts/Utility/` |
+| Platform                                                              | Path                                                                                      |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| ![win](https://img.shields.io/badge/Windows-9ccfd8?style=flat-square) | `%APPDATA%\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility\`             |
+| ![mac](https://img.shields.io/badge/macOS-ebbcba?style=flat-square)   | `~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Utility/` |
+| ![lnx](https://img.shields.io/badge/Linux-f6c177?style=flat-square)   | `~/.local/share/DaVinciResolve/Fusion/Scripts/Utility/`                                   |
 
 **Free launcher** — copy `MFlow_Free.py` + `mflow_path.txt` to `Scripts/Comp/` instead of `Scripts/Utility/`.
 
 To run standalone without Resolve:
+
 ```bash
 python main.py
 ```
 
 To uninstall (preserves your settings, presets and profiles):
+
 ```bash
 python uninstall.py
 ```
@@ -174,13 +176,13 @@ python uninstall.py
 
 ## ![req](https://img.shields.io/badge/◈_REQUIREMENTS-ebbcba?style=flat-square&labelColor=1a1a2e)
 
-| | |
-|---|---|
-| ![resolve](https://img.shields.io/badge/DaVinci_Resolve_18+-eb6f92?style=flat-square&labelColor=26233a) | Free or Studio — both work |
-| ![python](https://img.shields.io/badge/Python_3.9+-c4a7e7?style=flat-square&labelColor=26233a) | Only needed if NOT using the standalone `.exe` — must be from [python.org](https://python.org/downloads) |
-| ![pyside](https://img.shields.io/badge/PySide6_≥_6.5-9ccfd8?style=flat-square&labelColor=26233a) | Installed automatically by `install.py` |
+|                                                                                                         |                                                                                                          |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| ![resolve](https://img.shields.io/badge/DaVinci_Resolve_18+-eb6f92?style=flat-square&labelColor=26233a) | Free or Studio — both work                                                                               |
+| ![python](https://img.shields.io/badge/Python_3.9+-c4a7e7?style=flat-square&labelColor=26233a)          | Only needed if NOT using the standalone `.exe` — must be from [python.org](https://python.org/downloads) |
+| ![pyside](https://img.shields.io/badge/PySide6_≥_6.5-9ccfd8?style=flat-square&labelColor=26233a)        | Installed automatically by `install.py`                                                                  |
 
-> ⚠️ **Python from the Microsoft Store will not work.** It is a restricted stub that cannot load the DaVinci Resolve scripting modules. Download the standard installer from **[python.org/downloads](https://python.org/downloads)** and check *"Add Python to PATH"* during setup.
+> ⚠️ **Python from the Microsoft Store will not work.** It is a restricted stub that cannot load the DaVinci Resolve scripting modules. Download the standard installer from **[python.org/downloads](https://python.org/downloads)** and check _"Add Python to PATH"_ during setup.
 
 ---
 

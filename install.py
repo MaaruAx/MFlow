@@ -5,7 +5,7 @@ Never crashes - every error is caught, explained, and continues.
 """
 import subprocess, sys, os, shutil, platform, glob, json, time
 
-MFLOW_VERSION = "2.4.0"
+MFLOW_VERSION = "2.5.0"
 HERE   = os.path.dirname(os.path.abspath(__file__))
 PLAT   = platform.system()
 ARCH   = platform.machine()
