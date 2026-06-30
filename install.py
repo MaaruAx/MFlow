@@ -5,6 +5,7 @@ Never crashes - every error is caught, explained, and continues.
 """
 import subprocess, sys, os, shutil, platform, glob, json, time
 
+MFLOW_VERSION = "2.4.0"
 HERE   = os.path.dirname(os.path.abspath(__file__))
 PLAT   = platform.system()
 ARCH   = platform.machine()
@@ -153,10 +154,14 @@ def pip_install(python_exe, pkg, extra_args=None):
 
 # -- File operations -----------------------------------------------------------
 def copy_tree(src, dst):
-    """Copy src directory into dst, skipping __pycache__ and .pyc."""
+    """Copy src directory into dst, skipping __pycache__, .pyc, and PyInstaller
+    / Inno Setup build artifacts that might exist alongside the source on a
+    dev machine but should never be shipped into the user's install dir."""
     errors = []
+    SKIP_DIRS = ("__pycache__", ".git", ".venv", "venv", "node_modules",
+                 "dist", "build", "installer")
     for item in os.listdir(src):
-        if item in ("__pycache__", ".git", ".venv", "venv", "node_modules"):
+        if item in SKIP_DIRS:
             continue
         s = os.path.join(src, item)
         d = os.path.join(dst, item)
@@ -214,10 +219,16 @@ def write_mflow_path(install_dir, location):
 def main():
     print()
     sep("=")
-    print("  MFlow - Installer")
+    print(f"  MFlow {MFLOW_VERSION} - Installer")
     _plat_display = {"Windows": "Windows", "Darwin": "macOS", "Linux": "Linux"}.get(PLAT, PLAT)
     print(f"  Platform: {_plat_display} ({ARCH})   Python: {PY_VER}")
-    print(f"  Install target: {INSTALL_DIR}")
+    print(f"  App code:  {INSTALL_DIR}")
+    try:
+        sys.path.insert(0, HERE)
+        from core.platform_config import app_data_dir as _adir
+        print(f"  Your data: {_adir()}  (settings, profiles, themes)")
+    except Exception:
+        pass
     sep("=")
 
     # Block Microsoft Store Python
@@ -249,12 +260,33 @@ def main():
     sep()
     print("\n[2/4] Installing dependencies...\n")
 
+    req_file = os.path.join(HERE, "requirements.txt")
+
     # Check if already installed
     r, _ = safe(subprocess.run,
         [python_exe, "-c", "import PySide6.QtWebEngineWidgets; print('ok')"],
         capture_output=True, text=True, timeout=15)
     if r and "ok" in r.stdout:
         print("    PySide6 already installed  OK")
+    elif os.path.isfile(req_file):
+        # Prefer requirements.txt so version pins stay in one place (the repo)
+        # instead of duplicating "PySide6" here with no version constraint.
+        print(f"    pip install -r requirements.txt ...", end=" ", flush=True)
+        r3, err = safe(subprocess.run,
+            [python_exe, "-m", "pip", "install", "--upgrade", "-r", req_file],
+            capture_output=True, text=True, timeout=300)
+        if err or not r3 or r3.returncode != 0:
+            print("WARN  falling back to direct install")
+            pip_install(python_exe, "PySide6")
+        else:
+            print("OK")
+        # Verify WebEngine - some platforms need explicit install
+        r2, _ = safe(subprocess.run,
+            [python_exe, "-c", "import PySide6.QtWebEngineWidgets"],
+            capture_output=True, text=True, timeout=15)
+        if r2 and r2.returncode != 0:
+            log("QtWebEngineWidgets not found - trying PySide6[WebEngine]", "WARN")
+            pip_install(python_exe, "PySide6[WebEngine]")
     else:
         pip_install(python_exe, "PySide6")
         # Verify WebEngine - some platforms need explicit install
@@ -413,8 +445,14 @@ def main():
 
     # -- Summary ------------------------------------------------------------
     sep("=")
-    print(f"\n  Python:   {python_exe}")
-    print(f"  MFlow:    {install_dir}")
+    print(f"\n  MFlow {MFLOW_VERSION} installed")
+    print(f"  Python:    {python_exe}")
+    print(f"  App code:  {install_dir}")
+    try:
+        from core.platform_config import app_data_dir as _adir2
+        print(f"  Your data: {_adir2()}")
+    except Exception:
+        pass
     print()
     if install_studio:
         print("  Studio (any page):  Workspace > Scripts > MFlow")
