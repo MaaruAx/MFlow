@@ -1732,7 +1732,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Connect all signals
       backend.presets_updated.connect(s   => renderPresets(JSON.parse(s)));
       backend.profiles_updated.connect(s  => renderProfiles(JSON.parse(s)));
-      backend.tool_updated.connect(s      => { const d=JSON.parse(s); renderParamsTree(d); renderInputsList(d); kfrUpdateMax(d); });
+      backend.tool_updated.connect(s      => { const d=JSON.parse(s); renderInputsList(d); kfrUpdateMax(d); });
       backend.comp_scan_updated.connect(s => renderCompScan(JSON.parse(s)));
       backend.connection_changed.connect((ok,t) => setConn(ok,t));
       if(backend.comp_list_updated) backend.comp_list_updated.connect(s=>renderCompList(JSON.parse(s)));
@@ -2103,18 +2103,26 @@ function startResize(which, e) {
 // ═══════════════════════════════════════════════════════════════
 // § 12. CANVAS — init, resize, coordinates
 // ═══════════════════════════════════════════════════════════════
-let ctx, canvas, DPR=1;
+let ctx, canvas, DPR=1, _lastCanvasPxW=0, _lastCanvasPxH=0;
 function resizeCanvas() {
   const wrap = $('curve-wrap');
   const W = wrap.clientWidth, H = wrap.clientHeight;
   const size = Math.max(60, Math.min(W, H));
   CS = size; MG = Math.max(10, Math.round(size*30/380)); CI = CS-2*MG;
   DPR = window.devicePixelRatio || 1;
-  canvas.width  = Math.round(CS*DPR);
-  canvas.height = Math.round(CS*DPR);
-  canvas.style.width  = CS+'px';
-  canvas.style.height = CS+'px';
-  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const pxW = Math.round(CS*DPR), pxH = Math.round(CS*DPR);
+  // Setting canvas.width/height ALWAYS clears the backing store (browser spec),
+  // causing a visible blank flash even when the size didn't actually change —
+  // ResizeObserver can fire for sub-pixel/no-op layout passes. Only touch the
+  // backing store when the pixel dimensions genuinely changed.
+  if (pxW !== _lastCanvasPxW || pxH !== _lastCanvasPxH) {
+    canvas.width  = pxW;
+    canvas.height = pxH;
+    canvas.style.width  = CS+'px';
+    canvas.style.height = CS+'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    _lastCanvasPxW = pxW; _lastCanvasPxH = pxH;
+  }
   drawCurve();
 }
 function initCanvas() {
@@ -2928,7 +2936,12 @@ function makeCard(preset, idx) {
 }
 function drawCard(cv, preset) {
   const w=cv.offsetWidth||90, h=cv.offsetHeight||70, dpr=window.devicePixelRatio||1;
-  cv.width=w*dpr; cv.height=h*dpr; const x=cv.getContext('2d'); if(!x)return; x.scale(dpr,dpr);
+  const pxW=Math.round(w*dpr), pxH=Math.round(h*dpr);
+  const x=cv.getContext('2d'); if(!x)return;
+  // Same flicker-prevention as resizeCanvas(): only reset the backing store
+  // (which clears it) when dimensions actually changed; otherwise reuse it.
+  if (cv.width!==pxW || cv.height!==pxH) { cv.width=pxW; cv.height=pxH; }
+  x.setTransform(dpr,0,0,dpr,0,0);
   const mg=4, cw=w-2*mg, ch=h-2*mg, col=MODE_COLORS[preset.library]||'#9ccfd8';
   x.clearRect(0,0,w,h);
   x.strokeStyle=_TC.overlay; x.lineWidth=0.5;
@@ -3026,16 +3039,23 @@ const _SCAN_SVG = '<svg style=\"width:14px;height:14px;vertical-align:middle;mar
 // ── Preset context menu ───────────────────────────────────────────────────────
 let _ctxMenuEl = null;
 function _getCtxMenu() { return _ctxMenuEl || (_ctxMenuEl = document.getElementById('preset-ctx')); }
+let _presetCtxCloseHandler = null;
 function _openPresetCtx(x, y) {
   const m=_getCtxMenu(); if(!m) return;
+  _closePresetCtx();   // clear any stale listener from a previous open before adding a new one
   m.style.display='block'; m.classList.remove('menu-anim'); requestAnimationFrame(()=>m.classList.add('menu-anim'));
   const vw=window.innerWidth, vh=window.innerHeight;
   m.style.left=(x+m.offsetWidth>vw?x-m.offsetWidth:x)+'px';
   m.style.top=(y+m.offsetHeight>vh?y-m.offsetHeight:y)+'px';
-  const close=e=>{if(!m.contains(e.target)){m.style.display='none';document.removeEventListener('mousedown',close,true);}};
-  document.addEventListener('mousedown',close,true);
+  _presetCtxCloseHandler = e=>{if(!m.contains(e.target)) _closePresetCtx();};
+  document.addEventListener('mousedown',_presetCtxCloseHandler,true);
 }
-function _closePresetCtx() { const m=_getCtxMenu(); if(m){m.style.display='none';m.classList.remove('menu-anim');} }
+function _closePresetCtx() {
+  const m=_getCtxMenu(); if(m){m.style.display='none';m.classList.remove('menu-anim');}
+  // Always remove the listener here — covers outside-click AND every menu
+  // action (delete/rename/duplicate) that calls this directly.
+  if (_presetCtxCloseHandler) { document.removeEventListener('mousedown',_presetCtxCloseHandler,true); _presetCtxCloseHandler=null; }
+}
 function _presetCtxDelete() { _closePresetCtx(); deleteSelectedPreset(); }
 function _presetCtxRename() {
   _closePresetCtx();
@@ -3058,19 +3078,23 @@ function _presetCtxDuplicate() {
 }
 
 // ── Preset options menu ───────────────────────────────────────────────────────
+let _poMenuCloseHandler = null;
 function togglePresetOpts() {
   const m=document.getElementById('preset-opts-menu'); if(!m) return;
   const wasOpen=m.classList.contains('open');
-  m.classList.remove('open');
-  if(!wasOpen){
-    requestAnimationFrame(()=>{
-      m.classList.add('open');
-      const close=e=>{const b=document.getElementById('preset-opts-btn');if(!b||!b.contains(e.target)){m.classList.remove('open');document.removeEventListener('mousedown',close,true);}};
-      document.addEventListener('mousedown',close,true);
-    });
-  }
+  if (wasOpen) { _closePOMenu(); return; }
+  requestAnimationFrame(()=>{
+    m.classList.add('open');
+    _poMenuCloseHandler = e=>{const b=document.getElementById('preset-opts-btn');if(!b||!b.contains(e.target)) _closePOMenu();};
+    document.addEventListener('mousedown',_poMenuCloseHandler,true);
+  });
 }
-function _closePOMenu(){const m=document.getElementById('preset-opts-menu');if(m)m.classList.remove('open');}
+function _closePOMenu(){
+  const m=document.getElementById('preset-opts-menu'); if(m) m.classList.remove('open');
+  // Always remove the listener here — covers outside-click, toggle-button
+  // close, AND menu-item actions (sort, etc.) that call this directly.
+  if (_poMenuCloseHandler) { document.removeEventListener('mousedown',_poMenuCloseHandler,true); _poMenuCloseHandler=null; }
+}
 function presetOptsSortAZ(){_closePOMenu();if(!backend||!allPresets.length)return;const sorted=[...allPresets].sort((a,b)=>a.name.localeCompare(b.name));backend.reorder_presets(JSON.stringify(sorted));}
 function presetOptsSortZA(){_closePOMenu();if(!backend||!allPresets.length)return;const sorted=[...allPresets].sort((a,b)=>b.name.localeCompare(a.name));backend.reorder_presets(JSON.stringify(sorted));}
 function presetOptsExport(){_closePOMenu();if(backend&&backend.export_presets_dialog)backend.export_presets_dialog();}

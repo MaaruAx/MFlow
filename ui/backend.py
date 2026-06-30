@@ -47,6 +47,8 @@ class Backend(QObject):
     comp_list_updated  = Signal(str)         # JSON [{id, name, active}]
     spline_copied      = Signal(str)         # removed — kept stub for compat
     _apply_comp_sig    = Signal(object)      # internal: thread-safe cross-thread comp delivery
+    _conn_changed_sig   = Signal(bool, str)  # internal: thread-safe connection_changed from workers
+    _scan_done_sig      = Signal(object)     # internal: thread-safe pythons_scanned from ScanWorker
     curve_state_changed = Signal(str)        # full curve state JSON — dock windows sync from this
     flip_requested      = Signal()           # dock asks main window to run flipAll()
 
@@ -125,6 +127,11 @@ class Backend(QObject):
         # Thread-safe delivery: worker threads emit this to invoke _apply_new_comp
         # on the main thread via Qt's automatic queued-connection mechanism.
         self._apply_comp_sig.connect(self._apply_new_comp)
+        # Wire internal cross-thread signals to their public counterparts.
+        # AutoConnection → QueuedConnection when emitted from a thread-pool worker,
+        # guaranteeing delivery on the Qt main thread without a QMutex.
+        self._conn_changed_sig.connect(self.connection_changed)
+        self._scan_done_sig.connect(self._deliver_scan_result)
 
         # Start watcher if we already have a comp
         if comp:
@@ -342,19 +349,23 @@ class Backend(QObject):
                                     "Ensure DaVinci Resolve is open and:\n"
                                     "  Preferences > System > General > "
                                     "External scripting using = Local")
-                        _self.connection_changed.emit(
+                        _self._conn_changed_sig.emit(
                             False,
                             "Not connected \u2014 open Resolve and set "
                             "Preferences > General > External scripting: Local")
                 except Exception as exc:
                     log.error("[Connect] Exception: %s", exc, exc_info=True)
-                    _self.connection_changed.emit(False, f"Connect error: {exc}")
+                    _self._conn_changed_sig.emit(False, f"Connect error: {exc}")
                 finally:
                     # Always clear the guard, regardless of outcome, so a future
                     # attempt (manual click or auto-retry) is never permanently blocked.
                     _self._reconnecting = False
 
         QThreadPool.globalInstance().start(_ConnectWorker())
+
+    def _deliver_scan_result(self, result):
+        """Called on the Qt main thread by _scan_done_sig — safe to emit pythons_scanned."""
+        self.pythons_scanned.emit(result)
 
     def _apply_new_comp(self, comp):
         """Called on the Qt main thread after a background reconnect succeeds."""
@@ -1817,7 +1828,9 @@ class Backend(QObject):
                 backend_ref._python_scan_cache = result
                 backend_ref._python_scan_time  = time.monotonic()
                 # Signal must be emitted on the Qt thread; use a zero-delay timer
-                QTimer.singleShot(0, lambda: backend_ref.pythons_scanned.emit(result))
+                # QTimer.singleShot from a QRunnable thread has no event loop;
+                # use the internal signal for guaranteed main-thread delivery.
+                backend_ref._scan_done_sig.emit(result)
 
         QThreadPool.globalInstance().start(_ScanWorker())
         # Return stale cache or scanning placeholder

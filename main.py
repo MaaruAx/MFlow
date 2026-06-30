@@ -150,6 +150,13 @@ class MFlowWindow(QMainWindow):
         self.setWindowIcon(QIcon(_resource("MFlow.ico")))
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
+        # WA_NoSystemBackground: stops the OS from painting the widget background
+        # before Qt does — eliminates the white/black flash between frames on Windows.
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        # WA_OpaquePaintEvent: tells Qt this widget paints every pixel itself,
+        # removing the implicit background erase that causes a visible flicker on
+        # FramelessWindowHint windows during resize and focus changes.
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.resize(940, 580)
         self._hotkey_filter = None   # kept alive here — installNativeEventFilter
                                       # does not hold a strong ref in PySide6
@@ -157,6 +164,9 @@ class MFlowWindow(QMainWindow):
         self._view = QWebEngineView()
         # _LoggedPage forwards JS console output to the Python log
         self._view.setPage(_LoggedPage(self._view))
+        # Suppress background erase on the view — same flicker fix as the window.
+        self._view.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
+        self._view.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.setCentralWidget(self._view)
         # Eliminates white flash before CSS loads — must be set before loadUrl()
         self._view.page().setBackgroundColor(QColor("#121217"))
