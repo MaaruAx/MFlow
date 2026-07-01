@@ -1176,6 +1176,45 @@ kbd {
   </div>
 </div>
 
+<!-- HSV Color Picker -->
+<div id="clr-picker">
+  <div id="clr-pk-head">
+    <span id="clr-pk-label">Color</span>
+    <button id="clr-pk-x" onclick="_cpClose()">&times;</button>
+  </div>
+  <canvas id="clr-sv-canvas" width="182" height="160"></canvas>
+  <canvas id="clr-hue-canvas" width="182" height="12"></canvas>
+  <div id="clr-pk-bottom">
+    <div id="clr-pk-prev">
+      <div id="clr-prev-old"></div>
+      <div id="clr-prev-new"></div>
+    </div>
+    <input id="clr-hex-inp" type="text" maxlength="7" spellcheck="false"
+      oninput="_cpHexTyped(this.value)"
+      onkeydown="if(event.key==='Enter')_cpApply();if(event.key==='Escape')_cpClose()">
+  </div>
+  <div id="clr-pk-btns">
+    <button class="s-btn" onclick="_cpClose()">Cancel</button>
+    <button class="s-btn primary" onclick="_cpApply()">Apply</button>
+  </div>
+</div>
+
+<!-- Save theme dialog -->
+<div id="save-theme-ov" style="display:none;position:fixed;inset:0;z-index:600;
+  background:rgba(0,0,0,.55);align-items:center;justify-content:center">
+  <div class="dlg-box">
+    <div class="dlg-title">Save theme</div>
+    <input class="dlg-inp" id="save-theme-name" type="text" placeholder="Theme name"
+      onkeydown="if(event.key==='Enter')doSaveTheme();if(event.key==='Escape')$('save-theme-ov').style.display='none'">
+    <input class="dlg-inp" id="save-theme-author" type="text" placeholder="Author (optional)"
+      onkeydown="if(event.key==='Enter')doSaveTheme();if(event.key==='Escape')$('save-theme-ov').style.display='none'">
+    <div class="dlg-foot">
+      <button class="dlg-btn" onclick="$('save-theme-ov').style.display='none'">Cancel</button>
+      <button class="dlg-btn primary" onclick="doSaveTheme()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Settings overlay -->
 <div id="s-ov">
   <div id="s-panel">
