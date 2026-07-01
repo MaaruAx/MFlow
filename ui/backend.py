@@ -12,6 +12,7 @@ from core.preset_manager  import (load_profiles, save_profiles, add_preset,
 import logging
 log = logging.getLogger("mflow")
 from core.platform_config import settings_file, themes_dir, bundled_themes_dir, language_dir, win_subprocess_kwargs
+from core.resolve_connection import warmup_fusion_api
 from core.curve_engine    import (apply_bezier, apply_baked, apply_steps,
                                    apply_overframe, bake_oscillator,
                                    bake_elastic_penner, bake_elastic_out,
@@ -68,6 +69,12 @@ class Backend(QObject):
                     log.info("[Init] Fusion object cached from startup resolve")
             except Exception as e:
                 log.debug("[Init] Could not get Fusion at startup: %s", e)
+        # Warm up the Python<->Fusion write-side scripting bridge now, at
+        # startup, rather than letting the user's first real curve Apply be
+        # the first write-side call of the session — see warmup_fusion_api().
+        if self._comp is not None:
+            warmup_fusion_api(self._comp)
+
         self._watcher  = None
         self._reconnecting = False        # guards against overlapping reconnect attempts
         self._auto_reconnect_timer = None  # background retry timer — None when not running
@@ -268,6 +275,9 @@ class Backend(QObject):
 
     def set_comp(self, comp):
         self._comp = comp
+        # Warm up the write-side scripting bridge for this (re)connection too
+        # — see warmup_fusion_api(). Cheap, silent, non-fatal on failure.
+        warmup_fusion_api(comp)
         # Try to populate _fu from _resolve if not already cached
         if self._fu is None and self._resolve:
             try:

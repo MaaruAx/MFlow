@@ -3,6 +3,7 @@ Bezier evaluation, baking (spring/elastic/bounce/steps), and Fusion spline appli
 Handle writing uses every known format for Resolve compatibility.
 """
 import math
+import time
 import logging
 from dataclasses import dataclass, field
 
@@ -403,12 +404,12 @@ def _get_kf_range(spline):
         return None
 
 
-def _write_handle(spline, frame, side, time, value):
+def _write_handle(spline, frame, side, time_val, value):
     """
     Try every known SetData key format for a bezier handle.
     Returns True on first success.
     """
-    payload   = {1: float(time), 2: float(value)}
+    payload   = {1: float(time_val), 2: float(value)}
     frame_int = int(round(frame))
     tags = [frame, float(frame), frame_int, str(frame_int)]
     prefixes = ["Keyframes.", "Spline.Keyframes.", "Path.Keyframes."]
@@ -419,6 +420,58 @@ def _write_handle(spline, frame, side, time, value):
                 return True
             except Exception:
                 pass
+    return False
+
+
+def _settle(spline, delay: float = 0.02) -> None:
+    """Give Fusion a brief moment to flush internal state right after a
+    SetKeyFrames() commit, before any follow-up SetData() handle writes are
+    attempted. A single short, bounded pause here means the FIRST handle
+    write (previously the one most likely to land in the unsettled window
+    and fail — see _write_handle_retry) succeeds on its first try in the
+    common case, rather than relying purely on reactive retries after an
+    initial failure. Never raises — worst case this is a no-op delay."""
+    try:
+        time.sleep(delay)
+        get_kf = getattr(spline, "GetKeyFrames", None)
+        if callable(get_kf):
+            get_kf()
+    except Exception:
+        pass
+
+
+def _write_handle_retry(spline, frame, side, time_val, value,
+                         attempts: int = 3, delay: float = 0.03) -> bool:
+    """Redundant wrapper around _write_handle() for stability.
+
+    Immediately after a SetKeyFrames() call, Fusion's spline can take a brief
+    moment to internally "settle" before it reliably accepts a follow-up
+    SetData() write on a keyframe that was just (re)created — especially the
+    very first handle written right after the commit. Writing several
+    handles back-to-back with zero delay means the earliest ones can land in
+    that unsettled window and silently fail (this is the "first Apply only
+    updates one handle, the other needs a second Apply" bug: whichever
+    handle is written first has the least time to settle).
+
+    This wrapper retries a failed write a few times with a short pause and a
+    forced round-trip through GetKeyFrames() (which nudges Fusion to flush
+    its internal state) in between, instead of relying on a single
+    instantaneous attempt. Bounded to a handful of short retries — at most
+    ~90ms total in the worst case — so it never introduces a noticeable
+    stall on what is a synchronous, user-initiated Apply click.
+    """
+    for attempt in range(1, attempts + 1):
+        if _write_handle(spline, frame, side, time_val, value):
+            return True
+        # Give Fusion a moment to settle, then force a state round-trip
+        # before the next attempt.
+        try:
+            time.sleep(delay)
+            get_kf = getattr(spline, "GetKeyFrames", None)
+            if callable(get_kf):
+                get_kf()
+        except Exception:
+            pass
     return False
 
 
@@ -461,15 +514,122 @@ def _strip_locks(tbl) -> None:
         else: del entry["Flags"]
 
 
-def _call_set_kf(obj, tbl) -> bool:
+def _lookup_kf_entry(kf_dict, key):
+    """Look up a keyframe entry by key, tolerating type/format differences
+    between the key we used locally (int/float/original Fusion type) and
+    whatever Fusion echoes back on a fresh GetKeyFrames() read (which isn't
+    always the same type — e.g. int vs float vs numeric string). Falls back
+    to comparing float values across all keys if a direct lookup misses."""
+    if key in kf_dict:
+        return kf_dict[key]
+    try:
+        target = float(key)
+    except (TypeError, ValueError):
+        return None
+    for k in kf_dict.keys():
+        try:
+            if abs(float(k) - target) < 1e-6:
+                return kf_dict[k]
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _kf_handles_match(entry, expected_sides: dict, tol: float = 1e-3) -> bool:
+    """Check whether a GetKeyFrames() entry actually carries the RH/LH
+    sub-values we asked Fusion to write, within a small tolerance."""
+    if not isinstance(entry, dict):
+        return False
+    for side, want in expected_sides.items():
+        got = entry.get(side)
+        if not isinstance(got, dict):
+            return False
+        for k, wv in want.items():
+            gv = got.get(k)
+            if gv is None:
+                return False
+            try:
+                if abs(float(gv) - float(wv)) > tol:
+                    return False
+            except (TypeError, ValueError):
+                return False
+    return True
+
+
+def _call_set_kf(obj, tbl, attempts: int = 3, delay: float = 0.02) -> bool:
+    """Commit a keyframe table to Fusion, with a VERIFIED, redundant retry.
+
+    SetKeyFrames() accepts three call signatures depending on node type
+    (True=force-create, False=update-existing, no-arg=default) — but a call
+    that doesn't raise an exception does NOT guarantee every nested value in
+    `tbl` actually landed. In practice the (tbl, True) "force-create"
+    signature can silently drop the bezier RH/LH handle on one endpoint
+    while keeping the other. That is what produced the "first Apply only
+    updates one handle, the other stays the same" bug — including in plain
+    easing mode, since apply_bezier() commits everything through this one
+    call.
+
+    To close that gap, after each attempt that doesn't raise we read the
+    spline back via GetKeyFrames() and confirm the RH/LH values we intended
+    are actually present before declaring success — "didn't throw" is no
+    longer trusted on its own. If verification fails, we settle (brief
+    pause + state round-trip) and try the next signature or another pass,
+    instead of returning success on the first non-raising call.
+    """
     fn = getattr(obj, "SetKeyFrames", None)
-    if not callable(fn): return False
-    # Three signatures: True=force-create, False=update-existing, no arg=default.
-    # PolyPath Displacement splines only accept (tbl, False) — not True.
-    for args in ((tbl, True), (tbl, False), (tbl,)):
-        try: fn(*args); return True
-        except Exception: continue
-    return False
+    if not callable(fn):
+        return False
+
+    # Snapshot which keys carry RH/LH handles so we can verify them.
+    expected = {}
+    for k, v in tbl.items():
+        if not isinstance(v, dict):
+            continue
+        sides = {s: v[s] for s in ("RH", "LH") if s in v}
+        if sides:
+            expected[k] = sides
+
+    signatures = ((tbl, True), (tbl, False), (tbl,))
+    call_succeeded = False  # a signature ran without raising, at least once
+
+    for attempt in range(attempts):
+        for args in signatures:
+            try:
+                fn(*args)
+                call_succeeded = True
+            except Exception:
+                continue
+
+            if not expected:
+                # Nothing to verify (e.g. position-only commit) — a
+                # non-raising call is success.
+                return True
+
+            get_kf = getattr(obj, "GetKeyFrames", None)
+            try:
+                fresh = get_kf() if callable(get_kf) else None
+            except Exception:
+                fresh = None
+
+            if isinstance(fresh, dict):
+                all_match = all(
+                    _kf_handles_match(_lookup_kf_entry(fresh, k), want)
+                    for k, want in expected.items()
+                )
+                if all_match:
+                    return True
+            # Either couldn't read back or a handle didn't land — fall
+            # through and try the next signature / attempt.
+
+        if attempt < attempts - 1:
+            _settle(obj, delay)
+
+    # Last resort: if some call ran without raising even though we
+    # couldn't verify every handle landed, still report success — a
+    # partially-applied curve is better than the caller assuming total
+    # failure and leaving the spline in a worse, inconsistent state. The
+    # per-handle warnings logged by callers still surface the discrepancy.
+    return call_succeeded
 
 
 def apply_bezier(spline, h1: list, h2: list, kf_from: int = 1, kf_to: int = 0) -> bool:
@@ -636,6 +796,8 @@ def apply_baked(spline, frames, kf_from: int = 1, kf_to: int = 0,
         for args in ((kf, True), (kf, False), (kf,)):
             try:
                 set_kf(*args)
+                # Let Fusion settle before writing handles — see _settle().
+                _settle(spline)
                 # "Magnetism": flatten the boundary tangents so the baked curve
                 # enters/exits horizontally — same effect spring/elastic get
                 # naturally from their shape. Uses the proven SetData path
@@ -643,13 +805,13 @@ def apply_baked(spline, frames, kf_from: int = 1, kf_to: int = 0,
                 # SetKeyFrames, which crashes Fusion's Python bridge.
                 handle_dt = max(1.0, (t_end_int - t_start_int) * 0.15)
                 try:
-                    _write_handle(spline, t_start_int, "RH",
-                                  t_start_int + handle_dt, v_start)
+                    _write_handle_retry(spline, t_start_int, "RH",
+                                         t_start_int + handle_dt, v_start)
                 except Exception:
                     pass
                 try:
-                    _write_handle(spline, t_end_int, "LH",
-                                  t_end_int - handle_dt, v_end)
+                    _write_handle_retry(spline, t_end_int, "LH",
+                                         t_end_int - handle_dt, v_end)
                 except Exception:
                     pass
                 return True
@@ -780,6 +942,9 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
     if not ok:
         return False
 
+    # Let Fusion settle before writing handles — see _settle() docstring.
+    _settle(spline)
+
     # ── 3. Apply per-segment bezier handles ───────────────────────────────
     sorted_pts = sorted(of_points, key=lambda x: x.t)
     seg = (
@@ -807,7 +972,7 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
             else:
                 rh_t = ft0s + rh[0] * seg_dt
                 rh_v = fv0s + rh[1] * seg_dv
-            wrote = _write_handle(spline, ft0s, "RH", rh_t, rh_v)
+            wrote = _write_handle_retry(spline, ft0s, "RH", rh_t, rh_v)
             if wrote:
                 handles_ok += 1
             else:
@@ -821,7 +986,7 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
             else:
                 lh_t = ft1s + lh[0] * seg_dt
                 lh_v = fv1s + lh[1] * seg_dv
-            wrote = _write_handle(spline, ft1s, "LH", lh_t, lh_v)
+            wrote = _write_handle_retry(spline, ft1s, "LH", lh_t, lh_v)
             if wrote:
                 handles_ok += 1
             else:

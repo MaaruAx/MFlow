@@ -115,6 +115,41 @@ def get_comp(resolve):
         return None
 
 
+def warmup_fusion_api(comp) -> None:
+    """Best-effort warm-up of the Python<->Fusion scripting bridge.
+
+    The first *write*-side call Fusion's scripting API makes in a session
+    (SetKeyFrames, SetData, ...) can behave differently from later ones —
+    e.g. a call that doesn't raise an exception can still silently drop
+    part of what it was asked to write (this is what caused the "first
+    Apply only updates one handle" bug in the curve engine). Rather than
+    let the user's first real Apply click be that first write, this sends
+    one harmless, side-effect-free write-side call — comp.Lock()/Unlock() —
+    right after connecting, so the bridge is already warm by the time the
+    curve engine touches a real spline.
+
+    Lock()/Unlock() is Fusion's own documented pattern for bracketing batch
+    node edits; called on its own with no edits in between, it changes
+    nothing about the comp — it only exercises the same write-capable API
+    path. This is intentionally silent and non-fatal: if it fails for any
+    reason (older API surface, unusual node graph, etc.) that's fine, it
+    was only ever a defensive optimization, never a requirement.
+    """
+    if comp is None:
+        return
+    locked = False
+    try:
+        comp.Lock()
+        locked = True
+    except Exception:
+        pass
+    if locked:
+        try:
+            comp.Unlock()
+        except Exception:
+            pass
+
+
 class ResolveWatcher(QObject):
     """
     Polls the active Fusion comp every 500 ms for tool/undo changes.
