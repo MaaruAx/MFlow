@@ -1550,6 +1550,36 @@ function _getNodePalette() {
     MODE_COLORS.resonance || '#f4a261',
   ];
 }
+// Darken a hex color by reducing its brightness to `factor` (0-1) of the
+// original — used for child rows (e.g. a MediaIn's Left/Right channel)
+// so their text takes the parent node's color, just dimmed, instead of a
+// flat unrelated theme grey. Accepts #rgb/#rrggbb; falls back to the
+// input unchanged if it isn't parseable as hex (e.g. an rgb()/hsl() string
+// slipped in from a future theme format) so a bad color never throws.
+// Reads the current theme's --text color and dims it by `factor` of its
+// original brightness (e.g. factor=0.75 → 25% darker). Re-reads live via
+// getComputedStyle so it always tracks the active theme, including custom
+// user themes, instead of a color hardcoded at write-time.
+function _themeTextDim(factor = 0.75) {
+  let text = '#e0def4';
+  try {
+    const v = getComputedStyle(document.body).getPropertyValue('--text').trim();
+    if (v) text = v;
+  } catch (_) {}
+  return _dimColor(text, factor);
+}
+function _dimColor(hex, factor = 0.5) {
+  if (typeof hex !== 'string') return hex;
+  let h = hex.trim().replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return hex;
+  const r = Math.round(parseInt(h.slice(0, 2), 16) * factor);
+  const g = Math.round(parseInt(h.slice(2, 4), 16) * factor);
+  const b = Math.round(parseInt(h.slice(4, 6), 16) * factor);
+  const clamp = n => Math.max(0, Math.min(255, n));
+  const hex2 = n => clamp(n).toString(16).padStart(2, '0');
+  return '#' + hex2(r) + hex2(g) + hex2(b);
+}
 
 // ═══════════════════════════════════════════════════════════════
 // § 4. STATE — all mutable state in one block
@@ -3555,6 +3585,7 @@ function renderCompScan(data) {
   }
   const tree=$('scan-tree'), ph=$('scan-ph'); if(!tree)return;
   tree.innerHTML='';
+  const _childLblCol=_themeTextDim(0.75);
   const tools=Object.keys(_scanData);
   if (!tools.length) { if(ph){ph.style.display='';ph.textContent='No animated nodes found';} _updateScanCount(); return; }
   if (ph) ph.style.display='none';
@@ -3583,6 +3614,7 @@ function renderCompScan(data) {
       row.dataset.tool=toolName; row.dataset.inp=inpId;
       const ichk=document.createElement('div'); ichk.className='scan-inp-chk'; ichk.textContent=sel?'✓':'';
       const ilbl=document.createElement('div'); ilbl.className='scan-inp-lbl'; ilbl.textContent=meta.label;
+      ilbl.style.color=_childLblCol;
       const ikf=document.createElement('div'); ikf.className='scan-inp-kf'; ikf.textContent=meta.kf_count+'◆'; ikf.style.color=col;
       row.appendChild(ichk); row.appendChild(ilbl); row.appendChild(ikf);
       row.onclick=e=>{
