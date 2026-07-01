@@ -316,11 +316,47 @@ def main():
         install_dir = HERE
     else:
         install_dir = INSTALL_DIR
-        # Clean stale files from previous versions (preserve configs and presets)
+
+    # These are normally preserved across upgrades (user configs/presets/themes)
     KEEP_PATTERNS = {"settings.json", "profiles.json", "presets", "themes", "mflow_path.txt", "python_path.txt"}
+
+    # -- Ask about a clean install if there's existing user data ------------
+    clean_install = False
+    if os.path.isdir(install_dir) and install_dir != HERE:
+        has_existing_data = any(
+            os.path.exists(os.path.join(install_dir, p)) for p in KEEP_PATTERNS
+            if p not in ("mflow_path.txt", "python_path.txt")
+        )
+        if has_existing_data:
+            print()
+            log("Existing MFlow data found (settings, profiles, presets and/or themes).", "!")
+            yn_clean = input(
+                "  Perform a CLEAN install and erase your existing settings/presets/themes? [y/N]: "
+            ).strip().lower()
+            clean_install = yn_clean == 'y'
+            print()
+
+    # Preserve everything by default, or nothing if the user chose a clean install
+    keep_patterns = set() if clean_install else KEEP_PATTERNS
+
+    if clean_install:
+        log("Clean install selected — wiping existing settings/profiles/presets/themes", "!")
+        for item in KEEP_PATTERNS:
+            if item in ("mflow_path.txt", "python_path.txt"):
+                continue  # regenerated below regardless
+            target = os.path.join(install_dir, item)
+            if os.path.exists(target):
+                try:
+                    if os.path.isdir(target): shutil.rmtree(target)
+                    else: os.remove(target)
+                    log(f"  Erased: {item}")
+                except Exception as e:
+                    log(f"  Could not erase {item}: {e}", "WARN")
+
+    # Clean stale files from previous versions (preserve configs and presets unless clean install)
     if os.path.isdir(install_dir) and install_dir != HERE:
         for item in os.listdir(install_dir):
-            if item in KEEP_PATTERNS or item.startswith("."):
+            if item in keep_patterns or item.startswith("."):
                 continue
             target = os.path.join(install_dir, item)
             src_equiv = os.path.join(HERE, item)
