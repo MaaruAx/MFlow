@@ -1,7 +1,7 @@
 {
   "name": "Gruvbox Material Dark-MFlow",
   "author": "MaaruAx",
-  "version": 1,
+  "version": 2,
   "colors": {
     "base": "#282828",
     "surface": "#32302f",
@@ -17,7 +17,12 @@
     "easing": "#7daea3",
     "spring": "#d8a657",
     "elastic": "#ea6962",
-    "overframe": "#d3869b"
+    "overframe": "#d3869b",
+    "bounce": "#a8b665",
+    "catenary": "#89b482",
+    "pulse": "#ddc7a1",
+    "noise": "#7c6f64",
+    "resonance": "#e68a4e"
   },
   "grid_colors": {
     "grid": "#45403d",

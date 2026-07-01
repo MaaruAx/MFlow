@@ -1,7 +1,7 @@
 {
   "name": "FFlow 1.0",
   "author": "MaaruAx",
-  "version": 1,
+  "version": 2,
   "colors": {
     "base": "#191919",
     "surface": "#1c1c1c",
@@ -16,7 +16,12 @@
     "easing": "#e05828",
     "spring": "#e05828",
     "elastic": "#e05828",
-    "overframe": "#e05828"
+    "overframe": "#e05828",
+    "bounce": "#e05828",
+    "catenary": "#e05828",
+    "pulse": "#e05828",
+    "noise": "#e05828",
+    "resonance": "#e05828"
   },
   "grid_colors": {
     "grid": "#1f1f1f",

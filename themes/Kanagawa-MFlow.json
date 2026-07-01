@@ -1,21 +1,15 @@
 {
   "name": "Kanagawa-MFlow",
   "author": "MaaruAx",
-  "version": 1,
+  "version": 2,
   "colors": {
     "base": "#1f1f28",
     "surface": "#2a2a37",
     "overlay": "#2a2a37",
     "muted": "#727169",
     "text": "#c8c093",
-    "love": "#eb6f92",
-    "gold": "#f6c177",
-    "rose": "#ebbcba",
-    "pine": "#31748f",
-    "foam": "#9ccfd8",
-    "iris": "#c4a7e7",
     "border": "#363646",
-    "hl_low": "#21202e",
+    "hl_low": "#1f1f28",
     "hl_med": "#403d52",
     "hl_high": "#524f67"
   },
@@ -23,7 +17,12 @@
     "easing": "#7fb4ca",
     "spring": "#e6c384",
     "elastic": "#e46876",
-    "overframe": "#957fb8"
+    "overframe": "#957fb8",
+    "bounce": "#98bb6c",
+    "catenary": "#7aa89f",
+    "pulse": "#dcd7ba",
+    "noise": "#727169",
+    "resonance": "#ffa066"
   },
   "grid_colors": {
     "grid": "#2a2a37",
