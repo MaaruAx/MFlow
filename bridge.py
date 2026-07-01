@@ -110,12 +110,41 @@ def run():
     print(f"[MFlow] Launching: {python} {main_py}")
 
     if platform.system() == "Windows":
-        # Use DETACHED_PROCESS so Resolve doesn't wait for it
-        CREATE_DETACHED = 0x00000008
+        # NOTE: this used to pass creationflags=DETACHED_PROCESS (0x8) alone.
+        # DETACHED_PROCESS is documented to still let a console window flash
+        # open for a console-subsystem child (python.exe) on some Windows
+        # builds — a known CPython behavior (bpo-41619 / GH-85785). That is
+        # the "spontaneous cmd window" this fixes.
+        #
+        # Fix: combine two independent, redundant suppression mechanisms
+        # instead of relying on a single flag:
+        #   1. CREATE_NO_WINDOW      — don't allocate a console at all.
+        #   2. STARTUPINFO/SW_HIDE   — second hint to keep any window hidden.
+        # bridge.py is deliberately self-contained here (no import from the
+        # main app's core package) since it must keep working as a minimal,
+        # dependency-free bootstrapper even if the mflow install is partial
+        # or the app package import path isn't ready yet.
+        try:
+            CREATE_NO_WINDOW        = 0x08000000
+            CREATE_NEW_PROCESS_GROUP = 0x00000200
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = subprocess.SW_HIDE
+            win_kwargs = {
+                "startupinfo": si,
+                # CREATE_NO_WINDOW: no console for the child (fixes the flash).
+                # CREATE_NEW_PROCESS_GROUP: keeps the child in its own process
+                # group, independent of Resolve's — same independence
+                # DETACHED_PROCESS used to provide, just without its console bug.
+                "creationflags": CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP,
+            }
+        except Exception:
+            # Fail safe: worst case we fall back to no extra kwargs rather
+            # than crashing the launch entirely.
+            win_kwargs = {}
         try:
             subprocess.Popen([python, main_py], cwd=mflow,
-                             creationflags=CREATE_DETACHED,
-                             close_fds=True)
+                             close_fds=True, **win_kwargs)
             return
         except Exception as e:
             print(f"[MFlow] Popen failed: {e}")

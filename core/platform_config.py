@@ -4,6 +4,43 @@ _PLAT  = platform.system()
 _FROZEN = getattr(sys, "frozen", False)
 
 
+def win_subprocess_kwargs() -> dict:
+    """Extra kwargs for subprocess.run()/Popen() that keep a console-subsystem
+    child process (python.exe, py.exe launcher, etc.) from flashing open its
+    own console window when spawned from a windowed/frozen GUI app on Windows.
+
+    Two independent suppression mechanisms are combined on purpose:
+      1. creationflags=CREATE_NO_WINDOW — tells the OS not to allocate a
+         console for the child process at all.
+      2. STARTUPINFO(STARTF_USESHOWWINDOW, wShowWindow=SW_HIDE) — a second,
+         independent hint that keeps any window the child *does* create
+         hidden.
+    Belt-and-suspenders is intentional here: CREATE_NO_WINDOW alone is the
+    documented approach, but DETACHED_PROCESS-style flags are known to still
+    flash a console on some Windows builds (see CPython bpo-41619 / GH-85785).
+    Pairing it with STARTUPINFO/SW_HIDE closes that gap without relying on a
+    single mechanism.
+
+    No-op (returns {}) on non-Windows platforms, and fails safe (returns {})
+    if anything about the Windows-only subprocess APIs is unavailable —
+    a console-hiding helper should never be the reason a subprocess call
+    itself breaks.
+    """
+    if _PLAT != "Windows":
+        return {}
+    try:
+        import subprocess
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = subprocess.SW_HIDE
+        return {
+            "startupinfo": si,
+            "creationflags": subprocess.CREATE_NO_WINDOW,
+        }
+    except Exception:
+        return {}
+
+
 def app_data_dir() -> str:
     if _PLAT == "Windows":
         base = os.environ.get("APPDATA", os.path.expanduser("~"))

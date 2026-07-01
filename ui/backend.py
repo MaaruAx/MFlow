@@ -11,7 +11,7 @@ from core.preset_manager  import (load_profiles, save_profiles, add_preset,
                                    switch_profile, load_builtin, active_presets)
 import logging
 log = logging.getLogger("mflow")
-from core.platform_config import settings_file, themes_dir, bundled_themes_dir, language_dir
+from core.platform_config import settings_file, themes_dir, bundled_themes_dir, language_dir, win_subprocess_kwargs
 from core.curve_engine    import (apply_bezier, apply_baked, apply_steps,
                                    apply_overframe, bake_oscillator,
                                    bake_elastic_penner, bake_elastic_out,
@@ -1846,10 +1846,11 @@ class Backend(QObject):
         """Blocking scan — runs in a thread pool worker, never on the Qt main thread."""
         import glob, subprocess as sp, platform
         found = {}
+        _wkw = win_subprocess_kwargs()  # suppresses spontaneous console windows on Windows
 
         def _probe(exe):
             try:
-                r = sp.run([exe, "--version"], capture_output=True, text=True, timeout=5)
+                r = sp.run([exe, "--version"], capture_output=True, text=True, timeout=5, **_wkw)
                 ver = (r.stdout + r.stderr).strip().replace("Python ", "")
                 if ver and "3." in ver:
                     found[exe] = ver
@@ -1864,7 +1865,7 @@ class Backend(QObject):
             for ver in ("3.12", "3.11", "3.10", "3.9"):
                 try:
                     r = sp.run(["py", f"-{ver}", "-c", "import sys;print(sys.executable)"],
-                               capture_output=True, text=True, timeout=5)
+                               capture_output=True, text=True, timeout=5, **_wkw)
                     exe = r.stdout.strip()
                     if exe and os.path.isfile(exe):
                         _probe(exe)
