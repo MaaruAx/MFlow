@@ -16,15 +16,7 @@ _Shape your keyframes. Apply physics. Works on the free version of DaVinci Resol
 
 <br>
 
-![Windows](https://img.shields.io/badge/Windows-9ccfd8?style=flat-square&logo=windows&logoColor=1a1a2e)
-&nbsp;
-![macOS](https://img.shields.io/badge/macOS-ebbcba?style=flat-square&logo=apple&logoColor=1a1a2e)
-&nbsp;
-![Linux](https://img.shields.io/badge/Linux-f6c177?style=flat-square&logo=linux&logoColor=1a1a2e)
-&nbsp;
-![Python](https://img.shields.io/badge/Python_3.9+-c4a7e7?style=flat-square&logo=python&logoColor=1a1a2e)
-&nbsp;
-![Resolve](https://img.shields.io/badge/DaVinci_Resolve_18+-eb6f92?style=flat-square&logoColor=1a1a2e)
+![macOS](https://img.shields.io/badge/macOS-ebbcba?style=flat-square&logo=apple&logoColor=1a1a2e)&nbsp;&nbsp;![Linux](https://img.shields.io/badge/Linux-f6c177?style=flat-square&logo=linux&logoColor=1a1a2e)&nbsp;&nbsp;![Windows 11](https://img.shields.io/badge/Windows%2011-9ccfd8?style=flat-square&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzFhMWEyZSI%2BPHBhdGggZD0iTTExLjYwNiAwSDB2MTEuNjA2aDExLjYwNlYwem0xMi4zOTQgMGgtMTEuNjA2djExLjYwNmgxMS42MDZWMHptLTEyLjM5NCAxMi4zOTRIMFYyNC4waDExLjYwNnYtMTEuNjA2em0xMi4zOTQgMGgtMTEuNjA2djExLjYwNmgxMS42MDZWMTIuMzk0eiIvPjwvc3ZnPg%3D%3D)&nbsp;![Python](https://img.shields.io/badge/Python_3.9+-31748f?style=flat-square&logo=python&logoColor=1a1a2e)&nbsp;&nbsp;![Resolve](https://img.shields.io/badge/DaVinci_Reolve_17+-c4a7e7?style=flat-square&logo=davinciresolve&logoColor=1a1a2e)
 
 <br>
 
@@ -40,13 +32,18 @@ _Shape your keyframes. Apply physics. Works on the free version of DaVinci Resol
 <tr>
 <td>
 
-![curves](https://img.shields.io/badge/Four_Curve_Modes-c4a7e7?style=flat-square&labelColor=26233a)
+![curves](https://img.shields.io/badge/Nine_Curve_Modes-c4a7e7?style=flat-square&labelColor=26233a)
 
 ```
-Bezier         →  free handles + overshoot
-Spring         →  mass · stiffness · damping
-Elastic        →  amplitude + period
-Overkeyframe   →  bezier with mid control points
+Bezier    → Handles + custom overshoot
+Spring    → Real harmonic oscillator
+Elastic   → Amplitude + Period curves
+Bounce    → Damped cosine wave impacts
+Catenary  → Gravity-tension cable lines
+Pulse     → Intermittent periodic waves
+Noise     → Seeded organic jitter
+Resonance → Forced amplitude physical growth
+OKF       → Multi-segment bezier nodes
 ```
 
 </td>
@@ -70,27 +67,39 @@ Detachable floating panels
 
 ## ![modes](https://img.shields.io/badge/◈_CURVE_MODES-f6c177?style=flat-square&labelColor=1a1a2e)
 
-![bezier](https://img.shields.io/badge/Bezier-9ccfd8?style=flat-square&labelColor=26233a) &nbsp;Pull two handles freely across the curve. Enable overshoot to push beyond the 0–1 range and get natural overshoots and anticipations.
+![bezier](https://img.shields.io/badge/Bezier-9ccfd8?style=flat-square&labelColor=26233a) &nbsp;Pull two handles freely across the curve preview. Enable overshoot options to extend past standard boundaries for natural spring back animations.
 
-![spring](https://img.shields.io/badge/Spring-f6c177?style=flat-square&labelColor=26233a) &nbsp;A real damped harmonic oscillator runs under the hood. Set mass, stiffness, damping and initial velocity — MFlow integrates the physics frame by frame and bakes the result directly into your spline keyframes.
+![spring](https://img.shields.io/badge/Spring-f6c177?style=flat-square&labelColor=26233a) &nbsp;A physical damped harmonic oscillator engine that bakes realistic bouncing curves into keyframes based on mass, stiffness, and dynamic project framerates.
 
-![elastic](https://img.shields.io/badge/Elastic-eb6f92?style=flat-square&labelColor=26233a) &nbsp;Penner elastic easing with adjustable amplitude and period. Snappier and more predictable than Spring, great for UI and graphic elements.
+![elastic](https://img.shields.io/badge/Elastic-eb6f92?style=flat-square&labelColor=26233a) &nbsp;Penner elastic equations with custom parameters. Includes a preloaded database containing standard curves like "rubber band" or "snappy".
 
-![overkeyframe](https://img.shields.io/badge/OKF-c4a7e7?style=flat-square&labelColor=26233a) &nbsp;Adds intermediate keyframes between your two main keys and lets you control each sub-segment independently. Complex curves that would normally take many manual keyframes, built in seconds.
+![bounce](https://img.shields.io/badge/Bounce-c4a7e7?style=flat-square&labelColor=26233a) &nbsp;Simulates physical bounces with ceiling (1.0 limit) or floor (0.0 limit) options. Tweak decay and frequency interactively on the preview canvas.
+
+![catenary](https://img.shields.io/badge/Catenary-9ccfd8?style=flat-square&labelColor=26233a) &nbsp;Models hanging heavy wires under gravity. Adjust sagging intensity from a straight line to steep mathematical drops directly via mouse-dragging.
+
+![pulse](https://img.shields.io/badge/Pulse-f6c177?style=flat-square&labelColor=26233a) &nbsp;Creates repeated, periodic bursts of wave motion separated by quiet resting sections. Full frequency, tempo, and sharpness controls.
+
+![noise](https://img.shields.io/badge/Noise-eb6f92?style=flat-square&labelColor=26233a) &nbsp;Generates organic, continuous pseudo-random keyframe jitter based on seedable mathematical models.
+
+![resonance](https://img.shields.io/badge/Resonance-c4a7e7?style=flat-square&labelColor=26233a) &nbsp;Models forced physical oscillation over time. Features on-canvas adjustments for damping and drive constants.
+
+![okf](https://img.shields.io/badge/OKF-9ccfd8?style=flat-square&labelColor=26233a) &nbsp;Injects intermediate keyframes between major boundaries. Uses relative-space projections to ensure handle coordinates stay distortion-free.
 
 ---
 
 ## ![features](https://img.shields.io/badge/◈_FEATURES-9ccfd8?style=flat-square&labelColor=1a1a2e)
 
-![kfrange](https://img.shields.io/badge/Keyframe_range_selector-9ccfd8?style=flat-square&labelColor=26233a) &nbsp;Choose exactly which keyframe segment to apply the curve to using the FROM / TO controls — not limited to the outermost pair.
+![oncanvas](https://img.shields.io/badge/On--Canvas_Controls-9ccfd8?style=flat-square&labelColor=26233a) &nbsp;Control parameters interactively by clicking and dragging directly on the curve canvas (e.g., Bounce Decay/Frequency or Catenary Tension).
 
-![compact](https://img.shields.io/badge/Compact_mode-f6c177?style=flat-square&labelColor=26233a) &nbsp;Toggle between the full editor (940×580) and a minimal view (460×480) that shows only the curve canvas. Useful when screen space is tight.
+![presets](https://img.shields.io/badge/Library_Context_Menus-f6c177?style=flat-square&labelColor=26233a) &nbsp;Double-click preset cards to instantly write curves. Right-click to duplicate (with automatic name increments), rename, or delete library profiles.
 
-![autoapply](https://img.shields.io/badge/Auto--apply-eb6f92?style=flat-square&labelColor=26233a) &nbsp;Optionally apply the curve automatically every time you adjust a handle or parameter, without clicking Apply.
+![dbtools](https://img.shields.io/badge/Presets_Export_&_Sort-eb6f92?style=flat-square&labelColor=26233a) &nbsp;Sort your presets alphabetically, back up your personal presets, or batch-import libraries through a collapsible options drawer.
 
-![multicomp](https://img.shields.io/badge/Multi--comp_support-c4a7e7?style=flat-square&labelColor=26233a) &nbsp;When multiple compositions are open, pick the active one directly from MFlow's interface.
+![oversampling](https://img.shields.io/badge/Sub--Frame_Oversampling-c4a7e7?style=flat-square&labelColor=26233a) &nbsp;Bake ultra-precise, high-density keyframes (1x to 8x density scale) to produce fluid, high-frequency motion paths inside Resolve.
 
-![presets](https://img.shields.io/badge/Presets_&_profiles-9ccfd8?style=flat-square&labelColor=26233a) &nbsp;Save any curve shape as a named preset. Organize presets into profiles and import / export them as JSON to share with your team.
+![autoapply](https://img.shields.io/badge/Live_Auto--Apply-eb6f92?style=flat-square&labelColor=26233a) &nbsp;Apply active curves live instantly as you drag points, edit values, or switch math modes without clicking execution buttons.
+
+![fuzzysnap](https://img.shields.io/badge/Fuzzy_Playhead_Snapping-c4a7e7?style=flat-square&labelColor=26233a) &nbsp;Engine automatically identifies and snaps to the closest active keyframe interval if the playhead sits outside boundary thresholds.
 
 ---
 
@@ -112,51 +121,45 @@ You can also build your own theme and export it as a `.json` file to share or ke
 
 ## ![install](https://img.shields.io/badge/◈_INSTALLATION-c4a7e7?style=flat-square&labelColor=1a1a2e)
 
-**Option A — Standalone installer (Windows)**
+**Option A — Desktop Executable (Windows)**
 
-Download `MFlow-Setup.exe` from the [Releases page](https://codeberg.org/MaaruAx/MFlow/releases). No Python required.
+Download `MFlow-v2.5.0.exe` from the [Releases page](https://github.com/MaaruAX/MCopy/releases). Run standalone with no Python environment needed.
 
-**Option B — Python**
+**Option B — Standalone Installer (All Platforms)**
 
 ```bash
 python install.py
 ```
 
-The installer finds your Python, installs dependencies, and places the launcher in Resolve's scripts folder.
+The upgraded utility installer lets you selectively install, skip, or update Script utility launchers. Run the tool based on your DaVinci Resolve license level:
 
-Then launch from Resolve based on your license:
-
-| License                                                                                   | Where to launch                                  |
+| License                                                                                   | Execution Area                                   |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| ![studio](https://img.shields.io/badge/Studio-eb6f92?style=flat-square&labelColor=26233a) | Any page → `Workspace → Scripts → MFlow`         |
-| ![free](https://img.shields.io/badge/Free-9ccfd8?style=flat-square&labelColor=26233a)     | Fusion page only → `Scripts → Comp → MFlow_Free` |
+| ![studio](https://img.shields.io/badge/Studio-eb6f92?style=flat-square&labelColor=26233a) | Any window → `Workspace → Scripts → MFlow`       |
+| ![free](https://img.shields.io/badge/Free-9ccfd8?style=flat-square&labelColor=26233a)     | Fusion workspace only → `Scripts → Comp → MFlow` |
 
 <details>
-<summary>
-
-![manual](https://img.shields.io/badge/Manual_install_/_Troubleshooting-f6c177?style=flat-square&labelColor=26233a)
-
-</summary>
+<summary><img src="https://img.shields.io/badge/Manual_Install_/_Troubleshooting-f6c177?style=flat-square&labelColor=26233a" alt="manual"></summary>
 
 <br>
 
-**Studio launcher** — copy `MFlow.lua` + `python_path.txt` to:
+**Studio Script Launch** — Copy `MFlow.lua` and its companion `python_path.txt` config file to:
 
-| Platform                                                              | Path                                                                                      |
+| Platform                                                              | Destination Directory                                                                     |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | ![win](https://img.shields.io/badge/Windows-9ccfd8?style=flat-square) | `%APPDATA%\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility\`             |
 | ![mac](https://img.shields.io/badge/macOS-ebbcba?style=flat-square)   | `~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Utility/` |
 | ![lnx](https://img.shields.io/badge/Linux-f6c177?style=flat-square)   | `~/.local/share/DaVinciResolve/Fusion/Scripts/Utility/`                                   |
 
-**Free launcher** — copy `MFlow_Free.py` + `mflow_path.txt` to `Scripts/Comp/` instead of `Scripts/Utility/`.
+**Free Script Launch** — Copy `MFlow_Free.py` and `mflow_path.txt` inside the `Scripts/Comp/` directories instead.
 
-To run standalone without Resolve:
+To initialize directly from your terminal:
 
 ```bash
 python main.py
 ```
 
-To uninstall (preserves your settings, presets and profiles):
+To clean installation files without wiping your saved curves, profiles, and custom interface schemes:
 
 ```bash
 python uninstall.py
@@ -164,7 +167,7 @@ python uninstall.py
 
 <br>
 
-> **Still stuck? The fastest way to get help is Discord.** Post your error message, your OS, and your Python version and we'll get it fixed.
+> **Trouble connecting?** Join our Discord Server below. Provide your active operating system, host python version, and console outputs for immediate setup assistance.
 
 [![discord](https://img.shields.io/badge/Join_the_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dvZ9nvN79Y)
 
@@ -178,9 +181,9 @@ python uninstall.py
 
 |                                                                                                         |                                                                                                          |
 | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| ![resolve](https://img.shields.io/badge/DaVinci_Resolve_18+-eb6f92?style=flat-square&labelColor=26233a) | Free or Studio — both work                                                                               |
-| ![python](https://img.shields.io/badge/Python_3.9+-c4a7e7?style=flat-square&labelColor=26233a)          | Only needed if NOT using the standalone `.exe` — must be from [python.org](https://python.org/downloads) |
-| ![pyside](https://img.shields.io/badge/PySide6_≥_6.5-9ccfd8?style=flat-square&labelColor=26233a)        | Installed automatically by `install.py`                                                                  |
+| ![resolve](https://img.shields.io/badge/DaVinci_Resolve_18+-eb6f92?style=flat-square&labelColor=26233a) | Free or Studio releases fully compatible.                                                                |
+| ![python](https://img.shields.io/badge/Python_3.9+-c4a7e7?style=flat-square&labelColor=26233a)          | Required for standalone setup scripts. Standalone installer must be sourced from [python.org](https://python.org). |
+| ![pyside](https://img.shields.io/badge/PySide6_≥_6.5-9ccfd8?style=flat-square&labelColor=26233a)        | Installed on setup automatically by `install.py` processes.                                                                     |
 
 > ⚠️ **Python from the Microsoft Store will not work.** It is a restricted stub that cannot load the DaVinci Resolve scripting modules. Download the standard installer from **[python.org/downloads](https://python.org/downloads)** and check _"Add Python to PATH"_ during setup.
 
@@ -203,7 +206,8 @@ Inspired and based on **[FFlow](https://github.com/MisonLarp/Fusion-Flow/)** by 
 [![releases](https://img.shields.io/badge/Releases-eb6f92?style=for-the-badge)](https://codeberg.org/MaaruAx/MFlow/releases)
 
 <br>
-<sub>Part of the MMarket ecosystem • Created with love for the DaVinci Resolve community.</sub>
+<sub>**Part of the MMarket ecosystem • Created with love for the DaVinci Resolve community.</sub>
 <br><br>
 
 </div>
+
