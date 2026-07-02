@@ -2,9 +2,16 @@
 Resolve connection and live watcher (undo-stack strategy from friend's script).
 All API calls stay on the main thread — watcher uses QTimer, never QThread.
 """
-import importlib, importlib.util, os, sys
+import importlib, importlib.util, os, sys, time, logging
 from PySide6.QtCore import QObject, QTimer, Signal
 from core.platform_config import resolve_module_paths, fusionscript_path
+
+# Thresholds (ms) for the perf instrumentation below — tuned to only log
+# calls that are slow enough to be perceptible (a 500ms-cadence timer
+# blocking the main thread for >30ms starts eating into frame budget;
+# >150ms is squarely in "visible stall / flicker" territory).
+_SLOW_MS  = 30
+_VSLOW_MS = 150
 
 
 def get_resolve(custom_path: str = ""):
@@ -219,6 +226,7 @@ class ResolveWatcher(QObject):
         """Periodic check: has the user switched to a different comp in Resolve?"""
         if not self._fu:
             return
+        _t0 = time.perf_counter()
         try:
             current = self._fu.GetCurrentComp()
             if not current:
@@ -228,13 +236,18 @@ class ResolveWatcher(QObject):
             # COMPS_FileName/COMPS_Name are empty for timeline comps so we use
             # tool-name fingerprints which ARE reliable across IPC.
             if current_fp and current_fp != self._comp_fp:
-                import logging
                 logging.getLogger("mflow").debug(
                     "[Watcher] _comp_check: fp changed '%s' → '%s'",
                     self._comp_fp, current_fp)
                 self.comp_changed.emit()
         except Exception:
             pass
+        finally:
+            _ms = (time.perf_counter() - _t0) * 1000
+            if _ms > _SLOW_MS:
+                lvl = logging.WARNING if _ms > _VSLOW_MS else logging.INFO
+                logging.getLogger("mflow").log(
+                    lvl, "[PERF] _comp_check took %.1fms (main thread blocked)", _ms)
 
     # ── lifecycle ─────────────────────────────────────────────────────────────
 
@@ -290,11 +303,14 @@ class ResolveWatcher(QObject):
         so it doesn't affect normal poll performance.
         Returns the result dict as well for immediate use.
         """
+        _t0 = time.perf_counter()
         result = {}
+        tool_count = 0
         try:
             tool_list = self._comp.GetToolList(False)  # False = all tools, not just selected
             if not tool_list:
                 return result
+            tool_count = len(tool_list)
             for tool in tool_list.values():
                 try:
                     name = tool.Name
@@ -305,6 +321,13 @@ class ResolveWatcher(QObject):
                     pass
         except Exception:
             pass
+        _ms = (time.perf_counter() - _t0) * 1000
+        lvl = logging.WARNING if _ms > _VSLOW_MS else logging.INFO
+        logging.getLogger("mflow").log(
+            lvl,
+            "[PERF] scan_all_tools took %.1fms — %d tools scanned, "
+            "%d with animated inputs — main thread blocked",
+            _ms, tool_count, len(result))
         self.comp_scan_updated.emit(result)
         return result
 
@@ -319,10 +342,14 @@ class ResolveWatcher(QObject):
     POLL_MS = 500  # slower poll reduces CPU
 
     def _poll(self):
+        _t0 = time.perf_counter()
+        _t_active = _t_undo = _t_scan = None
         try:
             active = self._comp.ActiveTool
+            _t_active = time.perf_counter()
             name   = active.Name if active else ""
             undo   = self._undo_len()
+            _t_undo = time.perf_counter()
             self._poll_fail_count = 0   # reset on any successful IPC call
             name_changed = (name != self._last_name)
             undo_changed = (undo != self._last_undo)
@@ -337,21 +364,33 @@ class ResolveWatcher(QObject):
                     # On undo-only change, reuse cached inputs
                     if name_changed or not self._cached_inputs:
                         self._cached_inputs = self._animated_inputs(active)
+                        _t_scan = time.perf_counter()
                     self.tool_changed.emit(name, self._cached_inputs)
                 else:
                     self._cached_inputs = {}
                     self.tool_changed.emit("", {})
         except Exception:
             self._poll_fail_count += 1
-            import logging
             logging.getLogger("mflow").debug(
                 "[Watcher] Poll failed (%d/3 consecutive)", self._poll_fail_count)
             if self._poll_fail_count >= 3:
-                import logging
                 logging.getLogger("mflow").warning(
                     "[Watcher] 3 consecutive poll failures — emitting disconnected")
                 self.disconnected.emit()
                 self._timer.stop()
+        finally:
+            _total = (time.perf_counter() - _t0) * 1000
+            if _total > _SLOW_MS:
+                _active_ms = (_t_active - _t0) * 1000 if _t_active else -1
+                _undo_ms   = (_t_undo - _t_active) * 1000 if (_t_undo and _t_active) else -1
+                _scan_ms   = (_t_scan - _t_undo) * 1000 if (_t_scan and _t_undo) else -1
+                lvl = logging.WARNING if _total > _VSLOW_MS else logging.INFO
+                logging.getLogger("mflow").log(
+                    lvl,
+                    "[PERF] _poll took %.1fms total (ActiveTool=%.1fms, "
+                    "GetUndoStack=%.1fms, undo_len=%d, inputs_scan=%.1fms) "
+                    "— main thread blocked",
+                    _total, _active_ms, _undo_ms, self._last_undo, _scan_ms)
 
     def _emit(self, tool):
         self.tool_changed.emit(tool.Name, self._animated_inputs(tool))
