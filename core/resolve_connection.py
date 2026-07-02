@@ -175,6 +175,11 @@ class ResolveWatcher(QObject):
         self._last_name      = ""
         self._last_undo      = 0
         self._cached_inputs  = {}
+        # Per-tool memoization: avoids re-scanning a tool's animated inputs
+        # (up to 6 IPC round-trips per input) every time you click back onto
+        # a tool you've already visited. Cleared whenever undo_changed fires,
+        # since we can't cheaply know *which* tool the undo/redo affected.
+        self._input_cache    = {}
         self._selected_input = None
         self._comp_name      = self._get_comp_attr_name()   # stable name for comparison
 
@@ -359,12 +364,21 @@ class ResolveWatcher(QObject):
                 if undo_changed:
                     # Restart cooldown — scan fires 2.5s after last change
                     self._scan_cooldown.start()
+                    # Can't tell which tool an undo/redo touched, so drop the
+                    # whole memoization to stay correct — this trades a little
+                    # of the caching win on undo-heavy sessions for guaranteed
+                    # freshness.
+                    self._input_cache.clear()
                 if active:
-                    # Only re-scan inputs when tool changes — expensive operation
-                    # On undo-only change, reuse cached inputs
-                    if name_changed or not self._cached_inputs:
-                        self._cached_inputs = self._animated_inputs(active)
+                    # Re-scan only if we've never seen this tool since the
+                    # last invalidation — revisiting a tool you already
+                    # clicked (e.g. flipping between two nodes to compare
+                    # keyframes) is then a free dict lookup instead of a
+                    # fresh IPC round-trip per input.
+                    if name not in self._input_cache:
+                        self._input_cache[name] = self._animated_inputs(active)
                         _t_scan = time.perf_counter()
+                    self._cached_inputs = self._input_cache[name]
                     self.tool_changed.emit(name, self._cached_inputs)
                 else:
                     self._cached_inputs = {}
