@@ -1,0 +1,55 @@
+name: Update downloads badge
+
+on:
+  schedule:
+    # Runs every 6 hours. Adjust the cron expression if you want a
+    # different refresh rate.
+    - cron: "0 */6 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  update-badge:
+    # Real Codeberg hosted-runner labels (see https://codeberg.org/actions/meta):
+    #   codeberg-tiny   -> 2 minute time limit
+    #   codeberg-small  -> 5 minute time limit
+    #   codeberg-medium -> 10 minute time limit
+    # "docker" is not a valid label on Codeberg's hosted runners.
+    runs-on: codeberg-small
+    steps:
+      - name: Check out main branch
+        uses: https://code.forgejo.org/actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - name: Install dependencies
+        run: python3 -m pip install --break-system-packages requests
+
+      - name: Generate downloads.json
+        working-directory: main
+        run: python3 scripts/update_downloads_badge.py
+        env:
+          # Optional: add a GH_TOKEN repository secret (Settings > Actions >
+          # Secrets) to raise GitHub's unauthenticated 60 requests/hour
+          # limit. Not required for a low-frequency cron like this one.
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Check out pages branch
+        uses: https://code.forgejo.org/actions/checkout@v4
+        with:
+          ref: pages
+          path: pages
+
+      - name: Publish updated badge data
+        run: |
+          cp main/downloads.json pages/downloads.json
+          cd pages
+          git config user.name "MFlow Bot"
+          git config user.email "bot@users.noreply.codeberg.org"
+          git add downloads.json
+          if git diff --cached --quiet; then
+            echo "No change in download count, skipping commit."
+            exit 0
+          fi
+          git commit -m "Update downloads badge"
+          git push origin pages

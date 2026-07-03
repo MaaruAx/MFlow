@@ -4,8 +4,9 @@
 
 # ◈𝐌𝐅𝐋𝐎𝐖
 
-[![Version](https://img.shields.io/badge/Version-v2.5.0-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MCopy/releases)
-[![Status](https://img.shields.io/badge/Status-Stable-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MCopy)
+[![Version](https://img.shields.io/badge/Version-v2.5.1-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow/releases)
+[![Downloads](https://img.shields.io/endpoint?url=https://codeberg.org/MaaruAx/MFlow/raw/branch/pages/downloads.json&style=for-the-badge&labelColor=1a1a2e)](https://codeberg.org/MaaruAx/MFlow/releases)
+[![Status](https://img.shields.io/badge/Status-Stable-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow)
 ![free](https://img.shields.io/badge/Works_on_FREE_Resolve-1a1a2e?style=for-the-badge&labelColor=1a1a2e)
 
 <br>
@@ -121,11 +122,7 @@ You can also build your own theme and export it as a `.json` file to share or ke
 
 ## ![install](https://img.shields.io/badge/◈_INSTALLATION-c4a7e7?style=flat-square&labelColor=1a1a2e)
 
-**Option A — Desktop Executable (Windows)**
-
-Download `MFlow-v2.5.0.exe` from the [Releases page](https://github.com/MaaruAX/MCopy/releases). Run standalone with no Python environment needed.
-
-**Option B — Standalone Installer (All Platforms)**
+**— Standalone Installer (All Platforms)**
 
 ```bash
 python install.py
@@ -206,8 +203,7 @@ Inspired and based on **[FFlow](https://github.com/MisonLarp/Fusion-Flow/)** by 
 [![releases](https://img.shields.io/badge/Releases-eb6f92?style=for-the-badge)](https://codeberg.org/MaaruAx/MFlow/releases)
 
 <br>
-<sub>**Part of the MMarket ecosystem • Created with love for the DaVinci Resolve community.</sub>
+<sub>Part of the MMarket ecosystem • Created with love for the DaVinci Resolve community.</sub>**
 <br><br>
 
 </div>
-
