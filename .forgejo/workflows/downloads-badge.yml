@@ -16,11 +16,16 @@ jobs:
     # "docker" is not a valid label on Codeberg's hosted runners.
     runs-on: codeberg-small
     steps:
+      # NOTE: We use plain `git clone` here instead of
+      # `actions/checkout` / `code.forgejo.org/actions/checkout`.
+      # This repo uses the SHA-256 object format on Codeberg, and
+      # checkout@v4 does `git init` (which defaults to SHA-1) followed
+      # by `git fetch`, which fails with:
+      #   fatal: mismatched algorithms: client sha1; server sha256
+      # `git clone` negotiates the object format correctly up front,
+      # so it doesn't hit this bug.
       - name: Check out main branch
-        uses: https://code.forgejo.org/actions/checkout@v4
-        with:
-          ref: main
-          path: main
+        run: git clone --depth 1 --branch main https://codeberg.org/MaaruAx/MFlow.git main
 
       - name: Install dependencies
         run: python3 -m pip install --break-system-packages requests
@@ -35,10 +40,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
       - name: Check out pages branch
-        uses: https://code.forgejo.org/actions/checkout@v4
-        with:
-          ref: pages
-          path: pages
+        run: git clone --depth 1 --branch pages https://x-access-token:${{ secrets.CODEBERG_TOKEN }}@codeberg.org/MaaruAx/MFlow.git pages
 
       - name: Publish updated badge data
         run: |
