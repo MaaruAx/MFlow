@@ -122,7 +122,11 @@ You can also build your own theme and export it as a `.json` file to share or ke
 
 ## ![install](https://img.shields.io/badge/◈_INSTALLATION-c4a7e7?style=flat-square&labelColor=1a1a2e)
 
-**— Standalone Installer (All Platforms)**
+**Option A — Desktop Executable (Windows)**
+
+Download `MFlow-v2.5.1.exe` from the [Releases page](https://github.com/MaaruAX/MFlow/releases). Run standalone with no Python environment needed.
+
+**Option B — Standalone Installer (All Platforms)**
 
 ```bash
 python install.py
@@ -203,7 +207,7 @@ Inspired and based on **[FFlow](https://github.com/MisonLarp/Fusion-Flow/)** by 
 [![releases](https://img.shields.io/badge/Releases-eb6f92?style=for-the-badge)](https://codeberg.org/MaaruAx/MFlow/releases)
 
 <br>
-<sub>Part of the MMarket ecosystem • Created with love for the DaVinci Resolve community.</sub>**
+<sub>Part of the MMarket ecosystem • Created with love for the DaVinci Resolve community.</sub>
 <br><br>
 
 </div>

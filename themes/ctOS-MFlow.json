@@ -1,0 +1,33 @@
+{
+  "name": "ctOS",
+  "author": "",
+  "version": 1,
+  "colors": {
+    "base": "#000000",
+    "surface": "#000000",
+    "overlay": "#2d2c2c",
+    "muted": "#f0f0f0",
+    "text": "#f0f0f0",
+    "border": "#1e1d1d",
+    "hl_low": "#17fefe",
+    "hl_med": "#535151",
+    "hl_high": "#535151"
+  },
+  "mode_colors": {
+    "easing": "#edebec",
+    "spring": "#f0f0f0",
+    "elastic": "#f0f0f0",
+    "overframe": "#f0f0f0",
+    "bounce": "#f0f0f0",
+    "catenary": "#f0f0f0",
+    "pulse": "#f5e0dc",
+    "noise": "#f0f0f0",
+    "resonance": "#f0f0f0"
+  },
+  "grid_colors": {
+    "grid": "#2d2c2c",
+    "cross": "#2d2c2c",
+    "handle_fill": "#2d2c2c",
+    "edge": "#2d2c2c"
+  }
+}
