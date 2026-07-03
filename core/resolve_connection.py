@@ -1,8 +1,15 @@
 """
 Resolve connection and live watcher (undo-stack strategy from friend's script).
 All API calls stay on the main thread — watcher uses QTimer, never QThread.
+
+Exception: the very first connection bootstrap (get_resolve_with_timeout /
+get_comp_with_timeout below) runs in a short-lived daemon thread purely to
+enforce a hard time limit. That's a startup-only safety net, not a change to
+the "Fusion API calls happen on the main thread" rule the ongoing watcher
+follows — see the docstring on _run_with_timeout for why it's safe here
+specifically.
 """
-import importlib, importlib.util, os, sys, time, logging
+import importlib, importlib.util, os, sys, time, logging, threading
 from PySide6.QtCore import QObject, QTimer, Signal
 from core.platform_config import resolve_module_paths, fusionscript_path
 
@@ -12,6 +19,61 @@ from core.platform_config import resolve_module_paths, fusionscript_path
 # >150ms is squarely in "visible stall / flicker" territory).
 _SLOW_MS  = 30
 _VSLOW_MS = 150
+
+
+def _run_with_timeout(fn, args=(), timeout=6.0, name="worker"):
+    """Runs fn(*args) in a daemon thread and waits at most `timeout` seconds.
+
+    Why this is safe here even though the rest of this module insists Fusion
+    API calls stay on the main thread: this helper is only ever used for the
+    ONE-TIME startup bootstrap (get_resolve/get_comp), before any comp,
+    watcher, or UI exists yet — there is no concurrent main-thread Fusion
+    call it could race with. Once a comp is obtained, everything else in
+    this file (ResolveWatcher) goes back to calling the API exclusively from
+    the main thread via QTimer, as documented at the top of this file.
+
+    Python threads can't be force-killed, so if fn() really is stuck forever
+    (e.g. a dead scripting socket that never responds), the thread leaks for
+    the process lifetime — but it's a daemon thread, so it can never block
+    interpreter shutdown, and this call always returns within `timeout`
+    seconds regardless. A bounded wait that might leak one idle thread is a
+    strictly better trade than an unbounded hang that kills the whole app
+    before a window is even shown.
+
+    Returns (value, error, timed_out). Exactly one of (value being usable) /
+    (error being not None) / (timed_out being True) describes the outcome.
+    """
+    log = logging.getLogger("mflow")
+    box = {"value": None, "error": None, "done": False}
+
+    def _worker():
+        try:
+            box["value"] = fn(*args)
+        except Exception as e:
+            box["error"] = e
+        finally:
+            box["done"] = True
+
+    try:
+        t = threading.Thread(target=_worker, name=f"MFlow-{name}", daemon=True)
+        t.start()
+        t.join(timeout)
+    except Exception as e:
+        # Even starting/joining a thread should never be able to take the
+        # app down — fail safe as if it simply timed out.
+        log.warning("[%s] Could not run with timeout guard: %s", name, e)
+        return None, None, True
+
+    if not box["done"]:
+        log.warning("[%s] Timed out after %.1fs — continuing without it. "
+                    "(The attempt keeps running in the background as an "
+                    "orphaned daemon thread and its result will be discarded.)",
+                    name, timeout)
+        return None, None, True
+    if box["error"] is not None:
+        log.warning("[%s] Raised: %s", name, box["error"])
+        return None, box["error"], False
+    return box["value"], None, False
 
 
 def get_resolve(custom_path: str = ""):
@@ -120,6 +182,92 @@ def get_comp(resolve):
         return comp
     except Exception:
         return None
+
+
+def get_resolve_with_timeout(custom_path: str = "", timeout: float = 6.0):
+    """Bounded version of get_resolve() for use at app startup, before any
+    window exists. If DaVinci was closed uncleanly and left a stale
+    scripting socket behind, scriptapp("Resolve") can hang indefinitely
+    waiting for a response that will never come — which previously meant
+    the whole app appeared to die on launch with no window, no error,
+    nothing. Standalone installs (no guarantee Resolve is even installed,
+    let alone running cleanly) need this guaranteed not to happen.
+    See _run_with_timeout for exactly why running this one bootstrap call
+    off the main thread is safe."""
+    value, _err, timed_out = _run_with_timeout(
+        get_resolve, args=(custom_path,), timeout=timeout, name="get_resolve")
+    if timed_out:
+        logging.getLogger("mflow").warning(
+            "[get_resolve] Continuing in standalone mode after timeout.")
+    return value
+
+
+def get_comp_with_timeout(resolve, timeout: float = 4.0):
+    """Bounded version of get_comp() — see get_resolve_with_timeout. Lower
+    risk than get_resolve (resolve is already confirmed live at this point)
+    but guarded with the same mechanism for consistency: a single hung call
+    here shouldn't be able to take the whole app down either."""
+    value, _err, timed_out = _run_with_timeout(
+        get_comp, args=(resolve,), timeout=timeout, name="get_comp")
+    return value
+
+
+# ── Resolve process liveness check ────────────────────────────────────────────
+# Best-effort, deliberately cheap: the DaVinci scripting bridge can hang
+# indefinitely on a call into a dead/closing Resolve process rather than
+# raising promptly (a stale socket with nothing on the other end doesn't
+# always fail fast). Since a genuine hang can't be caught by try/except —
+# the calling thread just never comes back — the only way to avoid it is to
+# not make the call in the first place once Resolve is confirmed gone.
+# Cached with a short TTL so this never runs on every single 500ms poll
+# tick (spawning a process that often would trade one performance problem
+# for another); result defaults to "assume alive" on any failure/unknown
+# platform so this can only ever reduce hang risk, never invent a false
+# disconnect.
+_PROC_CHECK_NAMES = {
+    "win32":  ["Resolve.exe"],
+    "darwin": ["DaVinci Resolve"],
+}
+_PROC_CHECK_CACHE = {"alive": True, "ts": 0.0}
+_PROC_CHECK_TTL   = 3.0  # seconds
+
+
+def _is_resolve_process_alive() -> bool:
+    now = time.monotonic()
+    if now - _PROC_CHECK_CACHE["ts"] < _PROC_CHECK_TTL:
+        return _PROC_CHECK_CACHE["alive"]
+    alive = True  # fail-safe default: assume alive so this can never be the
+                  # sole cause of a false "disconnected"
+    try:
+        import subprocess
+        if sys.platform == "win32":
+            names = _PROC_CHECK_NAMES["win32"]
+            out = subprocess.run(
+                ["tasklist", "/FI", f"IMAGENAME eq {names[0]}"],
+                capture_output=True, text=True, timeout=1.5,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            alive = names[0].lower() in (out.stdout or "").lower()
+        elif sys.platform == "darwin":
+            out = subprocess.run(
+                ["pgrep", "-f", _PROC_CHECK_NAMES["darwin"][0]],
+                capture_output=True, text=True, timeout=1.5)
+            alive = bool((out.stdout or "").strip())
+        else:
+            # Linux: DaVinci's launcher process is typically lowercase.
+            out = subprocess.run(
+                ["pgrep", "-if", "resolve"],
+                capture_output=True, text=True, timeout=1.5)
+            alive = bool((out.stdout or "").strip())
+    except Exception as e:
+        # Check itself failed (no tasklist/pgrep, sandboxed env, etc.) —
+        # assume alive rather than risk a false disconnect over a check
+        # that isn't even working.
+        logging.getLogger("mflow").debug(
+            "[Watcher] Process liveness check unavailable (assuming alive): %s", e)
+        alive = True
+    _PROC_CHECK_CACHE["alive"] = alive
+    _PROC_CHECK_CACHE["ts"] = now
+    return alive
 
 
 def warmup_fusion_api(comp) -> None:
@@ -349,6 +497,19 @@ class ResolveWatcher(QObject):
     def _poll(self):
         _t0 = time.perf_counter()
         _t_active = _t_undo = _t_scan = None
+        if not _is_resolve_process_alive():
+            # Resolve is confirmed gone at the OS level — treat exactly like
+            # 3 consecutive IPC failures would, without risking a hang by
+            # attempting the call anyway.
+            self._poll_fail_count += 1
+            logging.getLogger("mflow").debug(
+                "[Watcher] Resolve process not found (%d/3 consecutive)", self._poll_fail_count)
+            if self._poll_fail_count >= 3:
+                logging.getLogger("mflow").warning(
+                    "[Watcher] Resolve process gone — emitting disconnected")
+                self.disconnected.emit()
+                self._timer.stop()
+            return
         try:
             active = self._comp.ActiveTool
             _t_active = time.perf_counter()

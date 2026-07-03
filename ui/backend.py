@@ -271,7 +271,10 @@ class Backend(QObject):
     @Slot()
     def close_window(self):
         log.info("[Close-PY] close_window Slot invoked — calling self._win.close()")
-        self._win.close()
+        try:
+            self._win.close()
+        except Exception as e:
+            log.error("[Close-PY] self._win.close() raised: %s", e, exc_info=True)
 
     # ── Resolve connection ────────────────────────────────────────────────────
 
@@ -320,7 +323,8 @@ class Backend(QObject):
             def run(self):
                 import time
                 try:
-                    from core.resolve_connection import get_resolve, get_comp as _gc
+                    from core.resolve_connection import (get_resolve_with_timeout,
+                                                          get_comp_with_timeout as _gc)
                     log.info("[Connect] Starting connection attempt…")
                     log.info("[Connect] Module search path: %s", cp or "(auto)")
 
@@ -329,7 +333,7 @@ class Backend(QObject):
                         if attempt > 0:
                             log.info("[Connect] Retry %d/%d — waiting 2s…", attempt + 1, max_att)
                             time.sleep(2)
-                        resolve = get_resolve(cp)
+                        resolve = get_resolve_with_timeout(cp, timeout=8.0)
                         if resolve:
                             break
                         log.warning("[Connect] Attempt %d failed — resolve=None", attempt + 1)

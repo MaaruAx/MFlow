@@ -9,6 +9,31 @@ from dataclasses import dataclass, field
 
 log = logging.getLogger("mflow")
 
+# Spring/oscillator preview-vs-bake sync point.
+#
+# Every OTHER bake_* function in this file evaluates its shape on a
+# normalized fraction tn = i/n of the REAL keyframe span, so the canvas
+# preview (which also samples 0..1 normalized) always matches exactly what
+# gets applied, no matter how long the real Fusion range is.
+#
+# The spring/oscillator was originally the one exception: it used the real
+# elapsed time in seconds (t1-t0)/fps so that omega_n would behave like a
+# physically real angular frequency. That meant the shape depended on the
+# real clip length, which the canvas has no way to know about at preview
+# time (it always draws assuming a fixed reference duration) — so anything
+# shorter than that reference duration got cut off mid-oscillation on
+# apply, even though the preview showed the full settle. This constant
+# removes that mismatch by making spring behave like every other mode:
+# always sampled across this fixed reference duration, so the preview is
+# always exactly what gets applied.
+#
+# MUST match SP_T_REF in ui/app.html exactly — if you ever change one,
+# change the other. Kept as an obvious, singular, well-commented constant
+# in both files specifically so it can't quietly drift again like it did
+# before (ui/app.html previously had this same value duplicated inline in
+# two separate places).
+SPRING_T_REF = 2.5
+
 
 # ── Bezier ────────────────────────────────────────────────────────────────────
 
@@ -146,13 +171,18 @@ def _oversample(t0, t1, density=1):
 def bake_oscillator(t0: float, v0: float, t1: float, v1: float,
                     fps: float, zeta: float = 0.3, omega_n: float = 8.0,
                     density: int = 1) -> list:
+    """fps is intentionally unused now — kept in the signature only so the
+    call site in backend.py doesn't need special-casing versus the other
+    bake_* functions, which all take the same (t0,v0,t1,v1,fps,...) shape."""
     zeta    = max(0.01, min(0.99, zeta))
     omega_n = max(0.5, omega_n)
-    # Use actual duration in seconds so omega_n (speed) changes the baked shape:
-    # high omega_n = spring settles quickly within the range,
-    # low omega_n  = spring barely starts within the range.
+    # Sample across the fixed SPRING_T_REF reference duration (see comment
+    # above the constant) instead of the real (t1-t0)/fps duration. This is
+    # what makes the shape match the canvas preview exactly regardless of
+    # how long the real keyframe range actually is — the same normalized
+    # approach every other mode (elastic/bounce/catenary/etc.) already uses.
     n, frame_pos = _oversample(t0, t1, density)
-    T = (t1 - t0) / fps          # actual duration in seconds
+    T = SPRING_T_REF
     result = []
     for i in range(n + 1):
         tn  = i / n

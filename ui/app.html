@@ -789,6 +789,29 @@ kbd {
 </style>
 </head>
 <body>
+<script>
+// Eliminates the startup flash of default colors before the saved theme
+// loads. window.__MFLOW_BOOT_THEME__ is injected by main.py via a
+// QWebEngineScript at DocumentCreation — i.e. it's already defined by the
+// time this, the very first script in <body>, runs (before any of the
+// content below it is parsed or painted). This applies just the raw color
+// variables directly as inline styles (which reliably beat the page's own
+// :root{} stylesheet defaults in the CSS cascade, regardless of parse
+// order) as a fast, self-contained preview. The real applyThemeJSON() call
+// still runs normally later via the settings_signal round-trip and will
+// harmlessly re-apply everything (mode colors, grid colors, interface
+// colors, etc.) exactly — this is only here to make sure the FIRST frame
+// already looks right instead of flashing the wrong theme for a moment.
+try {
+  var _boot = window.__MFLOW_BOOT_THEME__;
+  if (_boot && _boot.colors) {
+    Object.keys(_boot.colors).forEach(function(k) {
+      if (k === 'subtle') return; // derived via color-mix() — never override directly
+      document.body.style.setProperty('--' + k.replace(/_/g, '-'), _boot.colors[k]);
+    });
+  }
+} catch (e) { /* never let a boot-theme problem block the rest of the page */ }
+</script>
 <div id="root">
 <div id="tooltip"></div>
 <!-- resize-edge divs removed — native OS window frame handles resize now -->
@@ -1518,7 +1541,14 @@ if (_DOCK_MODE) {
 // § 3. CONSTANTS
 // ═══════════════════════════════════════════════════════════════
 let CS=380, MG=30, CI=CS-2*MG, CELLS=10;
-const SP_Y_MAX=1.5, SP_OM_MIN=0.5, SP_OM_MAX=30.0, SP_T_DISPLAY=5.0;
+// SP_T_REF: fixed reference duration the spring/oscillator preview is
+// sampled across. MUST match SPRING_T_REF in core/curve_engine.py exactly —
+// if you ever change one, change the other. This used to be two separate
+// hardcoded "2.5" literals (in updateLookup() and drawSpringCurve()) plus a
+// third, unused SP_T_DISPLAY=5.0 constant that looked like it controlled
+// this but didn't — that mismatch is what caused the preview to be
+// internally confusing. Now there is exactly one number, used everywhere.
+const SP_Y_MAX=1.5, SP_OM_MIN=0.5, SP_OM_MAX=30.0, SP_T_REF=2.5;
 const EL_Y_MIN=-1.2, EL_Y_MAX=1.3, EL_Y_RNG=EL_Y_MAX-EL_Y_MIN;
 const LN=256, ANIM_DUR=1400;
 let MODE_COLORS = { easing:'#9ccfd8', spring:'#f6c177', elastic:'#eb6f92', overframe:'#c4a7e7', bounce:'#c4756a', catenary:'#31748f', pulse:'#e0def4', noise:'#908caa', resonance:'#f4a261' };
@@ -2363,9 +2393,8 @@ function evalOKF(x) {
 }
 function updateLookup() {
   if (isSpring()) {
-    const T_REF = 2.5;
     for (let i=0; i<=LN; i++) {
-      let v = evalSpring(i/LN*T_REF, physZeta, physOmegaN);
+      let v = evalSpring(i/LN*SP_T_REF, physZeta, physOmegaN);
       lookup[i] = _physFlipped ? 1-v : v;
     }
   } else if (isElastic()) {
@@ -2471,10 +2500,10 @@ function scheduleDraw() {
   requestAnimationFrame(() => { _rafDrawPending=false; drawCurve(); });
 }
 function drawSpringCurve(col) {
-  const N=200, T_REF=2.5;
+  const N=200;
   ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath();
   for (let i=0; i<=N; i++) {
-    const raw=evalSpring(i/N*T_REF, physZeta, physOmegaN);
+    const raw=evalSpring(i/N*SP_T_REF, physZeta, physOmegaN);
     const val=_physFlipped?1-raw:raw;
     const p=spToPx(i/N, val);
     i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y);
@@ -3873,7 +3902,14 @@ function _populateSettingsForm(s) {
 function applySettingsUI(s) {
   Object.assign(_currentSettings,s);
   if (s.mode_colors)   Object.assign(MODE_COLORS,s.mode_colors);
-  if (s.theme!=null)   applyTheme(s.theme);
+  // BUG FIX: this used to call applyTheme(s.theme), which only sets a CSS
+  // class on <body> — but every actual theme (bundled or user-saved) is
+  // pure JSON with no matching CSS class anywhere in this file, so that
+  // call was a visual no-op. The saved theme was never really restored on
+  // launch; only the dropdown looked right. applySelectedTheme() is the
+  // same call the dropdown's onchange already uses, and correctly loads
+  // the real JSON via backend.load_theme() -> applyThemeJSON().
+  if (s.theme) applySelectedTheme(s.theme); else applyTheme('');
   if (s.auto_apply!=null) applyAA(s.auto_apply);
   if (s.always_on_top!=null && backend) backend.set_always_on_top(s.always_on_top);
   if (s.preset_cols)   applyPresetCols(s.preset_cols);

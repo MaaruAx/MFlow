@@ -279,6 +279,19 @@ class MFlowWindow(QMainWindow):
         except Exception as _e:
             log.warning("qwebchannel.js injection skipped: %s", _e)
 
+        # ── Boot-theme injection (eliminates startup theme flash) ──────────────
+        # app.html's :root{} block paints default colors immediately on load;
+        # the real saved theme only used to arrive later via the JS<->Python
+        # settings round-trip, causing a visible flash of default colors on
+        # every launch. Resolving the theme here and injecting it as a plain
+        # JS global (same DocumentCreation technique as qwebchannel.js above)
+        # lets app.html's own first-body-script apply it before first paint —
+        # see the inline <script> right after <body> in app.html.
+        try:
+            self._apply_boot_theme_injection()
+        except Exception as _e:
+            log.warning("[Theme] Boot-theme injection skipped: %s", _e)
+
         if not os.path.isfile(APP_HTML):
             log.error("app.html not found at: %s", APP_HTML)
             raise FileNotFoundError(f"app.html missing: {APP_HTML}")
@@ -286,6 +299,51 @@ class MFlowWindow(QMainWindow):
         self._view.load(QUrl.fromLocalFile(APP_HTML))
         self._view.loadFinished.connect(self._on_page_ready)
         log.info("Window created, loading UI...")
+
+    def _apply_boot_theme_injection(self):
+        """Reads the saved theme name from settings.json, resolves it to its
+        JSON file (same lookup order as Backend.load_theme: user themes/
+        folder first, then the bundled one), and injects it as
+        window.__MFLOW_BOOT_THEME__ before the page loads. Deliberately
+        defensive at every step — a missing/corrupt settings file, a theme
+        name that no longer resolves to any file, or bad JSON must never
+        stop the app from launching. Worst case: no injection happens and
+        the page just falls back to its normal (slightly-delayed) theme
+        load, exactly like before this fix existed."""
+        from core.platform_config import settings_file, themes_dir, bundled_themes_dir
+        theme_name = ""
+        try:
+            with open(settings_file(), encoding="utf-8") as f:
+                theme_name = (json.load(f).get("theme") or "").strip()
+        except Exception:
+            pass
+        if not theme_name:
+            return  # Default theme — nothing to inject, page's own :root{} is already correct
+        data = None
+        for tdir in (themes_dir(), bundled_themes_dir()):
+            for candidate in (theme_name + ".json", theme_name):
+                path = os.path.join(tdir, candidate)
+                if os.path.isfile(path):
+                    try:
+                        with open(path, encoding="utf-8") as f:
+                            data = json.load(f)
+                        break
+                    except Exception as e:
+                        log.debug("[Theme] Could not read %s: %s", path, e)
+            if data is not None:
+                break
+        if not isinstance(data, dict):
+            log.debug("[Theme] Boot theme %r not found on disk — skipping injection", theme_name)
+            return
+        from PySide6.QtWebEngineCore import QWebEngineScript
+        js = "window.__MFLOW_BOOT_THEME__ = " + json.dumps(data) + ";"
+        script = QWebEngineScript()
+        script.setName("__mflow_boot_theme__")
+        script.setSourceCode(js)
+        script.setInjectionPoint(QWebEngineScript.InjectionPoint.DocumentCreation)
+        script.setWorldId(QWebEngineScript.ScriptWorldId.MainWorld)
+        self._view.page().scripts().insert(script)
+        log.info("[Theme] Boot theme %r injected for flash-free startup", theme_name)
 
     def _on_page_ready(self, ok):
         if not ok:
@@ -353,11 +411,38 @@ class MFlowWindow(QMainWindow):
             log.warning("[Hotkey] Scan trigger from global hotkey failed: %s", e)
 
     def closeEvent(self, event):
+        """Every step here is independently try/excepted, and the window is
+        ALWAYS allowed to close at the end regardless of what happened above
+        — this used to be a bare sequence of calls with no exception
+        handling at all, so a single failure partway through (e.g. the
+        comp watcher's .stop() raising because the underlying comp
+        reference had gone stale after Resolve closed) would escape
+        closeEvent entirely and could leave the native close button looking
+        like it does nothing. Closing must never be blockable by an
+        internal error."""
         log.info("Closing MFlow")
-        self._unregister_global_hotkey()
-        if hasattr(self, '_backend') and self._backend._watcher:
-            self._backend._watcher.stop()
-        super().closeEvent(event)
+        try:
+            self._unregister_global_hotkey()
+        except Exception as e:
+            log.warning("[Close-PY] _unregister_global_hotkey failed (ignored): %s", e)
+        try:
+            if hasattr(self, '_backend') and self._backend is not None and self._backend._watcher:
+                self._backend._watcher.stop()
+        except Exception as e:
+            log.warning("[Close-PY] watcher.stop() failed (ignored): %s", e)
+        try:
+            super().closeEvent(event)
+        except Exception as e:
+            log.warning("[Close-PY] super().closeEvent() raised (ignored, forcing accept): %s", e)
+        finally:
+            # Belt-and-suspenders: guarantee the close is accepted even if
+            # something above threw before event.accept() would normally
+            # have been called by the base implementation.
+            try:
+                if not event.isAccepted():
+                    event.accept()
+            except Exception:
+                pass
         log.info("[Close-PY] closeEvent finished — event.isAccepted()=%s", event.isAccepted())
 
 
@@ -376,31 +461,27 @@ def main():
 
     # Windows groups unpackaged Python apps under the python.exe taskbar icon
     # unless we give the process its own AppUserModelID — must be set before
-    # QApplication() creates the native window, or it has no effect.
+    # QApplication() creates the native window, or it has no effect. This is
+    # deliberately the ONLY call to this API in the app — a second, later
+    # call used to exist right after QApplication() was constructed, which
+    # is already too late per the constraint above and just overwrote this
+    # one with a different (equally ineffective) ID string. Removed as dead,
+    # confusing leftover code.
     if sys.platform == "win32":
         try:
             import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MFlow.App.2.5")
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MFlow.MFlow.2.5.0")
         except Exception as e:
             log.debug("[Taskbar] Could not set AppUserModelID: %s", e)
 
     app = QApplication(sys.argv)
     app.setApplicationName("MFlow")
     app.setApplicationVersion("2.5.0")
-
-    # ── Ícono en barra de tareas (Windows) ───────────────────────────────────
-    # Sin AppUserModelID, Windows agrupa el exe bajo el ícono del launcher de
-    # Python en lugar del de MFlow.
-    if sys.platform == "win32":
-        import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-            "MFlow.MFlow.2.5.0"
-        )
     app.setWindowIcon(QIcon(_resource("MFlow.ico")))
 
     comp = None
     try:
-        from core.resolve_connection import get_resolve, get_comp
+        from core.resolve_connection import get_resolve_with_timeout, get_comp_with_timeout
         from core.platform_config import settings_file
         custom = ""
         try:
@@ -408,9 +489,11 @@ def main():
                 custom = json.load(f).get("dvr_path", "")
         except Exception:
             pass
-        resolve = get_resolve(custom)
+        # Bounded: guarantees the window shows within ~6s even if Resolve's
+        # scripting bridge is dead/hung — see get_resolve_with_timeout().
+        resolve = get_resolve_with_timeout(custom, timeout=6.0)
         if resolve:
-            comp = get_comp(resolve)
+            comp = get_comp_with_timeout(resolve, timeout=4.0)
             log.info("Connected to Resolve")
         else:
             resolve = None
