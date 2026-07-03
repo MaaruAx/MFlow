@@ -1771,8 +1771,17 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       if (backend) { try { e.shiftKey ? backend.redo_resolve() : backend.undo_resolve(); } catch(_) {} }
     }
-    // Delete / Backspace — remove selected preset (no input focused)
-    if ((e.key === 'Delete' || e.key === 'Backspace') && !editable && selIdx >= 0) {
+    // Delete / Backspace — remove selected preset (no input focused, and the
+    // name dialog isn't open). ROOT-CAUSE FIX: showDlg() used to focus its
+    // input 80ms after making it visible. During that window keyboard focus
+    // was still wherever it was before (often nothing, or a previously
+    // clicked preset card) — NOT inside the <input>, so `editable` was
+    // false and an early Backspace/Delete keystroke (typed while opening
+    // the dialog, e.g. to clear a pre-filled rename value) fell through to
+    // this shortcut and silently deleted whatever preset was selected. This
+    // explicit dialog-open check closes that gap regardless of focus timing.
+    const dlgOpen = $('name-dlg') && $('name-dlg').classList.contains('open');
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !editable && !dlgOpen && selIdx >= 0) {
       e.preventDefault();
       deleteSelectedPreset();
     }
@@ -3091,7 +3100,7 @@ function selectPreset(idx) {
 }
 function saveCurrentPreset() {
   showDlg('Preset name:', '', n => {
-    if (!backend) return;
+    if (!backend) { console.log('[Preset-Save-JS] backend is not defined — cannot save'); return; }
     const p={name:n, library:mode, h1:[...h1], h2:[...h2]};
     if (isSpring())    p.params={zeta:physZeta, omega_n:physOmegaN};
     if (isElastic())   p.params={amplitude:elAmp, period:elPeriod, direction:elDirection};
@@ -3100,10 +3109,11 @@ function saveCurrentPreset() {
     if (isPulse())     p.params={omega1:pulseOmega1, omega2:pulseOmega2, n:pulseN, reverse:pulseReverse};
     if (isNoise())     p.params={freq:noiseFreq, amp:noiseAmp, seed:noiseSeed, reverse:noiseReverse};
     if (isResonance()) p.params={gamma:resGamma, omega:resOmega, omega0:resOmega0, reverse:resReverse};
+    console.log('[Preset-Save-JS] calling backend.save_preset name='+n+' library='+mode);
     backend.save_preset(JSON.stringify(p));
   });
 }
-function deleteSelectedPreset() { if(selIdx>=0&&backend) backend.delete_preset(selIdx); }
+function deleteSelectedPreset() { console.log('[Preset-Delete-JS] deleteSelectedPreset called, selIdx='+selIdx); if(selIdx>=0&&backend) backend.delete_preset(selIdx); }
 
 const _SCAN_SVG = '<svg style=\"width:14px;height:14px;vertical-align:middle;margin-right:4px;flex-shrink:0\" viewBox=\"0 0 24 24\" fill=\"currentColor\"><path d=\"M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z\"/></svg>';
 
@@ -4069,7 +4079,7 @@ function _openVarPicker(varKey,swId,event){event.stopPropagation();const sw=$(sw
 // § 30. DIALOGS
 // ═══════════════════════════════════════════════════════════════
 let dlgCb=null;
-function showDlg(title,def,cb){dlgCb=cb;$('dlg-title').textContent=title;$('dlg-inp').value=def||'';$('name-dlg').classList.add('open');setTimeout(()=>$('dlg-inp').focus(),80);}
+function showDlg(title,def,cb){dlgCb=cb;$('dlg-title').textContent=title;$('dlg-inp').value=def||'';$('name-dlg').classList.add('open');requestAnimationFrame(()=>requestAnimationFrame(()=>$('dlg-inp').focus()));}
 function dlgOK(){const v=$('dlg-inp').value.trim();$('name-dlg').classList.remove('open');if(dlgCb&&v)dlgCb(v);dlgCb=null;}
 function dlgCancel(){$('name-dlg').classList.remove('open');dlgCb=null;}
 
