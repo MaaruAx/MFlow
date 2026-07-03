@@ -211,6 +211,9 @@ body.compact #version{display:none!important}
   45% {transform:scale(1.055);box-shadow:0 0 0 4px var(--accent)44}
   100%{transform:scale(1);    box-shadow:0 0 0 0 var(--accent)}
 }
+.preset-empty{grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:4px;padding:22px 10px;color:var(--muted);font-size:11px;text-align:center}
+.preset-empty .pe-title{font-size:12px;color:var(--text)}
 /* ── Animation utilities ── */
 @keyframes menuIn  {from{opacity:0;transform:translateY(-5px) scale(.97)}to{opacity:1;transform:none}}
 @keyframes cpFadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -813,7 +816,7 @@ kbd {
   </div>
   <button class="wctl" onclick="backend&&backend.minimize_window()">−</button>
   <button class="wctl" onclick="toggleMaximize()">□</button>
-  <button class="wctl" id="btn-close" style="color:var(--love)" onclick="backend&&backend.close_window()">×</button>
+  <button class="wctl" id="btn-close" style="color:var(--love)" onclick="_diagCloseClick()">×</button>
 </div>
 
 <!-- ═══════════════════ TOOLBAR ═══════════════════ -->
@@ -2054,6 +2057,19 @@ function toggleCompact() {
   }
 }
 function toggleMaximize() { if(backend) backend.toggle_maximize(); }
+// TEMP DIAGNOSTIC — remove once the close-button bug is confirmed fixed.
+// Logs reach Python via _LoggedPage (console -> mflow.log) with no extra setup.
+function _diagCloseClick() {
+  console.log('[Close-JS] click fired. backend='+(typeof backend)+' has_close_window='+!!(backend&&backend.close_window));
+  if (!backend) { console.log('[Close-JS] ABORT: backend is undefined at click time'); return; }
+  if (!backend.close_window) { console.log('[Close-JS] ABORT: backend.close_window is missing'); return; }
+  try {
+    backend.close_window();
+    console.log('[Close-JS] backend.close_window() call returned normally');
+  } catch (e) {
+    console.log('[Close-JS] backend.close_window() THREW: '+e);
+  }
+}
 function setPreviewShape(s) { _pvShape = s; }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2975,6 +2991,14 @@ function renderPresets(p) {
   const g = $('preset-grid'); g.innerHTML='';
   const _prevSel=selIdx; selIdx=-1;
   _gridResizeObs.disconnect(); _gridResizeObs.observe(g);
+  if (!allPresets.length) {
+    const empty = document.createElement('div');
+    empty.className = 'preset-empty';
+    empty.innerHTML = '<div class="pe-title">No presets yet</div><div>Save one from the canvas to see it here</div>';
+    g.appendChild(empty);
+    _syncDeleteBtn();
+    return;
+  }
   const frag=document.createDocumentFragment();
   allPresets.forEach((pr,i) => frag.appendChild(makeCard(pr,i)));
   g.appendChild(frag);
