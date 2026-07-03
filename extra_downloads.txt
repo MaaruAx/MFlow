@@ -1,0 +1,8 @@
+# Manual download count used to account for downloads that the
+# Codeberg/GitHub release APIs can't track automatically -- for example,
+# downloads of the auto-generated source code archives (zip/tar.gz),
+# or downloads from other sites/mirrors distributing MFlow.
+#
+# Edit the number below by hand whenever you want to update it.
+# Everything above this line is a comment and is ignored by the script.
+93

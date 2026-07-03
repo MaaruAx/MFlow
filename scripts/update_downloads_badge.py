@@ -14,6 +14,19 @@ that field across every asset of every release on both platforms and
 writes the combined total to a JSON file in the schema Shields.io's
 "endpoint" badge expects:
   https://shields.io/badges/endpoint-badge
+
+Codeberg/GitHub's APIs never expose a download counter for the
+auto-generated "Source Code (zip)" / "Source Code (tar.gz)" links on
+a release, because those archives are generated on the fly and never
+stored or tracked server-side. Downloads from other sites/mirrors
+(e.g. itch.io, third-party mirrors, direct source archive downloads)
+aren't tracked by either API either. To account for these anyway,
+this script also reads an optional plain-text file (EXTRA_DOWNLOADS_PATH)
+and adds a manually-entered integer to the total. Lines starting with
+"#" are treated as comments and ignored; the first non-comment,
+non-blank line must contain the integer. Edit that file by hand
+whenever you want to update the manual count; leave the number at 0
+(or delete the file) if you don't want to add anything.
 """
 
 import json
@@ -31,6 +44,14 @@ OUTPUT_PATH = "downloads.json"
 BADGE_LABEL = "Downloads"
 BADGE_COLOR = "c4a7e7"
 CACHE_SECONDS = 21600  # 6 hours, matches the workflow schedule
+
+# Plain-text file with an optional comment header (lines starting with
+# "#") followed by a single integer: manually-tracked downloads that
+# the Codeberg/GitHub APIs can't report (source code zip/tar.gz
+# downloads, or downloads from other sites/mirrors). Edit the number
+# by hand whenever you want to update it. Missing file or invalid
+# content is treated as 0, never a hard failure.
+EXTRA_DOWNLOADS_PATH = "extra_downloads.txt"
 
 
 def fetch_all_pages(url, params, headers, page_size_key):
@@ -79,6 +100,51 @@ def fetch_github_total():
     return sum_downloads(releases)
 
 
+def read_extra_downloads():
+    """Read the manually-tracked extra download count from
+    EXTRA_DOWNLOADS_PATH. Lines starting with '#' and blank lines are
+    skipped; the first remaining line must be the integer. Returns 0
+    if the file is missing, has no such line, or the line isn't a
+    valid non-negative integer -- this is always a soft failure, since
+    it's a manual/optional number."""
+    try:
+        with open(EXTRA_DOWNLOADS_PATH, "r", encoding="utf-8") as extra_file:
+            lines = extra_file.readlines()
+    except FileNotFoundError:
+        return 0
+
+    raw_value = None
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        raw_value = stripped
+        break
+
+    if raw_value is None:
+        return 0
+
+    try:
+        value = int(raw_value)
+    except ValueError:
+        print(
+            f"Warning: {EXTRA_DOWNLOADS_PATH} contains '{raw_value}', "
+            "which isn't a valid integer. Ignoring it (treated as 0).",
+            file=sys.stderr,
+        )
+        return 0
+
+    if value < 0:
+        print(
+            f"Warning: {EXTRA_DOWNLOADS_PATH} contains a negative number "
+            f"({value}). Ignoring it (treated as 0).",
+            file=sys.stderr,
+        )
+        return 0
+
+    return value
+
+
 def format_count(count):
     """Format large numbers the way most download badges do, e.g. 12.3k."""
     if count < 1000:
@@ -98,7 +164,8 @@ def main():
         print(f"Error fetching download stats: {error}", file=sys.stderr)
         sys.exit(1)
 
-    total = codeberg_total + github_total
+    extra_total = read_extra_downloads()
+    total = codeberg_total + github_total + extra_total
 
     badge_data = {
         "schemaVersion": 1,
@@ -114,6 +181,7 @@ def main():
 
     print(f"Codeberg downloads: {codeberg_total}")
     print(f"GitHub downloads:   {github_total}")
+    print(f"Manual/extra:       {extra_total}")
     print(f"Combined total:     {total}")
     print(f"Wrote {OUTPUT_PATH}")
 
