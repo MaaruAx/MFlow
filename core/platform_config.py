@@ -68,6 +68,11 @@ def app_data_dir() -> str:
 
 def settings_file()       -> str: return os.path.join(app_data_dir(), "settings.json")
 def profiles_state_file() -> str: return os.path.join(app_data_dir(), "profiles.json")
+def profiles_index_file() -> str: return os.path.join(app_data_dir(), "profiles.json")
+def profiles_dir()        -> str:
+    p = os.path.join(app_data_dir(), "profiles")
+    os.makedirs(p, exist_ok=True)
+    return p
 def themes_dir()          -> str:
     p = os.path.join(app_data_dir(), "themes")
     os.makedirs(p, exist_ok=True)
