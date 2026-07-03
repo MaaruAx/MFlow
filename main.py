@@ -144,18 +144,65 @@ class _GlobalHotkeyFilter(QAbstractNativeEventFilter):
 
 
 class MFlowWindow(QMainWindow):
+    def _apply_native_titlebar_style(self):
+        """
+        Windows-only, purely cosmetic — makes the *native* titlebar dark to
+        match MFlow's theme, and requests a Mica backdrop where the OS
+        supports it. Fails silently everywhere else (older Windows 10, non-
+        Windows) since neither of these is required for the app to work.
+
+        Note on Mica specifically: it only shows through areas of the window
+        that AREN'T covered by opaque content. Since the QWebEngineView fills
+        the entire client area, the visible effect is limited to the thin
+        native titlebar strip itself (where the system icon/min/max/close
+        live) — it will NOT blur behind the app's own UI. That's an OS-level
+        constraint (would need DwmExtendFrameIntoClientArea + a transparent
+        margin to go further), not something worth chasing for a hidden strip.
+        """
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            hwnd = int(self.winId())
+            dwmapi = ctypes.windll.dwmapi
+            DWMWA_USE_IMMERSIVE_DARK_MODE = 20   # Win10 1809+ / Win11
+            DWMWA_SYSTEMBACKDROP_TYPE     = 38   # Win11 22H2+ only
+            DWMSBT_MAINWINDOW             = 2    # = Mica
+
+            dark = ctypes.c_int(1)
+            dwmapi.DwmSetWindowAttribute(
+                ctypes.c_void_p(hwnd), DWMWA_USE_IMMERSIVE_DARK_MODE,
+                ctypes.byref(dark), ctypes.sizeof(dark))
+
+            backdrop = ctypes.c_int(DWMSBT_MAINWINDOW)
+            dwmapi.DwmSetWindowAttribute(
+                ctypes.c_void_p(hwnd), DWMWA_SYSTEMBACKDROP_TYPE,
+                ctypes.byref(backdrop), ctypes.sizeof(backdrop))
+        except Exception as e:
+            log.debug("[Titlebar] DWM styling unavailable (older Windows?): %s", e)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        if not getattr(self, "_titlebar_styled", False):
+            self._titlebar_styled = True
+            log.info("[AOT-PY] initial showEvent — windowFlags=%s", self.windowFlags())
+            self._apply_native_titlebar_style()
+
     def __init__(self, comp=None, fusion_app=None, resolve=None):
         super().__init__()
         self.setWindowTitle("MFlow")
         self.setWindowIcon(QIcon(_resource("MFlow.ico")))
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
+        # Native OS window frame (no FramelessWindowHint): gives us back
+        # correct Snap/Aero, drop shadow, multi-monitor DPI handling, and
+        # native resize/move — all of which were fighting with QWebEngineView
+        # under a frameless window and were the main remaining flicker cause.
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, False)
         # WA_NoSystemBackground: stops the OS from painting the widget background
         # before Qt does — eliminates the white/black flash between frames on Windows.
         self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         # WA_OpaquePaintEvent: tells Qt this widget paints every pixel itself,
-        # removing the implicit background erase that causes a visible flicker on
-        # FramelessWindowHint windows during resize and focus changes.
+        # removing the implicit background erase that can cause a visible
+        # flicker on resize and focus changes.
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
         self.resize(940, 580)
         self._hotkey_filter = None   # kept alive here — installNativeEventFilter
@@ -311,6 +358,7 @@ class MFlowWindow(QMainWindow):
         if hasattr(self, '_backend') and self._backend._watcher:
             self._backend._watcher.stop()
         super().closeEvent(event)
+        log.info("[Close-PY] closeEvent finished — event.isAccepted()=%s", event.isAccepted())
 
 
 def main():
@@ -325,6 +373,16 @@ def main():
         os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS",
                               "--disable-gpu --disable-software-rasterizer")
         log.info("GPU acceleration disabled by settings")
+
+    # Windows groups unpackaged Python apps under the python.exe taskbar icon
+    # unless we give the process its own AppUserModelID — must be set before
+    # QApplication() creates the native window, or it has no effect.
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MFlow.App.2.5")
+        except Exception as e:
+            log.debug("[Taskbar] Could not set AppUserModelID: %s", e)
 
     app = QApplication(sys.argv)
     app.setApplicationName("MFlow")
