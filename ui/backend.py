@@ -8,7 +8,8 @@ from PySide6.QtWidgets import QFileDialog, QApplication
 
 from core.preset_manager  import (load_profiles, save_profiles, add_preset,
                                    delete_preset, new_profile, delete_profile,
-                                   switch_profile, load_builtin, active_presets)
+                                   switch_profile, load_builtin, active_presets,
+                                   reorder_presets as _reorder_presets_lib)
 import logging
 log = logging.getLogger("mflow")
 from core.platform_config import settings_file, themes_dir, bundled_themes_dir, language_dir, win_subprocess_kwargs
@@ -269,6 +270,7 @@ class Backend(QObject):
 
     @Slot()
     def close_window(self):
+        log.info("[Close-PY] close_window Slot invoked — calling self._win.close()")
         self._win.close()
 
     # ── Resolve connection ────────────────────────────────────────────────────
@@ -519,10 +521,13 @@ class Backend(QObject):
         flag = Qt.WindowType.WindowStaysOnTopHint
         # Main window
         flags = self._win.windowFlags()
+        log.info("[AOT-PY] set_always_on_top(%s) — flags before=%s", enabled, flags)
         if enabled: flags |= flag
         else: flags &= ~flag
         self._win.setWindowFlags(flags)
         self._win.show()
+        log.info("[AOT-PY] set_always_on_top(%s) — flags after=%s (native frame, "
+                 "no decoration hints stripped)", enabled, self._win.windowFlags())
         # All dock windows
         for dlg in getattr(self, '_dock_windows', {}).values():
             if dlg and dlg.isVisible():
@@ -1307,8 +1312,10 @@ class Backend(QObject):
         # Keeping self._mode in sync here, at the single choke point both JS and
         # internal callers go through, fixes all of those at once.
         self._mode = library
-        user = [p for p in active_presets(self._profiles)
-                if p.get("library") == library]
+        # Reads only this mode's file for the active profile — with the
+        # per-profile/per-mode storage layout, this can never pick up (or
+        # clobber, on a later save) another mode's presets.
+        user = active_presets(self._profiles, library)
         log.debug(
             "[Profile] load_library(%r): active_profile=%r, "
             "user_in_active_profile=%d, total_active_profile_entries=%d",
@@ -1318,13 +1325,41 @@ class Backend(QObject):
 
     @Slot(str)
     def save_preset(self, preset_json):
-        p = json.loads(preset_json)
+        log.info("[Preset-Save] save_preset Slot invoked — raw=%s", preset_json)
+        try:
+            p = json.loads(preset_json)
+        except Exception as e:
+            log.error("[Preset-Save] Could not parse preset JSON from JS: %s", e)
+            self.status_changed.emit(f"Save failed: bad data ({e})", "#eb6f92")
+            return
+        name = p.get("name", "")
+        lib = p.get("library", "easing")
+        active = self._profiles.get("active", "Default")
+        if not name:
+            log.warning("[Preset-Save] Preset has empty name — refusing to save. payload=%r", p)
+            self.status_changed.emit("Preset needs a name", "var(--gold)")
+            return
+        log.info("[Preset-Save] Saving name=%r library=%r into profile=%r", name, lib, active)
         self._profiles = add_preset(self._profiles, p)
-        self.load_library(p.get("library", "easing"))
+        # Verify the write actually landed on disk instead of trusting silently.
+        on_disk = active_presets(self._profiles, lib)
+        found = any(x.get("name") == name for x in on_disk)
+        log.info("[Preset-Save] Post-write verification: %d preset(s) now in %s/%s.json — "
+                 "target name present=%s", len(on_disk), active, lib, found)
+        if not found:
+            log.error("[Preset-Save] Write did NOT persist to disk — check file permissions "
+                       "for the profiles folder.")
+            self.status_changed.emit("Save failed — could not write to disk", "#eb6f92")
+        self.load_library(lib)
 
     @Slot(int)
     def delete_preset(self, idx):
+        active = self._profiles.get("active", "Default")
+        log.info("[Preset-Delete] delete_preset Slot invoked — idx=%d mode=%r profile=%r",
+                 idx, self._mode, active)
         self._profiles, ok = delete_preset(self._profiles, idx, self._mode)
+        log.info("[Preset-Delete] result ok=%s — %d preset(s) remain in %s/%s.json",
+                 ok, len(active_presets(self._profiles, self._mode)), active, self._mode)
         if not ok:
             self.status_changed.emit("Could not delete preset", "var(--gold)")
         self.load_library(self._mode)
@@ -1332,10 +1367,10 @@ class Backend(QObject):
     @Slot(str)
     def new_profile(self, name):
         before_active = self._profiles.get("active")
-        before_keys   = list(self._profiles.get("profiles", {}).keys())
+        before_keys   = list(self._profiles.get("profiles", []))
         self._profiles = new_profile(self._profiles, name.strip())
         after_active = self._profiles.get("active")
-        after_keys   = list(self._profiles.get("profiles", {}).keys())
+        after_keys   = list(self._profiles.get("profiles", []))
         log.debug(
             "[Profile] new_profile(name=%r) — before: active=%r keys=%r | "
             "after: active=%r keys=%r | mode=%r",
@@ -1354,8 +1389,22 @@ class Backend(QObject):
 
     @Slot(str)
     def delete_profile(self, name):
+        before_active = self._profiles.get("active")
         self._profiles = delete_profile(self._profiles, name)
+        after_active = self._profiles.get("active")
+        log.info("[Profile] delete_profile(%r) — active: %r -> %r", name, before_active, after_active)
         self._emit_profiles()
+        # BUG FIX: this call was missing. When the deleted profile was the
+        # active one, delete_profile() correctly switches self._profiles["active"]
+        # to another profile on the Python side, but without re-fetching here
+        # the JS grid (allPresets) kept showing whatever the now-deleted
+        # profile's presets were. Those "ghost" cards looked like they
+        # belonged to the newly active profile (e.g. Default) since that's
+        # what the dropdown now shows — but their index no longer matched any
+        # real file, so trying to delete them there silently failed (idx out
+        # of range against the real, usually-empty, file). Same class of bug
+        # as the one already fixed in new_profile().
+        self.load_library(self._mode)
 
     @Slot(str)
     def switch_profile(self, name):
@@ -1364,8 +1413,8 @@ class Backend(QObject):
 
     def _emit_profiles(self):
         self.profiles_updated.emit(json.dumps({
-            "names":  list(self._profiles["profiles"].keys()),
-            "active": self._profiles["active"],
+            "names":  list(self._profiles.get("profiles", [])),
+            "active": self._profiles.get("active"),
         }))
 
     # ── Apply ─────────────────────────────────────────────────────────────────
@@ -1929,19 +1978,23 @@ class Backend(QObject):
         self._settings["python_path"] = path
         _wj(settings_file(), self._settings)
 
-    @Slot()
-
     @Slot(str)
     def reorder_presets(self, presets_json: str):
-        """Replace the active profile's preset list with the given JSON array.
-        Used by sort operations so no duplicates are created."""
+        """Replace the active profile's preset list *for the current mode
+        only* with the given JSON array (used by the sort menu so no
+        duplicates are created).
+
+        BUG FIX: this used to overwrite self._profiles["profiles"][active] —
+        which held every mode's presets mixed into one flat list — with just
+        the current mode's presets from JS. Sorting in any one tab silently
+        deleted every preset saved under every OTHER mode in that profile.
+        With per-mode storage, this call can only ever touch self._mode's
+        own file, so that data loss is no longer possible."""
         try:
             presets = json.loads(presets_json)
             if not isinstance(presets, list):
                 return
-            from core.preset_manager import save_profiles
-            self._profiles["profiles"][self._profiles["active"]] = presets
-            save_profiles(self._profiles)
+            self._profiles = _reorder_presets_lib(self._profiles, self._mode, presets)
             self.load_library(self._mode)
         except Exception as e:
             log.warning("[Preset] reorder_presets failed: %s", e)
@@ -1949,9 +2002,7 @@ class Backend(QObject):
     @Slot()
     def export_presets_dialog(self):
         """Open a Save File dialog to export user presets for the active library."""
-        from core.preset_manager import active_presets, save_profiles
-        presets = [p for p in active_presets(self._profiles)
-                   if p.get("library") == self._mode]
+        presets = active_presets(self._profiles, self._mode)
         if not presets:
             self.status_changed.emit("No user presets to export", "var(--muted)")
             return
