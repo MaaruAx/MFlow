@@ -8,8 +8,7 @@ from PySide6.QtWidgets import QFileDialog, QApplication
 
 from core.preset_manager  import (load_profiles, save_profiles, add_preset,
                                    delete_preset, new_profile, delete_profile,
-                                   switch_profile, load_builtin, load_active_presets,
-                                   reorder_presets as _reorder_presets_lib)
+                                   switch_profile, load_builtin, active_presets)
 import logging
 log = logging.getLogger("mflow")
 from core.platform_config import settings_file, themes_dir, bundled_themes_dir, language_dir, win_subprocess_kwargs
@@ -270,10 +269,7 @@ class Backend(QObject):
 
     @Slot()
     def close_window(self):
-        log.info("[Close-PY] close_window Slot invoked — win=%s visible=%s flags=%s",
-                  self._win, self._win.isVisible(), self._win.windowFlags())
         self._win.close()
-        log.info("[Close-PY] self._win.close() returned")
 
     # ── Resolve connection ────────────────────────────────────────────────────
 
@@ -521,28 +517,16 @@ class Backend(QObject):
     def set_always_on_top(self, enabled: bool):
         from PySide6.QtCore import Qt
         flag = Qt.WindowType.WindowStaysOnTopHint
-        # Standard decoration flags that must always be present, regardless of
-        # what windowFlags() currently reports — re-applying just the raw
-        # flags Qt hands back drops the OS-implicit close/min/max buttons.
-        deco = (
-            Qt.WindowType.Window |
-            Qt.WindowType.WindowCloseButtonHint |
-            Qt.WindowType.WindowMinimizeButtonHint |
-            Qt.WindowType.WindowMaximizeButtonHint
-        )
         # Main window
-        before = self._win.windowFlags()
-        flags = before | deco
+        flags = self._win.windowFlags()
         if enabled: flags |= flag
         else: flags &= ~flag
-        log.info("[AOT-PY] set_always_on_top(%s) — before=%s requested=%s", enabled, before, flags)
         self._win.setWindowFlags(flags)
         self._win.show()
-        log.info("[AOT-PY] after setWindowFlags+show — actual=%s", self._win.windowFlags())
         # All dock windows
         for dlg in getattr(self, '_dock_windows', {}).values():
             if dlg and dlg.isVisible():
-                f = dlg.windowFlags() | deco
+                f = dlg.windowFlags()
                 if enabled: f |= flag
                 else: f &= ~flag
                 dlg.setWindowFlags(f)
@@ -1314,28 +1298,59 @@ class Backend(QObject):
 
     @Slot(str)
     def load_library(self, library):
-        user = load_active_presets(self._profiles, library)
+        # ROOT FIX: self._mode used to only change on startup/settings-restore,
+        # never when the user switched tabs in the UI (JS calls load_library()
+        # directly with the new library, bypassing self._mode entirely). Every
+        # internal self.load_library(self._mode) call (new_profile, switch_profile,
+        # delete_preset) was therefore often refreshing the WRONG library — whatever
+        # tab was active at startup, not whatever the user was actually looking at.
+        # Keeping self._mode in sync here, at the single choke point both JS and
+        # internal callers go through, fixes all of those at once.
+        self._mode = library
+        user = [p for p in active_presets(self._profiles)
+                if p.get("library") == library]
+        log.debug(
+            "[Profile] load_library(%r): active_profile=%r, "
+            "user_in_active_profile=%d, total_active_profile_entries=%d",
+            library, self._profiles.get("active"), len(user),
+            len(active_presets(self._profiles)))
         self.presets_updated.emit(json.dumps(user))
 
     @Slot(str)
     def save_preset(self, preset_json):
         p = json.loads(preset_json)
-        self._profiles, ok = add_preset(self._profiles, p)
-        if not ok:
-            self.status_changed.emit("Failed to save preset — check log", "#eb6f92")
+        self._profiles = add_preset(self._profiles, p)
         self.load_library(p.get("library", "easing"))
 
     @Slot(int)
     def delete_preset(self, idx):
         self._profiles, ok = delete_preset(self._profiles, idx, self._mode)
         if not ok:
-            log.warning("[Preset] delete_preset failed idx=%s mode=%s", idx, self._mode)
+            self.status_changed.emit("Could not delete preset", "var(--gold)")
         self.load_library(self._mode)
 
     @Slot(str)
     def new_profile(self, name):
+        before_active = self._profiles.get("active")
+        before_keys   = list(self._profiles.get("profiles", {}).keys())
         self._profiles = new_profile(self._profiles, name.strip())
+        after_active = self._profiles.get("active")
+        after_keys   = list(self._profiles.get("profiles", {}).keys())
+        log.debug(
+            "[Profile] new_profile(name=%r) — before: active=%r keys=%r | "
+            "after: active=%r keys=%r | mode=%r",
+            name, before_active, before_keys, after_active, after_keys, self._mode)
+        if after_active == before_active and after_keys == before_keys:
+            log.warning(
+                "[Profile] new_profile(%r) did NOT change state — name empty, "
+                "already existed, or collided after strip()", name)
         self._emit_profiles()
+        # BUG FIX: this was missing — new_profile() correctly creates an empty
+        # list and makes it active on the Python side, but without this call
+        # the preset grid in JS never re-fetches, so it kept showing whatever
+        # library was last loaded (e.g. Default's presets) even though the
+        # new profile really was empty underneath.
+        self.load_library(self._mode)
 
     @Slot(str)
     def delete_profile(self, name):
@@ -1349,7 +1364,7 @@ class Backend(QObject):
 
     def _emit_profiles(self):
         self.profiles_updated.emit(json.dumps({
-            "names":  list(self._profiles["profiles"]),
+            "names":  list(self._profiles["profiles"].keys()),
             "active": self._profiles["active"],
         }))
 
@@ -1918,16 +1933,15 @@ class Backend(QObject):
 
     @Slot(str)
     def reorder_presets(self, presets_json: str):
-        """Replace the SAVED order of the active profile's CURRENT-MODE preset
-        list only. Used by sort operations so no duplicates are created.
-        Scoped to self._mode's own file — cannot touch other modes' presets."""
+        """Replace the active profile's preset list with the given JSON array.
+        Used by sort operations so no duplicates are created."""
         try:
             presets = json.loads(presets_json)
             if not isinstance(presets, list):
                 return
-            self._profiles, ok = _reorder_presets_lib(self._profiles, self._mode, presets)
-            if not ok:
-                log.error("[Preset] reorder_presets: save failed mode=%s", self._mode)
+            from core.preset_manager import save_profiles
+            self._profiles["profiles"][self._profiles["active"]] = presets
+            save_profiles(self._profiles)
             self.load_library(self._mode)
         except Exception as e:
             log.warning("[Preset] reorder_presets failed: %s", e)
@@ -1935,7 +1949,9 @@ class Backend(QObject):
     @Slot()
     def export_presets_dialog(self):
         """Open a Save File dialog to export user presets for the active library."""
-        presets = load_active_presets(self._profiles, self._mode)
+        from core.preset_manager import active_presets, save_profiles
+        presets = [p for p in active_presets(self._profiles)
+                   if p.get("library") == self._mode]
         if not presets:
             self.status_changed.emit("No user presets to export", "var(--muted)")
             return
@@ -1962,17 +1978,11 @@ class Backend(QObject):
             if not isinstance(data, list):
                 self.status_changed.emit("Invalid preset file", "#eb6f92")
                 return
-            imported, failed = 0, 0
             for p in data:
                 if isinstance(p, dict) and p.get("name"):
-                    self._profiles, ok = add_preset(self._profiles, p)
-                    imported += 1 if ok else 0
-                    failed += 0 if ok else 1
+                    self._profiles = add_preset(self._profiles, p)
             self.load_library(self._mode)
-            if failed:
-                self.status_changed.emit(f"Imported {imported} preset(s), {failed} failed — check log", "#eb6f92")
-            else:
-                self.status_changed.emit(f"Imported {imported} preset(s)", "#9ccfd8")
+            self.status_changed.emit(f"Imported {len(data)} preset(s)", "#9ccfd8")
         except Exception as e:
             self.status_changed.emit(f"Import failed: {e}", "#eb6f92")
 
