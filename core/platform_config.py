@@ -79,20 +79,28 @@ def themes_dir()          -> str:
     return p
 
 def bundled_themes_dir() -> str:
-    """themes/ folder inside the MFlow install directory (next to main.py)."""
-    base = os.path.dirname(sys.executable) if _FROZEN else \
+    """themes/ folder inside the MFlow install directory (next to main.py).
+    Frozen case uses sys._MEIPASS, not the exe's own folder: since
+    PyInstaller 6.0, onedir builds place bundled data inside an _internal/
+    subfolder rather than flat next to the exe, and _MEIPASS always points
+    to wherever that data actually landed (onedir's _internal, onefile's
+    temp extraction dir, or the exe's own folder in older PyInstaller)."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)) if _FROZEN else \
            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base, "themes")
 
 def language_dir() -> str:
-    """language/ folder inside the MFlow install directory (next to main.py)."""
-    base = os.path.dirname(sys.executable) if _FROZEN else \
+    """language/ folder inside the MFlow install directory (next to main.py).
+    See bundled_themes_dir() for why frozen mode uses sys._MEIPASS."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)) if _FROZEN else \
            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     p = os.path.join(base, "language")
     os.makedirs(p, exist_ok=True)
     return p
 def builtin_presets_dir() -> str:
-    base = os.path.dirname(sys.executable) if _FROZEN else \
+    """presets/ folder inside the MFlow install directory (next to main.py).
+    See bundled_themes_dir() for why frozen mode uses sys._MEIPASS."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)) if _FROZEN else \
            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(base, "presets")
 
