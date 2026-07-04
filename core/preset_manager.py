@@ -119,11 +119,22 @@ def _seed_default_from_builtins():
     so it can never overwrite anything a user already saved there. Runs
     exactly once per install (gated by the "seeded_defaults" flag in the
     index) — deleting the seeded presets afterward is a normal delete and
-    they will NOT come back on next launch."""
+    they will NOT come back on next launch.
+
+    Returns True if the builtin presets directory was found (i.e. seeding
+    genuinely had a chance to happen — including the edge case where it's
+    empty on purpose), and False if it wasn't found at all. Callers should
+    only persist the "seeded_defaults" flag on True: a False here almost
+    always means an incomplete/broken install (the presets/ folder never
+    got bundled or copied), and retrying on the next launch — once the
+    install is fixed — is far better than silently never seeding again
+    because a broken run happened to set the flag first."""
     try:
         bdir = builtin_presets_dir()
         if not os.path.isdir(bdir):
-            return
+            log.warning("[Preset] Builtin presets dir not found at %s — "
+                        "skipping seed, will retry on next launch", bdir)
+            return False
         for fname in os.listdir(bdir):
             if not fname.endswith(".json"):
                 continue
@@ -136,8 +147,10 @@ def _seed_default_from_builtins():
                 _wj(dest, data)
                 log.info("[Preset] Seeded Default/%s.json with %d factory preset(s)",
                           mode, len(data))
+        return True
     except Exception as e:
         log.warning("[Preset] Seeding Default from builtins failed: %s", e)
+        return False
 
 
 def load_profiles():
@@ -151,23 +164,23 @@ def load_profiles():
         for name in d["profiles"]:
             _profile_dir(name)
         if not d.get("seeded_defaults"):
-            _seed_default_from_builtins()
-            d["seeded_defaults"] = True
-            save_index(d)
+            if _seed_default_from_builtins():
+                d["seeded_defaults"] = True
+                save_index(d)
         return d
 
     if isinstance(d, dict) and isinstance(d.get("profiles"), dict):
         migrated = _migrate_legacy(idx_path, d)
         if not migrated.get("seeded_defaults"):
-            _seed_default_from_builtins()
-            migrated["seeded_defaults"] = True
-            save_index(migrated)
+            if _seed_default_from_builtins():
+                migrated["seeded_defaults"] = True
+                save_index(migrated)
         return migrated
 
     fresh = copy.deepcopy(_EMPTY_INDEX)
     _profile_dir("Default")
-    _seed_default_from_builtins()
-    fresh["seeded_defaults"] = True
+    if _seed_default_from_builtins():
+        fresh["seeded_defaults"] = True
     _wj(idx_path, fresh)
     return fresh
 
