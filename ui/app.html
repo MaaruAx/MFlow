@@ -2743,10 +2743,15 @@ function _processDrag(px, py, shiftKey) {
 function onHover(e) { if(dragging)return; const[px,py]=getXY(e); canvas.style.cursor=hitTest(px,py)?'grab':'crosshair'; }
 function onDown(e)  {
   if (e.button!==0) return; const[px,py]=getXY(e); dragging=hitTest(px,py);
-  if (dragging) { canvas.style.cursor='grabbing'; document.addEventListener('mousemove',_onDragGlobal); document.addEventListener('mouseup',_onDragUp); }
+  if (dragging) { canvas.style.cursor='grabbing'; document.addEventListener('mousemove',_onDragGlobal); document.addEventListener('mouseup',_onDragUp); if(backend&&backend.set_interacting){try{backend.set_interacting(true);}catch(e){}} }
 }
 function _onDragGlobal(e) { if(!dragging)return; const r=canvas.getBoundingClientRect(); _processDrag(e.clientX-r.left, e.clientY-r.top, e.shiftKey); }
-function _onDragUp()      { document.removeEventListener('mousemove',_onDragGlobal); document.removeEventListener('mouseup',_onDragUp); dragging=null; canvas.style.cursor='crosshair'; }
+function _onDragUp()      { document.removeEventListener('mousemove',_onDragGlobal); document.removeEventListener('mouseup',_onDragUp); dragging=null; canvas.style.cursor='crosshair'; if(backend&&backend.set_interacting){try{backend.set_interacting(false);}catch(e){}} }
+// Safety net: if the OS window loses focus mid-drag (e.g. alt-tab), the
+// mouseup that normally clears `dragging` may never fire in this document.
+// Without this, polling would stay paused until Python's own 5s timeout
+// safety net kicks in — this recovers immediately instead.
+window.addEventListener('blur', () => { if (dragging) _onDragUp(); });
 function onWheel(e) {
   if (!overshoot) return;
   viewZoom=Math.max(0.3,Math.min(3.0, viewZoom+(e.deltaY>0?.1:-.1)));

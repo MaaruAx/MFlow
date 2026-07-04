@@ -334,6 +334,22 @@ class ResolveWatcher(QObject):
         self._poll_fail_count = 0           # consecutive poll failures
         self._comp_fp = self._quick_fp(comp)  # fingerprint for comp-change detection
 
+        # Set true while the user is actively dragging something in the
+        # canvas (curve handles, physics parameter draggers). _poll() skips
+        # its body entirely while this is set — see set_interacting() below
+        # for why this matters: a single ActiveTool property read routinely
+        # costs 150-240ms of IPC round-trip on the main thread (confirmed
+        # via [PERF] logging), and if that lands mid-drag it visibly stutters
+        # the exact interaction the user is in the middle of.
+        self._interacting = False
+        # Safety net: if a mouseup is ever missed (e.g. the OS window loses
+        # focus mid-drag and the browser-side mouseup never fires), this
+        # guarantees polling resumes anyway instead of silently staying
+        # paused forever.
+        self._interacting_timeout = QTimer(self)
+        self._interacting_timeout.setSingleShot(True)
+        self._interacting_timeout.timeout.connect(self._force_clear_interacting)
+
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
 
@@ -494,7 +510,26 @@ class ResolveWatcher(QObject):
 
     POLL_MS = 500  # slower poll reduces CPU
 
+    def set_interacting(self, active: bool):
+        """Called from Backend.set_interacting() (wired to JS drag start/end).
+        While active, _poll() returns immediately without touching the
+        Fusion API at all — no IPC calls means no chance of the ~150-240ms
+        ActiveTool round-trip landing in the middle of a drag gesture."""
+        self._interacting = bool(active)
+        if self._interacting:
+            self._interacting_timeout.start(5000)  # safety net — see __init__ comment
+        else:
+            self._interacting_timeout.stop()
+
+    def _force_clear_interacting(self):
+        if self._interacting:
+            logging.getLogger("mflow").debug(
+                "[Watcher] interacting flag force-cleared after timeout (missed mouseup?)")
+            self._interacting = False
+
     def _poll(self):
+        if self._interacting:
+            return
         _t0 = time.perf_counter()
         _t_active = _t_undo = _t_scan = None
         if not _is_resolve_process_alive():

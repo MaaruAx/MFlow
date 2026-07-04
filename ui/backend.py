@@ -138,7 +138,7 @@ class Backend(QObject):
         # Wire internal cross-thread signals to their public counterparts.
         # AutoConnection → QueuedConnection when emitted from a thread-pool worker,
         # guaranteeing delivery on the Qt main thread without a QMutex.
-        self._conn_changed_sig.connect(self.connection_changed)
+        self._conn_changed_sig.connect(self._on_worker_conn_failed)
         self._scan_done_sig.connect(self._deliver_scan_result)
 
         # Start watcher if we already have a comp
@@ -372,10 +372,23 @@ class Backend(QObject):
                 except Exception as exc:
                     log.error("[Connect] Exception: %s", exc, exc_info=True)
                     _self._conn_changed_sig.emit(False, f"Connect error: {exc}")
-                finally:
-                    # Always clear the guard, regardless of outcome, so a future
-                    # attempt (manual click or auto-retry) is never permanently blocked.
-                    _self._reconnecting = False
+                # NOTE: _reconnecting is deliberately NOT cleared here anymore.
+                # BUG FIX: it used to be cleared in a `finally` right here, but
+                # _apply_comp_sig.emit()/_conn_changed_sig.emit() only QUEUE
+                # the result onto the main thread — they return immediately,
+                # they don't wait for it to be processed. Clearing the guard
+                # here meant there was a real window (confirmed via [PERF]
+                # logs: a background attempt taking close to the auto-retry
+                # timer's own 15s interval) where _reconnecting had already
+                # gone back to False, but the main thread hadn't applied the
+                # result yet — so the 15s timer's next tick saw "not
+                # reconnecting, no comp yet" and fired a SECOND, fully
+                # redundant connect attempt (duplicate Fusion connection,
+                # duplicate watcher, duplicate comp scan — all visible
+                # doubled up in the log). The guard is now cleared on the
+                # main thread instead, in _apply_new_comp() and
+                # _on_worker_conn_failed() below, after the result has
+                # actually been applied — closing that window completely.
 
         QThreadPool.globalInstance().start(_ConnectWorker())
 
@@ -384,19 +397,34 @@ class Backend(QObject):
         self.pythons_scanned.emit(result)
 
     def _apply_new_comp(self, comp):
-        """Called on the Qt main thread after a background reconnect succeeds."""
-        if comp:
-            # Stop the retry timer FIRST — before set_comp → _announce_connection
-            # has a chance to call _ensure_auto_reconnect again.
-            self._stop_auto_reconnect()
-            log.info("[Connect] Applying comp to watcher")
-            self.set_comp(comp)
-        else:
-            log.warning("[Connect] No comp available — Fusion page may not be active")
-            self.connection_changed.emit(
-                False,
-                "Resolve found but no active Fusion comp \u2014 "
-                "open a composition or switch to the Fusion page")
+        """Called on the Qt main thread after a background reconnect succeeds
+        (resolve was obtained; comp may or may not be present)."""
+        try:
+            if comp:
+                # Stop the retry timer FIRST — before set_comp → _announce_connection
+                # has a chance to call _ensure_auto_reconnect again.
+                self._stop_auto_reconnect()
+                log.info("[Connect] Applying comp to watcher")
+                self.set_comp(comp)
+            else:
+                log.warning("[Connect] No comp available — Fusion page may not be active")
+                self.connection_changed.emit(
+                    False,
+                    "Resolve found but no active Fusion comp \u2014 "
+                    "open a composition or switch to the Fusion page")
+        finally:
+            # See the long comment in reconnect()'s worker for why this is
+            # cleared HERE (main thread, after the result is fully applied)
+            # rather than in the worker's own finally block.
+            self._reconnecting = False
+
+    def _on_worker_conn_failed(self, ok: bool, msg: str):
+        """Main-thread landing point for _conn_changed_sig — the failure/
+        exception path out of reconnect()'s background worker. See the long
+        comment in that worker for why _reconnecting is cleared here instead
+        of in the worker thread itself."""
+        self._reconnecting = False
+        self.connection_changed.emit(ok, msg)
 
     # ── Background auto-reconnect ────────────────────────────────────────────
     # Covers two cases the one-shot startup connect (main.py) can't handle:
@@ -518,6 +546,16 @@ class Backend(QObject):
             self._win.windowHandle().startSystemResize(edges)
         except Exception:
             pass
+
+    @Slot(bool)
+    def set_interacting(self, active: bool):
+        """Wired to JS drag start/end (curve handles, physics parameter
+        draggers). Pauses the comp watcher's polling while the user is
+        actively dragging, so the ~150-240ms ActiveTool IPC round-trip
+        (confirmed via [PERF] logging) can never land mid-gesture and
+        stutter the interaction. Safe no-op if there's no watcher yet."""
+        if self._watcher:
+            self._watcher.set_interacting(active)
 
     @Slot(bool)
     def set_always_on_top(self, enabled: bool):
