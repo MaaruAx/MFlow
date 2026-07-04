@@ -78,6 +78,8 @@ class Backend(QObject):
 
         self._watcher  = None
         self._reconnecting = False        # guards against overlapping reconnect attempts
+        self._reconnect_queued = False    # a click arrived while busy — service it once free
+        self._reconnect_queued_path = ""
         self._auto_reconnect_timer = None  # background retry timer — None when not running
         self._profiles = load_profiles()
         self._settings = _rj(settings_file())
@@ -301,7 +303,20 @@ class Backend(QObject):
     @Slot(str)
     def reconnect(self, custom_path="", _max_attempts=3):
         if self._reconnecting:
-            log.debug("[Connect] Reconnect already in progress — skipping duplicate call")
+            # BUG FIX: this used to just `return` here — completely silent.
+            # JS's doReconnect() already optimistically shows "Connecting…"
+            # and disables the button BEFORE calling this Slot, so if an
+            # unrelated attempt (e.g. a stale auto-retry that started before
+            # Resolve was even open) happened to already be in flight, this
+            # click was dropped with zero feedback — the button could stay
+            # stuck on "Connecting…" until that unrelated attempt eventually
+            # resolved on its own, with no guarantee of when or whether it
+            # would. Queuing this request instead guarantees it always gets
+            # serviced: as soon as the in-flight attempt finishes, exactly
+            # one more attempt fires automatically using this call's args.
+            log.debug("[Connect] Reconnect already in progress — queuing this request instead of dropping it")
+            self._reconnect_queued_path = custom_path
+            self._reconnect_queued = True
             return
         self._reconnecting = True
         # Emit immediately so the UI shows "Connecting…" right away
@@ -396,6 +411,20 @@ class Backend(QObject):
         """Called on the Qt main thread by _scan_done_sig — safe to emit pythons_scanned."""
         self.pythons_scanned.emit(result)
 
+    def _service_queued_reconnect(self):
+        """If a manual reconnect click arrived while a previous attempt was
+        still in flight, it was queued instead of dropped — this fires it
+        now that the guard is free. Deliberately re-enters via a queued
+        QTimer.singleShot(0, ...) rather than calling self.reconnect()
+        directly, so this always runs as a fresh top-level call on the next
+        event-loop iteration instead of nesting inside whichever signal
+        handler just finished."""
+        if self._reconnect_queued:
+            self._reconnect_queued = False
+            path = self._reconnect_queued_path
+            log.debug("[Connect] Servicing queued reconnect request")
+            QTimer.singleShot(0, lambda: self.reconnect(path))
+
     def _apply_new_comp(self, comp):
         """Called on the Qt main thread after a background reconnect succeeds
         (resolve was obtained; comp may or may not be present)."""
@@ -417,6 +446,7 @@ class Backend(QObject):
             # cleared HERE (main thread, after the result is fully applied)
             # rather than in the worker's own finally block.
             self._reconnecting = False
+            self._service_queued_reconnect()
 
     def _on_worker_conn_failed(self, ok: bool, msg: str):
         """Main-thread landing point for _conn_changed_sig — the failure/
@@ -425,6 +455,7 @@ class Backend(QObject):
         of in the worker thread itself."""
         self._reconnecting = False
         self.connection_changed.emit(ok, msg)
+        self._service_queued_reconnect()
 
     # ── Background auto-reconnect ────────────────────────────────────────────
     # Covers two cases the one-shot startup connect (main.py) can't handle:
