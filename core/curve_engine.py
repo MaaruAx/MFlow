@@ -102,6 +102,120 @@ _BAKE_FNS = {
 
 # ── Frame baking ──────────────────────────────────────────────────────────────
 
+def derive_squash_stretch(baked_frames, intensity: float = 1.0,
+                           min_scale: float = 0.15, max_scale: float = 4.0):
+    """
+    Derives a pair of complementary "squash & stretch" scale-factor curves
+    from an already-baked primary motion curve — the classic animation
+    principle where a moving object stretches along its direction of
+    travel and squashes perpendicular to it, in proportion to how fast
+    it's currently moving. Settles back to neutral 1.0 (no distortion)
+    wherever the primary motion is momentarily at rest — that's what makes
+    it read as motivated by the motion rather than an arbitrary wobble
+    layered on top.
+
+    Deliberately mode-agnostic: this only ever looks at the BAKED VALUES,
+    never at which curve type produced them (bounce, spring, elastic, or a
+    plain ease all work identically) — no per-mode special-casing, no
+    "impact detection" logic. For a bounce, velocity naturally peaks right
+    around each ground contact and crosses zero at each apex, so the
+    squash/stretch lands exactly where you'd expect without being told
+    where the "impacts" are. For a plain ease-in-out, velocity peaks at
+    the midpoint and eases to zero at both ends, giving a subtle
+    stretch-then-settle — which is exactly why this works even for
+    "cualquier modo, incluso easing simple".
+
+    Parameters
+    ----------
+    baked_frames : list[(frame, value)]
+        The already-baked primary curve, exactly as returned by any
+        bake_*() function or bake_fn(). Frames need not be evenly spaced
+        (some bake_* functions oversample near sharp corners) — velocity
+        is computed against the actual local frame spacing, not an
+        assumed constant step.
+    intensity : float
+        0   = no effect at all (both factors stay at 1.0 everywhere).
+        1.0 = a full unit of stretch/squash at peak velocity — roughly the
+              magnitude of the 1.5 / 0.667 reference example this was
+              designed around.
+        Above 1 exaggerates further (cartoon-style). This is deliberately
+        left as a tunable creative dial rather than a fixed formula, since
+        "looks natural" is a per-shot judgment call that needs the person
+        actually looking at the result in Resolve, not something a single
+        constant can guarantee up front.
+    min_scale / max_scale : float
+        Hard safety clamps so an extreme intensity value, or a noisy/spiky
+        primary curve, can never invert a shape (scale <= 0) or blow up to
+        a degenerate size. Generous defaults — tune per taste via the UI.
+
+    Returns
+    -------
+    (stretch_frames, squash_frames) — two [(frame, value)] lists at the
+    same frame positions as the input, in exactly the shape apply_baked()
+    expects. Hand stretch_frames to whichever spline is along the primary
+    motion's own axis, and squash_frames to the perpendicular one (or vice
+    versa, whichever reads correctly for the specific setup) — both are
+    already safe to write independently since they're just plain
+    frame/value pairs like any other baked curve.
+    """
+    n = len(baked_frames)
+    if n < 2:
+        flat = [(f, 1.0) for f, _ in baked_frames]
+        return flat, list(flat)
+
+    frames = [f for f, _v in baked_frames]
+    values = [v for _f, v in baked_frames]
+
+    # Central-difference velocity (one-sided at the two edges), in
+    # value-per-frame. Dividing by the LOCAL frame delta (rather than
+    # assuming a fixed step) keeps this correct even where a bake_*
+    # function oversamples near sharp corners with smaller steps.
+    velocity = [0.0] * n
+    for i in range(n):
+        if i == 0:
+            df = frames[i + 1] - frames[i]
+            velocity[i] = (values[i + 1] - values[i]) / df if df else 0.0
+        elif i == n - 1:
+            df = frames[i] - frames[i - 1]
+            velocity[i] = (values[i] - values[i - 1]) / df if df else 0.0
+        else:
+            df = frames[i + 1] - frames[i - 1]
+            velocity[i] = (values[i + 1] - values[i - 1]) / df if df else 0.0
+
+    peak = max((abs(v) for v in velocity), default=0.0)
+    if peak < 1e-9:
+        # Perfectly flat curve — nothing to derive from. Stay neutral
+        # rather than divide by ~zero and manufacture noise out of nothing.
+        flat = [(f, 1.0) for f in frames]
+        return flat, list(flat)
+
+    stretch_frames = []
+    squash_frames  = []
+    for f, v in zip(frames, velocity):
+        norm    = abs(v) / peak                       # 0 at rest, 1 at peak speed
+        stretch = 1.0 + intensity * norm
+        stretch = max(min_scale, min(max_scale, stretch))
+        squash  = 1.0 / stretch                        # volume-preserving inverse
+        squash  = max(min_scale, min(max_scale, squash))
+        stretch_frames.append((f, stretch))
+        squash_frames.append((f, squash))
+
+    # Force exact endpoint alignment — same "magnetism" every bake_*
+    # function in this file already uses (see bake_oscillator, bake_bounce,
+    # etc.): regardless of what the velocity-based math produced at the
+    # very first/last sample, snap it to exactly neutral (1.0 = no
+    # distortion). This is what makes it feel natural no matter how the
+    # primary curve behaves — always cleanly at rest exactly ON the
+    # keyframe, never landing a fraction off from a numerically-imperfect
+    # velocity estimate at the boundary.
+    stretch_frames[0]  = (stretch_frames[0][0],  1.0)
+    stretch_frames[-1] = (stretch_frames[-1][0], 1.0)
+    squash_frames[0]   = (squash_frames[0][0],   1.0)
+    squash_frames[-1]  = (squash_frames[-1][0],  1.0)
+
+    return stretch_frames, squash_frames
+
+
 def bake_fn(fn_name, t0, v0, t1, v1, fps, params=None):
     """Compute [(abs_time, value), ...] for every frame using a named easing fn."""
     fn = _BAKE_FNS.get(fn_name)
