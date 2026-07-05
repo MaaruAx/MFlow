@@ -19,7 +19,92 @@ from core.curve_engine    import (apply_bezier, apply_baked, apply_steps,
                                    bake_elastic_penner, bake_elastic_out,
                                    bake_bounce, bake_catenary, bake_pulse,
                                    bake_noise, bake_resonance, OverframePoint,
-                                   _numeric_times)
+                                   _numeric_times, derive_squash_stretch,
+                                   eval_bezier)
+
+
+# ── Squash & stretch input resolution ─────────────────────────────────────────
+# Detection is by INPUT SIGNATURE (which input IDs the tool actually has),
+# not by tool.ID — we never actually confirmed what .ID reports for either
+# tool below, and signature-based detection is strictly more robust anyway:
+# it works even if the same visible "Transform" name maps to different
+# internal IDs across Resolve versions, since it only cares about the
+# inputs that actually matter for this feature.
+#
+# Both mappings below were built from REAL GetInputList() dumps against
+# live tools, not guessed:
+#
+# 1. ResolveFX "Transform" (OFX-based, dragged from Filters, not Fusion's
+#    native tool): scaleX/scaleY ("Ancho"/"Altura") are already independent
+#    — no lock checkbox exists on this tool at all.
+#
+# 2. Fusion's native "Transform" tool: has UseSizeAndAspect ("Usar tamaño y
+#    aspecto"), which when True locks size editing to Size+Aspect and makes
+#    XSize/YSize read-only derived values; setting it False is what makes
+#    XSize/YSize ("Tamaño (X)"/"Tamaño (Y)") independently keyframeable.
+#    IMPORTANT: this tool ALSO has inputs literally called Width/Height
+#    ("Anchura"/"Altura") — but those are sub-fields of ReferenceSize (the
+#    canvas resolution the Size percentage is relative to), NOT animatable
+#    object scale. They are deliberately NOT used here, and Width/Height is
+#    deliberately excluded from the generic fallback below too, precisely
+#    because this tool proves that pairing can silently mean the wrong
+#    thing on a real, common tool.
+def _find_squash_stretch_inputs_by_signature(by_id):
+    """by_id is the set of INPS_ID strings present on the tool. Returns
+    (width_id, height_id, lock_id_or_None) for the first matching known
+    signature, or None if nothing matches."""
+    if {"UseSizeAndAspect", "XSize", "YSize"} <= by_id:
+        return ("XSize", "YSize", "UseSizeAndAspect")
+    if {"scaleX", "scaleY"} <= by_id:
+        return ("scaleX", "scaleY", None)
+    # Lower-confidence generic fallbacks for tools not yet confirmed —
+    # deliberately NOT including bare "Width"/"Height": confirmed above to
+    # be a false friend (reference-size fields, not animatable scale) on at
+    # least one common real tool, so it's excluded rather than risk quietly
+    # writing keyframes to the wrong input on some future tool shaped the
+    # same way.
+    for w, h in (("SizeX", "SizeY"), ("Size.X", "Size.Y")):
+        if w in by_id and h in by_id:
+            lock = None
+            for lock_candidate in ("LockAspect", "LockXY", "UseFrameFit"):
+                if lock_candidate in by_id:
+                    lock = lock_candidate
+                    break
+            return (w, h, lock)
+    return None
+
+
+def _resolve_squash_stretch_inputs(tool):
+    """Given a live Fusion tool object, returns (width_id, height_id, lock_id)
+    describing which two inputs squash & stretch should write keyframes to,
+    and — if applicable — which boolean input must be unlocked first.
+    lock_id is None when the tool has no such lock and can be written to
+    directly (confirmed true for the ResolveFX Transform).
+
+    Returns None if this tool isn't recognized by any known signature —
+    callers must treat that as "squash & stretch isn't available for this
+    tool" and say so clearly in the UI, never guess further."""
+    try:
+        inputs = tool.GetInputList()
+        by_id = set()
+        for inp in inputs.values():
+            attrs = inp.GetAttrs()
+            inp_id = attrs.get("INPS_ID", "")
+            if inp_id:
+                by_id.add(inp_id)
+    except Exception as e:
+        log.debug("[SquashStretch] Could not read input list: %s", e)
+        return None
+
+    match = _find_squash_stretch_inputs_by_signature(by_id)
+    if match is None:
+        try:
+            tool_id = tool.ID
+        except Exception:
+            tool_id = "?"
+        log.info("[SquashStretch] No known input signature matched for tool %r "
+                  "— squash & stretch unavailable for this tool.", tool_id)
+    return match
 
 
 def _rj(path):
@@ -132,6 +217,12 @@ class Backend(QObject):
         self._switching_comp = False   # guard against re-entrant comp switches
         self._fps      = float(self._settings.get("bake_fps", 24))
         self._bake_density = max(1, int(self._settings.get("bake_density", 1)))
+        # Squash & stretch — off by default; a button in the UI opens a
+        # small popup to enable it and set intensity per apply, rather
+        # than a persistent global switch like Auto-apply.
+        self._squash_stretch_enabled = bool(self._settings.get("squash_stretch_enabled", False))
+        self._squash_intensity = float(self._settings.get("squash_intensity", 1.0))
+        self._squash_invert = False  # swaps which axis gets stretch vs squash
         self._python_scan_cache = None  # cached result of scan_pythons()
         self._python_scan_time  = 0.0   # epoch when cache was last filled
         # Thread-safe delivery: worker threads emit this to invoke _apply_new_comp
@@ -338,7 +429,8 @@ class Backend(QObject):
             def run(self):
                 import time
                 try:
-                    from core.resolve_connection import (get_resolve_with_timeout,
+                    from core.resolve_connection import (probe_resolve_connection,
+                                                          get_resolve_with_timeout,
                                                           get_comp_with_timeout as _gc)
                     log.info("[Connect] Starting connection attempt…")
                     log.info("[Connect] Module search path: %s", cp or "(auto)")
@@ -348,6 +440,18 @@ class Backend(QObject):
                         if attempt > 0:
                             log.info("[Connect] Retry %d/%d — waiting 2s…", attempt + 1, max_att)
                             time.sleep(2)
+                        # Probe in a real separate process first — see
+                        # probe_resolve_connection's docstring for why the
+                        # thread-based timeout alone isn't sufficient (a
+                        # hang here runs on a QThreadPool worker thread, not
+                        # the main thread, but if the native call holds the
+                        # GIL while stuck, that freezes every thread in the
+                        # process including the main Qt event loop — this
+                        # was NOT just a "leak one thread pool slot" risk).
+                        if not probe_resolve_connection(cp, timeout=6.0):
+                            log.warning("[Connect] Attempt %d — probe found Resolve "
+                                        "unresponsive, skipping real attempt", attempt + 1)
+                            continue
                         resolve = get_resolve_with_timeout(cp, timeout=8.0)
                         if resolve:
                             break
@@ -1506,6 +1610,28 @@ class Backend(QObject):
     def apply_curve_all(self):
         self._do_apply(scope="selected")
 
+    @Slot(bool)
+    def set_squash_stretch_enabled(self, enabled: bool):
+        self._squash_stretch_enabled = bool(enabled)
+        log.info("[SquashStretch] %s", "enabled" if enabled else "disabled")
+
+    @Slot(float)
+    def set_squash_intensity(self, value: float):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return
+        self._squash_intensity = max(0.0, min(3.0, value))
+
+    @Slot(bool)
+    def set_squash_invert(self, inverted: bool):
+        # There's no reliable way to know from the tool's inputs alone
+        # whether "width" or "height" is actually the axis the primary
+        # motion is moving along (e.g. a vertical fall should stretch
+        # along Y and squash along X, not the other way around) — so
+        # rather than guess, this is a simple manual override.
+        self._squash_invert = bool(inverted)
+
     @Slot()
     def undo_resolve(self):
         """Forward Ctrl+Z from MFlow window to Resolve's comp undo.
@@ -1609,7 +1735,29 @@ class Backend(QObject):
                 _, sel_id = self._sel_inp
                 targets = {sel_id: all_inp[sel_id]} if sel_id in all_inp else all_inp
             else:
-                targets = all_inp
+                # BUG FIX: once Squash & Stretch writes keyframes to a
+                # tool's width/height inputs (e.g. TamañoX/TamañoY), the
+                # next scan sees them as ordinary animated inputs — so an
+                # unfiltered "apply to everything on this tool" (auto-apply,
+                # or Apply pressed again) would sweep them up too and
+                # overwrite the derived squash/stretch curve with the
+                # PRIMARY curve using THEIR OWN endpoints as anchors (which,
+                # for an oscillating curve that starts/ends near 1.0, means
+                # it collapses back toward ~1.0 — exactly the "reverts to
+                # 1.0 a second later" symptom). Excluding them here means
+                # they can only ever be written by _apply_squash_stretch
+                # itself, never by a blind sweep. Explicit single-input
+                # selection (the branch above) is intentionally NOT
+                # filtered — if the user deliberately picks that exact
+                # input, that's not a blind sweep.
+                ss_pair = _resolve_squash_stretch_inputs(tool) if self._squash_stretch_enabled else None
+                excluded = {ss_pair[0], ss_pair[1]} if ss_pair else set()
+                targets = {k: v for k, v in all_inp.items() if k not in excluded} if excluded else all_inp
+                if excluded and not targets:
+                    self.apply_done.emit(False,
+                        "Only Squash & Stretch's own inputs are animated on this tool \u2014 "
+                        "nothing else to apply to")
+                    return
             work_items.append((tool, targets))
 
         applied = 0
@@ -1618,6 +1766,8 @@ class Backend(QObject):
                           # wasn't inside any keyframe segment on that spline
         failed = 0
         tool_names = []
+        squash_stretch_msgs = []
+        squash_stretch_done_for = set()  # tool ids already handled this apply
         try:
             self._comp.StartUndo("MFlow: Apply")
             self._comp.Lock()
@@ -1666,6 +1816,14 @@ class Backend(QObject):
                             applied += 1
                         else:
                             failed += 1
+                    # Squash & stretch fires once per TOOL (not per input) —
+                    # using the first successfully-applied spline on this
+                    # tool as the reference to derive velocity from.
+                    if ok and self._squash_stretch_enabled and id(tool_obj) not in squash_stretch_done_for:
+                        squash_stretch_done_for.add(id(tool_obj))
+                        ss_ok, ss_msg = self._apply_squash_stretch(tool_obj, spline, fps)
+                        if not ss_ok and ss_msg:
+                            squash_stretch_msgs.append(ss_msg)
             self._comp.Unlock()
             self._comp.EndUndo(True)
         except Exception as e:
@@ -1675,9 +1833,10 @@ class Backend(QObject):
             return
 
         names_str = ", ".join(tool_names) if tool_names else "?"
+        ss_suffix = (" \u2014 Squash & Stretch: " + "; ".join(squash_stretch_msgs)) if squash_stretch_msgs else ""
         if applied:
             extra = f" ({no_segment} skipped — playhead outside their keyframe range)" if no_segment else ""
-            self.apply_done.emit(True, f"Applied to {applied} input(s) on: {names_str}{extra}")
+            self.apply_done.emit(True, f"Applied to {applied} input(s) on: {names_str}{extra}{ss_suffix}")
         elif no_segment > 0 and failed == 0 and no_spline == 0:
             self.apply_done.emit(False,
                 "Playhead isn't inside a keyframe segment \u2014 move it between "
@@ -1760,6 +1919,160 @@ class Backend(QObject):
             pass
 
         return None
+
+    def _bake_current_mode_frames(self, spline, fps):
+        """Mirrors _apply_one's mode branching, but RETURNS the
+        [(frame,value)] representation instead of writing it to Fusion.
+        Used only to derive squash & stretch from whatever the primary
+        curve currently is — including easing/overframe (bezier-handle)
+        modes, which don't otherwise produce a plain frame list at all,
+        by sampling eval_bezier the same way the canvas preview does."""
+        mode = self._mode
+        kf_from, kf_to = self._kf_from, self._kf_to
+
+        if mode in ("easing", "overframe"):
+            r = self._bake_range(spline, kf_from=kf_from, kf_to=kf_to)
+            if not r:
+                return None
+            t0, v0, t1, v1 = r
+            h1, h2 = self._h1, self._h2
+            n = 100
+            frames = []
+            for i in range(n + 1):
+                x = i / n
+                y = eval_bezier(x, h1, h2)
+                frame = t0 + x * (t1 - t0)
+                value = v0 + y * (v1 - v0)
+                frames.append((frame, value))
+            return frames
+
+        r = self._bake_range(spline, kf_from=kf_from, kf_to=kf_to)
+        if not r:
+            return None
+        t0, v0, t1, v1 = r
+
+        if mode == "elastic":
+            if self._el_direction == "out":
+                return bake_elastic_out(t0, v0, t1, v1, fps,
+                                        amplitude=self._el_amplitude,
+                                        period=self._el_period,
+                                        flip_to_mid=self._phys_flipped,
+                                        density=self._bake_density)
+            return bake_elastic_penner(t0, v0, t1, v1, fps,
+                                       amplitude=self._el_amplitude,
+                                       period=self._el_period,
+                                       flip_to_mid=self._phys_flipped,
+                                       density=self._bake_density)
+        if mode in ("spring", "bounce_osc"):
+            return bake_oscillator(t0, v0, t1, v1, fps,
+                                   zeta=self._phys_zeta,
+                                   omega_n=self._phys_omega_n,
+                                   density=self._bake_density)
+        if mode == "bounce":
+            return bake_bounce(t0, v0, t1, v1, fps,
+                               gamma=self._bounce_gamma,
+                               omega=self._bounce_omega,
+                               flipped=(self._bounce_dir == "floor"),
+                               density=self._bake_density)
+        if mode == "catenary":
+            return bake_catenary(t0, v0, t1, v1, fps, a=self._catenary_a,
+                                 reverse=self._catenary_reverse,
+                                 density=self._bake_density)
+        if mode == "pulse":
+            return bake_pulse(t0, v0, t1, v1, fps,
+                              omega1=self._pulse_omega1,
+                              omega2=self._pulse_omega2,
+                              n=self._pulse_n,
+                              reverse=self._pulse_reverse,
+                              density=self._bake_density)
+        if mode == "noise":
+            return bake_noise(t0, v0, t1, v1, fps,
+                              freq=self._noise_freq,
+                              amp=self._noise_amp,
+                              seed=self._noise_seed,
+                              reverse=self._noise_reverse,
+                              density=self._bake_density)
+        if mode == "resonance":
+            return bake_resonance(t0, v0, t1, v1, fps,
+                                  gamma=self._res_gamma,
+                                  omega=self._res_omega,
+                                  omega0=self._res_omega0,
+                                  reverse=self._res_reverse,
+                                  density=self._bake_density)
+        return None
+
+    def _apply_squash_stretch(self, tool, primary_spline, fps):
+        """Applies squash & stretch to `tool`'s width/height inputs,
+        derived from the SAME curve configuration as the normal apply
+        (same mode, params, and kf_from/kf_to range), using
+        primary_spline to derive velocity from.
+
+        REQUIRES both target inputs to already have at least 2 keyframes
+        set manually in Fusion first — matching what MFlow already
+        assumes everywhere else (reshape existing animation, never
+        create it from scratch). A live test against a real Transform
+        confirmed that assigning a fresh comp.BezierSpline({...}) to a
+        previously-static input doesn't reliably create a working spline
+        in this environment (only the first keyframe stuck; a second
+        attempt raised TypeError) — so that path is deliberately never
+        attempted here. If either input has no spline yet, this fails
+        with a clear, actionable message instead.
+
+        Must be called from inside the same StartUndo/Lock block as the
+        primary apply, so a single Ctrl+Z undoes everything together.
+
+        Returns (ok: bool, message: str|None) — message is set on any
+        failure, None on clean success.
+        """
+        resolved = _resolve_squash_stretch_inputs(tool)
+        if resolved is None:
+            return False, f"Squash & stretch isn't available for '{tool.Name}' (no recognized size inputs)"
+        width_id, height_id, lock_id = resolved
+
+        try:
+            by_id_obj = {}
+            for inp in tool.GetInputList().values():
+                iid = inp.GetAttrs().get("INPS_ID", "")
+                if iid:
+                    by_id_obj[iid] = inp
+        except Exception as e:
+            return False, f"Could not read '{tool.Name}'\u2019s inputs: {e}"
+
+        width_inp  = by_id_obj.get(width_id)
+        height_inp = by_id_obj.get(height_id)
+        if width_inp is None or height_inp is None:
+            return False, f"Squash & stretch inputs not found on '{tool.Name}'"
+
+        width_spline  = self._get_spline(width_inp)
+        height_spline = self._get_spline(height_inp)
+        if width_spline is None or height_spline is None:
+            missing = [i for i, s in ((width_id, width_spline), (height_id, height_spline)) if s is None]
+            return False, (f"Add at least 2 keyframes to {' and '.join(missing)} "
+                            f"on '{tool.Name}' first, then try Squash & Stretch again")
+
+        if lock_id:
+            try:
+                cur = tool.GetInput(lock_id)
+                if cur:
+                    tool.SetInput(lock_id, 0)
+                    log.info("[SquashStretch] Unlocked %s on '%s'", lock_id, tool.Name)
+            except Exception as e:
+                log.warning("[SquashStretch] Could not unlock %s on '%s': %s", lock_id, tool.Name, e)
+
+        frames = self._bake_current_mode_frames(primary_spline, fps)
+        if not frames:
+            return False, "Could not derive a curve to base squash & stretch on"
+
+        stretch_frames, squash_frames = derive_squash_stretch(frames, intensity=self._squash_intensity)
+        if self._squash_invert:
+            stretch_frames, squash_frames = squash_frames, stretch_frames
+        t_start, t_end = frames[0][0], frames[-1][0]
+
+        ok1 = apply_baked(width_spline, stretch_frames, t_start=t_start, t_end=t_end)
+        ok2 = apply_baked(height_spline, squash_frames, t_start=t_start, t_end=t_end)
+        if not (ok1 and ok2):
+            return False, f"Squash & stretch partially failed writing keyframes on '{tool.Name}'"
+        return True, None
 
     def _apply_one(self, spline, fps):
         mode = self._mode
