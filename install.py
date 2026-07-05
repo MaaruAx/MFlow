@@ -285,8 +285,18 @@ def main():
             [python_exe, "-c", "import PySide6.QtWebEngineWidgets"],
             capture_output=True, text=True, timeout=15)
         if r2 and r2.returncode != 0:
-            log("QtWebEngineWidgets not found - trying PySide6[WebEngine]", "WARN")
-            pip_install(python_exe, "PySide6[WebEngine]")
+            log("QtWebEngineWidgets not found - installing PySide6-Addons directly", "WARN")
+            # BUG FIX: "PySide6[WebEngine]" is not a real extras marker on
+            # PyPI — PySide6 doesn't define custom extras at all, so pip
+            # either warns and no-ops or just reinstalls plain PySide6 with
+            # no effect (a silent no-op wearing a success message). Qt
+            # WebEngineWidgets actually ships in the separate PySide6-Addons
+            # wheel, which the PySide6 metapackage normally pulls in
+            # automatically as a dependency — installing it directly is the
+            # real fix for when it didn't come along the first time (common
+            # on macOS when no matching Addons wheel got resolved for the
+            # exact Python version/architecture in use).
+            pip_install(python_exe, "PySide6-Addons")
     else:
         pip_install(python_exe, "PySide6")
         # Verify WebEngine - some platforms need explicit install
@@ -294,8 +304,8 @@ def main():
             [python_exe, "-c", "import PySide6.QtWebEngineWidgets"],
             capture_output=True, text=True, timeout=15)
         if r2 and r2.returncode != 0:
-            log("QtWebEngineWidgets not found - trying PySide6[WebEngine]", "WARN")
-            pip_install(python_exe, "PySide6[WebEngine]")
+            log("QtWebEngineWidgets not found - installing PySide6-Addons directly", "WARN")
+            pip_install(python_exe, "PySide6-Addons")
 
     # platformdirs: clean cross-platform path resolution
     r_pd, _ = safe(subprocess.run,
@@ -305,6 +315,28 @@ def main():
         print("    platformdirs already installed  OK")
     else:
         pip_install(python_exe, "platformdirs")
+
+    # Final verification, after all the fallbacks above — if this still
+    # fails, retrying pip again won't help; the honest answer on macOS is
+    # usually that no PySide6-Addons wheel exists for this exact Python
+    # build/architecture combo, and the fix is switching Python versions,
+    # not installing harder.
+    r_final, _ = safe(subprocess.run,
+        [python_exe, "-c", "import PySide6.QtWebEngineWidgets; print('ok')"],
+        capture_output=True, text=True, timeout=15)
+    if not (r_final and "ok" in r_final.stdout):
+        print()
+        log("PySide6's QtWebEngineWidgets still isn't importable after install attempts.", "!")
+        if PLAT == "Darwin":
+            log(f"  This Python is {ARCH} — {python_exe}", "")
+            log("  On macOS this is almost always a missing wheel for this exact", "")
+            log("  Python build + architecture combo, not a retry-able failure.", "")
+            log("  Try installing the official universal2 build from", "")
+            log("  https://www.python.org/downloads/macos/ (not Homebrew's Python,", "")
+            log("  which can mismatch your Mac's architecture) and re-run this installer.", "")
+        else:
+            log("  Try: pip install --upgrade --force-reinstall PySide6 PySide6-Addons", "")
+        print()
 
     # -- Step 3: Copy MFlow to install dir ---------------------------------
     sep()
