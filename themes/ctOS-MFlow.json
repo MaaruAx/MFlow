@@ -1,6 +1,6 @@
 {
-  "name": "ctOS",
-  "author": "",
+  "name": "ctOS-MFlow",
+  "author": "MaaruAx",
   "version": 1,
   "colors": {
     "base": "#000000",
@@ -14,13 +14,13 @@
     "hl_high": "#535151"
   },
   "mode_colors": {
-    "easing": "#edebec",
+    "easing": "#f0f0f0",
     "spring": "#f0f0f0",
     "elastic": "#f0f0f0",
     "overframe": "#f0f0f0",
     "bounce": "#f0f0f0",
     "catenary": "#f0f0f0",
-    "pulse": "#f5e0dc",
+    "pulse": "#f0f0f0",
     "noise": "#f0f0f0",
     "resonance": "#f0f0f0"
   },
@@ -29,5 +29,13 @@
     "cross": "#2d2c2c",
     "handle_fill": "#2d2c2c",
     "edge": "#2d2c2c"
-  }
+  },
+    "interface_colors": {
+      "base": "#000000",
+      "surface": "#000000",
+      "overlay": "#2d2c2c",
+      "border": "#1e1d1d",
+      "text": "#f0f0f0",
+      "muted": "#f0f0f0"
+}
 }
