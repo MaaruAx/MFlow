@@ -497,6 +497,21 @@ body.compact #version{display:none!important}
 .csel-opt{padding:5px 9px;font-size:11px;color:var(--text);cursor:pointer;white-space:nowrap}
 .csel-opt:hover{background:var(--hl-low)}
 .csel-opt.active{color:var(--accent)}
+.ss-menu{display:none;position:fixed;z-index:9999;
+  background:var(--overlay);border:1px solid var(--hl-med);border-radius:var(--r);
+  min-width:190px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,.5);
+  flex-direction:column;gap:8px}
+.ss-menu.open{display:flex}
+.ss-menu-row{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text)}
+.ss-hint{font-size:9px;color:var(--muted);line-height:1.4}
+/* Thicker than the shared .cp-sl — the default 3px track was hard to grab precisely */
+#ss-intensity{height:8px;border-radius:4px}
+#ss-intensity::-webkit-slider-thumb{width:14px;height:18px;border-radius:3px;margin-top:-5px}
+#ss-intensity::-webkit-slider-runnable-track{height:8px;border-radius:4px}
+.ss-scrub{font-size:11px;color:var(--text);width:38px;text-align:center;flex-shrink:0;
+  cursor:ew-resize;user-select:none;border:1px solid var(--hl-med);border-radius:3px;padding:2px 0;
+  background:var(--overlay)}
+.ss-scrub:hover{border-color:var(--accent)}
 /* Fix checkbox: color-scheme:dark handles the native look, accent-color sets tick color */
 .s-check input[type=checkbox]{accent-color:var(--accent);cursor:pointer;
   width:14px;height:14px;color-scheme:dark}
@@ -820,7 +835,7 @@ try {
 <div id="titlebar">
   <span id="appname"><span id="nm">M</span><span id="nf">Flow</span></span>
   <span class="badge" id="badge-fluid" data-i18n="badge.fluid">FLUID</span>
-  <span id="version">v2.5.1</span>
+  <span id="version">v2.5.0</span>
   <div class="spacer"></div>
   <div id="conn-row">
     <div id="conn-dot"></div>
@@ -1132,12 +1147,31 @@ try {
         <div style="padding:8px 10px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
           <span id="scan-sel-count"></span>
           <button id="btn-scan" onclick="doScanAll()"><svg style="width:14px;height:14px;vertical-align:middle;margin-right:4px;flex-shrink:0" viewBox="0 0 24 24" fill="currentColor"><path d="M11 1H9v2h2v2H5v2H3v10h2v2h2v-2H5V7h6v2H9v2h2V9h2V7h2V5h-2V3h-2zm8 4h-2v2h2v10h-6v-2h2v-2h-2v2h-2v2H9v2h2v2h2v2h2v-2h-2v-2h6v-2h2V7h-2z"/></svg><span id="scan-btn-lbl">SCAN ALL</span></button>
+          <button id="btn-squash-stretch" class="tog" style="width:100%" onclick="toggleSquashStretchMenu(event)" data-i18n="scan.squash_stretch">SQUASH &amp; STRETCH</button>
         </div>
       </div>
       <div id="inp-list" style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;border-top:1px solid var(--border);padding:4px 0;max-height:140px;overflow-y:auto"></div>
     </div>
   </div>
 </div><!-- /#main -->
+
+<div id="squash-stretch-menu" class="ss-menu">
+  <div class="ss-menu-row">
+    <label class="s-check" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" id="ss-enabled" onchange="onSquashStretchToggle()">
+      <span data-i18n="ss.enable">Enable</span>
+    </label>
+  </div>
+  <div class="cp-row" style="margin-bottom:0">
+    <span class="cp-lbl" data-i18n="ss.intensity">Intensity</span>
+    <input class="cp-sl" id="ss-intensity" type="range" min="0" max="300" value="100" oninput="onSquashIntensityChange()">
+    <span class="ss-scrub" id="ss-intensity-val" data-i18n-title="ss.drag_hint" title="Drag to scrub, click to type">1.0</span>
+  </div>
+  <div class="ss-menu-row">
+    <button id="btn-ss-invert" class="tog" style="width:100%" onclick="onSquashInvertToggle()" data-i18n="ss.invert">INVERT AXES</button>
+  </div>
+  <div class="ss-hint" data-i18n="ss.hint">Derived from motion velocity — works with any curve mode. Needs the target size input already keyframed. If it stretches the wrong way, hit Invert.</div>
+</div>
 
 <!-- ═══════════════════ BOTTOM BAR ═══════════════════ -->
 <div id="bottom-bar">
@@ -4171,6 +4205,92 @@ function cselSetValue(wrapperId, value) {
     if (active && label) label.textContent = o.textContent;
   });
 }
+function toggleSquashStretchMenu(e) {
+  if (e) e.stopPropagation();
+  const menu = $('squash-stretch-menu');
+  const btn  = $('btn-squash-stretch');
+  if (!menu || !btn) return;
+  const isOpen = menu.classList.contains('open');
+  document.querySelectorAll('.csel-list.open').forEach(l => l.classList.remove('open'));
+  if (isOpen) { menu.classList.remove('open'); return; }
+  const rect = btn.getBoundingClientRect();
+  menu.style.bottom = '';
+  menu.classList.add('open');           // add first so offsetWidth below is accurate
+  const menuW = menu.offsetWidth || 200;
+  // Opens to the right of the button; if that would run off the window's
+  // right edge, falls back to the left side instead of getting clipped.
+  let left = rect.right + 6;
+  if (left + menuW > window.innerWidth - 4) left = Math.max(4, rect.left - menuW - 6);
+  menu.style.left = left + 'px';
+  menu.style.top  = Math.min(rect.top, window.innerHeight - menu.offsetHeight - 8) + 'px';
+}
+document.addEventListener('click', (e) => {
+  const menu = $('squash-stretch-menu');
+  const btn  = $('btn-squash-stretch');
+  if (menu && menu.classList.contains('open') &&
+      !menu.contains(e.target) && e.target !== btn) {
+    menu.classList.remove('open');
+  }
+});
+function onSquashStretchToggle() {
+  const enabled = $('ss-enabled').checked;
+  $('btn-squash-stretch').classList.toggle('on', enabled);
+  if (backend && backend.set_squash_stretch_enabled) {
+    try { backend.set_squash_stretch_enabled(enabled); } catch (e) {}
+  }
+}
+function onSquashInvertToggle() {
+  const btn = $('btn-ss-invert');
+  const on = !btn.classList.contains('on');
+  btn.classList.toggle('on', on);
+  if (backend && backend.set_squash_invert) {
+    try { backend.set_squash_invert(on); } catch (e) {}
+  }
+}
+function _setSquashIntensity(v) {
+  v = Math.max(0, Math.min(3, v));
+  $('ss-intensity').value = Math.round(v * 100);
+  _updateSliderFill('ss-intensity', 0, 300, v * 100);
+  $('ss-intensity-val').textContent = v.toFixed(2);
+  if (backend && backend.set_squash_intensity) {
+    try { backend.set_squash_intensity(v); } catch (e) {}
+  }
+}
+function onSquashIntensityChange() {
+  _setSquashIntensity(parseInt($('ss-intensity').value, 10) / 100);
+}
+// Draggable scrub counter: click-drag horizontally to change the value
+// (common DCC-app pattern), or click without dragging to type an exact
+// number via the existing name-dialog.
+(function () {
+  let dragStartX = null, dragStartV = 0, moved = false;
+  const el = document.getElementById('ss-intensity-val');
+  if (!el) return;
+  el.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    dragStartX = e.clientX;
+    dragStartV = parseInt($('ss-intensity').value, 10) / 100;
+    moved = false;
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+  function onMove(e) {
+    const dx = e.clientX - dragStartX;
+    if (Math.abs(dx) > 2) moved = true;
+    // ~150px drag = a full 0..3 sweep — matches the slider's own feel
+    _setSquashIntensity(dragStartV + dx / 50);
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    if (!moved) {
+      showDlg('Intensity (0-3):', (parseInt($('ss-intensity').value, 10) / 100).toFixed(2), v => {
+        const n = parseFloat(v);
+        if (!isNaN(n)) _setSquashIntensity(n);
+      });
+    }
+  }
+})();
 function cselPopulate(wrapperId, options, currentValue) {
   // options: array of {value, text}
   const wrap = $(wrapperId); if (!wrap) return;
