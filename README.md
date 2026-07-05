@@ -4,9 +4,10 @@
 
 # ◈𝐌𝐅𝐋𝐎𝐖
 
-[![Version](https://img.shields.io/badge/Version-v2.5.1-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow/releases)
+[![Version](https://img.shields.io/badge/Version-v2.6.0-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow/releases)
 [![Downloads](https://img.shields.io/endpoint?url=https://codeberg.org/MaaruAx/MFlow/raw/branch/pages/downloads.json&style=for-the-badge&labelColor=1a1a2e)](https://codeberg.org/MaaruAx/MFlow/releases)
 [![Status](https://img.shields.io/badge/Status-Stable-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow)
+
 ![free](https://img.shields.io/badge/Works_on_FREE_Resolve-1a1a2e?style=for-the-badge&labelColor=1a1a2e)
 
 <br>
@@ -122,17 +123,40 @@ You can also build your own theme and export it as a `.json` file to share or ke
 
 ## ![install](https://img.shields.io/badge/◈_INSTALLATION-c4a7e7?style=flat-square&labelColor=1a1a2e)
 
-**Option A — Desktop Executable (Windows)**
+**Option A — Windows Installer (recommended on Windows)**
 
-Download `MFlow-v2.5.1.exe` from the [Releases page](https://github.com/MaaruAX/MFlow/releases). Run standalone with no Python environment needed.
+Download `MFlow-v2.6.0-x64-Setup.exe` from the [Releases page](https://codeberg.org/MaaruAx/MFlow/releases). It's a checkbox installer — pick any combination of the three components below, run it, done.
 
-**Option B — Standalone Installer (All Platforms)**
+| Component                                                                                             | What it does                                                                      |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| ![standalone](https://img.shields.io/badge/Standalone_App-9ccfd8?style=flat-square&labelColor=26233a) | Installs the desktop app — works on its own, no Resolve required.                 |
+| ![studio](https://img.shields.io/badge/Studio-eb6f92?style=flat-square&labelColor=26233a)             | Adds MFlow to `Workspace → Scripts → MFlow` — any page, DaVinci Resolve Studio.   |
+| ![free](https://img.shields.io/badge/Free-9ccfd8?style=flat-square&labelColor=26233a)                 | Adds MFlow to `Fusion page → Comp → Scripts → MFlow_Free` — DaVinci Resolve Free. |
+
+<details>
+<summary><img src="https://img.shields.io/badge/How_does_it_work%3F-f6c177?style=flat-square&labelColor=26233a" alt="how"></summary>
+
+<br>
+
+The installer itself is small — it only embeds the plain source files needed for the Resolve integration (`main.py`, `core/`, `ui/`, presets, themes, language files). Nothing there needs Python installed separately or an internet connection; it's copied straight to `%APPDATA%\MFlow` if you check Studio and/or Free, and the matching bridge file (`MFlow.lua` for Studio, `MFlow_Free.py` for Free) is dropped into Resolve's own `Scripts` folder so it shows up in the menu.
+
+If you check **Standalone App**, the installer downloads the compiled desktop build from Cloudflare R2 during setup (that's why it needs an internet connection for that step specifically) and extracts it straight into the install folder you chose. That download is verified automatically against a SHA-256 checksum baked into the installer at build time — if the downloaded bytes don't match, Setup flags it instead of silently installing a corrupted or tampered file. The exact file name and its expected hash are both shown on the "Ready to Install" screen before anything downloads, and you can cross-check that hash by hand against the one published in each release's changelog. See the **Verify Release Authenticity** section below for the full verification steps if you want to confirm it came from this project specifically.
+
+If you skip a component, nothing related to it is downloaded, copied, or touched — checking only "Free", for example, never installs the standalone app or touches Resolve's Studio-only Scripts folder.
+
+Uninstalling removes everything from the install folder; it separately asks whether to also delete your saved presets/themes/settings in `%APPDATA%\MFlow`, so you can uninstall and reinstall without losing your data if you say no.
+
+<br>
+
+</details>
+
+**Option B — Manual Installer Script (macOS, Linux, or manual setup)**
 
 ```bash
 python install.py
 ```
 
-The upgraded utility installer lets you selectively install, skip, or update Script utility launchers. Run the tool based on your DaVinci Resolve license level:
+This cross-platform utility installer lets you selectively install, skip, or update Script utility launchers. Run the tool based on your DaVinci Resolve license level:
 
 | License                                                                                   | Execution Area                                   |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -176,15 +200,64 @@ python uninstall.py
 
 </details>
 
+<details>
+<summary><img src="https://img.shields.io/badge/Verify_Release_Authenticity-9ccfd8?style=flat-square&labelColor=26233a" alt="verify"></summary>
+
+<br>
+
+Every release is GPG-signed. Alongside the installer, each release includes `SHA256SUMS.txt` and `SHA256SUMS.txt.asc` — use them to confirm the file you downloaded is exactly what was published here, unmodified in transit or on the server.
+
+**Public key fingerprint:**
+
+```
+3B48 59FF A129 4797 4836  ADB4 8130 B8F7 C0C7 FAEB
+```
+
+**1. Import the public key** — either works:
+
+```bash
+# From the key file included in this repo
+gpg --import mmarket-pubkey.asc
+
+# Or from a keyserver
+gpg --keyserver keys.openpgp.org --recv-keys 3B4859FFA12947974836ADB48130B8F7C0C7FAEB
+```
+
+**2. Verify the signature** — confirms `SHA256SUMS.txt` itself hasn't been altered and genuinely came from this key:
+
+```bash
+gpg --verify SHA256SUMS.txt.asc SHA256SUMS.txt
+```
+
+Look for `Good signature from "..."` in the output.
+
+**3. Check the file you downloaded against the published hash:**
+
+```bash
+# Linux / macOS
+sha256sum -c SHA256SUMS.txt
+
+# Windows (PowerShell)
+Get-FileHash .\MFlow-v2.6.0-x64-Setup.exe -Algorithm SHA256
+```
+
+The result should match the corresponding line in `SHA256SUMS.txt` exactly.
+
+> The installer also downloads a standalone build from Cloudflare R2 during setup. That download is verified automatically (SHA-256 check built into the installer), and its expected hash is shown on the installer's "Ready to Install" screen if you want to compare it by hand too.
+
+<br>
+
+</details>
+
 ---
 
 ## ![req](https://img.shields.io/badge/◈_REQUIREMENTS-ebbcba?style=flat-square&labelColor=1a1a2e)
 
-|                                                                                                         |                                                                                                          |
-| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| ![resolve](https://img.shields.io/badge/DaVinci_Resolve_18+-eb6f92?style=flat-square&labelColor=26233a) | Free or Studio releases fully compatible.                                                                |
+|                                                                                                         |                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| ![resolve](https://img.shields.io/badge/DaVinci_Resolve_18+-eb6f92?style=flat-square&labelColor=26233a) | Free or Studio releases fully compatible.                                                                          |
 | ![python](https://img.shields.io/badge/Python_3.9+-c4a7e7?style=flat-square&labelColor=26233a)          | Required for standalone setup scripts. Standalone installer must be sourced from [python.org](https://python.org). |
-| ![pyside](https://img.shields.io/badge/PySide6_≥_6.5-9ccfd8?style=flat-square&labelColor=26233a)        | Installed on setup automatically by `install.py` processes.                                                                     |
+| ![pyside](https://img.shields.io/badge/PySide6_≥_6.5-9ccfd8?style=flat-square&labelColor=26233a)        | Installed on setup automatically by `install.py` processes.                                                        |
 
 > ⚠️ **Python from the Microsoft Store will not work.** It is a restricted stub that cannot load the DaVinci Resolve scripting modules. Download the standard installer from **[python.org/downloads](https://python.org/downloads)** and check _"Add Python to PATH"_ during setup.
 
