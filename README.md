@@ -26,6 +26,20 @@ _Shape your keyframes. Apply physics. Works on the free version of DaVinci Resol
 
 ---
 
+<div align="center">
+
+<br>
+
+### ◈ 𝐒𝐔𝐏𝐏𝐎𝐑𝐓 𝐔𝐒
+
+[![kofi](https://img.shields.io/badge/_Support_me_on_Ko--fi-FF5E5B?style=for-the-badge&logo=kofi&logoColor=white&labelColor=1a1a2e)](https://ko-fi.com/theoldhyaenidae)
+
+<br>
+
+</div>
+
+---
+
 ## ![feat](https://img.shields.io/badge/◈_WHAT_IS_MFLOW-eb6f92?style=flat-square&labelColor=1a1a2e)
 
 **MFlow** is a floating panel that lets you draw bezier curves, dial in physics, and push them directly into Resolve's splines with one click — no Studio license required, works on the free version of DaVinci Resolve.
@@ -284,3 +298,4 @@ Inspired and based on **[FFlow](https://github.com/MisonLarp/Fusion-Flow/)** by 
 <br><br>
 
 </div>
+

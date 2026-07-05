@@ -470,13 +470,13 @@ def main():
     if sys.platform == "win32":
         try:
             import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MFlow.MFlow.2.5.1")
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MFlow.MFlow.2.6.0")
         except Exception as e:
             log.debug("[Taskbar] Could not set AppUserModelID: %s", e)
 
     app = QApplication(sys.argv)
     app.setApplicationName("MFlow")
-    app.setApplicationVersion("2.5.1")
+    app.setApplicationVersion("2.6.0")
     app.setWindowIcon(QIcon(_resource("MFlow.ico")))
 
     comp = None
