@@ -102,7 +102,8 @@ _BAKE_FNS = {
 
 # ── Frame baking ──────────────────────────────────────────────────────────────
 
-def derive_squash_stretch(baked_frames, intensity: float = 1.0,
+def derive_squash_stretch(baked_frames, stretch_intensity: float = 1.0,
+                           squash_intensity: float = 1.0,
                            min_scale: float = 0.15, max_scale: float = 4.0):
     """
     Derives a pair of complementary "squash & stretch" scale-factor curves
@@ -117,46 +118,33 @@ def derive_squash_stretch(baked_frames, intensity: float = 1.0,
     Deliberately mode-agnostic: this only ever looks at the BAKED VALUES,
     never at which curve type produced them (bounce, spring, elastic, or a
     plain ease all work identically) — no per-mode special-casing, no
-    "impact detection" logic. For a bounce, velocity naturally peaks right
-    around each ground contact and crosses zero at each apex, so the
-    squash/stretch lands exactly where you'd expect without being told
-    where the "impacts" are. For a plain ease-in-out, velocity peaks at
-    the midpoint and eases to zero at both ends, giving a subtle
-    stretch-then-settle — which is exactly why this works even for
-    "cualquier modo, incluso easing simple".
+    "impact detection" logic.
+
+    stretch intensity and squash_intensity are independent dials (NOT
+    forced into a strict volume-preserving 1/x relationship) — letting the
+    two axes be tuned separately by eye, since "looks natural" is a
+    per-shot judgment call. Each is 0 = no effect on that axis, 1.0 =
+    a full unit of effect at peak velocity, and can go higher to
+    exaggerate further.
 
     Parameters
     ----------
     baked_frames : list[(frame, value)]
         The already-baked primary curve, exactly as returned by any
-        bake_*() function or bake_fn(). Frames need not be evenly spaced
-        (some bake_* functions oversample near sharp corners) — velocity
-        is computed against the actual local frame spacing, not an
-        assumed constant step.
-    intensity : float
-        0   = no effect at all (both factors stay at 1.0 everywhere).
-        1.0 = a full unit of stretch/squash at peak velocity — roughly the
-              magnitude of the 1.5 / 0.667 reference example this was
-              designed around.
-        Above 1 exaggerates further (cartoon-style). This is deliberately
-        left as a tunable creative dial rather than a fixed formula, since
-        "looks natural" is a per-shot judgment call that needs the person
-        actually looking at the result in Resolve, not something a single
-        constant can guarantee up front.
+        bake_*() function or bake_fn(). Frames need not be evenly spaced.
+    stretch_intensity, squash_intensity : float
+        Independent per-axis intensity dials, as described above.
     min_scale / max_scale : float
-        Hard safety clamps so an extreme intensity value, or a noisy/spiky
+        Hard safety clamps so an extreme intensity, or a noisy/spiky
         primary curve, can never invert a shape (scale <= 0) or blow up to
-        a degenerate size. Generous defaults — tune per taste via the UI.
+        a degenerate size.
 
     Returns
     -------
     (stretch_frames, squash_frames) — two [(frame, value)] lists at the
     same frame positions as the input, in exactly the shape apply_baked()
-    expects. Hand stretch_frames to whichever spline is along the primary
-    motion's own axis, and squash_frames to the perpendicular one (or vice
-    versa, whichever reads correctly for the specific setup) — both are
-    already safe to write independently since they're just plain
-    frame/value pairs like any other baked curve.
+    expects, each smoothly settling to exactly 1.0 at both endpoints
+    regardless of intensity (see the edge-fade comment below).
     """
     n = len(baked_frames)
     if n < 2:
@@ -184,30 +172,46 @@ def derive_squash_stretch(baked_frames, intensity: float = 1.0,
 
     peak = max((abs(v) for v in velocity), default=0.0)
     if peak < 1e-9:
-        # Perfectly flat curve — nothing to derive from. Stay neutral
-        # rather than divide by ~zero and manufacture noise out of nothing.
         flat = [(f, 1.0) for f in frames]
         return flat, list(flat)
 
+    # BUG FIX: this used to hard-snap ONLY the very first/last sample to
+    # exactly 1.0 after computing everything else from raw velocity. That
+    # works fine for the other bake_* functions because their underlying
+    # physics naturally decays to near-zero velocity at the boundary, so
+    # forcing the endpoint is an imperceptible rounding correction. But
+    # squash & stretch derives from an ARBITRARY primary curve's velocity,
+    # which can still be high right up to the very last frame (e.g. a
+    # bounce "landing" at full speed) — so the value stayed elevated
+    # through the second-to-last sample and then hard-snapped to 1.0 on
+    # the last one, producing a visibly abrupt jump instead of a settle.
+    # Fixing this with a smoothstep taper over the first/last ~12% of the
+    # range: the deviation from neutral fades out gradually and reaches
+    # exactly 0 right at the boundary, so it settles into the keyframe
+    # instead of snapping onto it.
+    ease_n = max(1, min(n // 2, round(n * 0.12)))
+
+    def _edge_fade(i):
+        if i < ease_n:
+            x = i / ease_n
+        elif i > (n - 1) - ease_n:
+            x = ((n - 1) - i) / ease_n
+        else:
+            return 1.0
+        return x * x * (3 - 2 * x)  # smoothstep: 0 at the edge, 1 past the taper window
+
     stretch_frames = []
     squash_frames  = []
-    for f, v in zip(frames, velocity):
-        norm    = abs(v) / peak                       # 0 at rest, 1 at peak speed
-        stretch = 1.0 + intensity * norm
-        stretch = max(min_scale, min(max_scale, stretch))
-        squash  = 1.0 / stretch                        # volume-preserving inverse
-        squash  = max(min_scale, min(max_scale, squash))
+    for i, (f, v) in enumerate(zip(frames, velocity)):
+        norm    = (abs(v) / peak) * _edge_fade(i)     # 0 at rest/edges, up to 1 at peak speed
+        stretch = max(min_scale, min(max_scale, 1.0 + stretch_intensity * norm))
+        squash  = max(min_scale, min(max_scale, 1.0 / (1.0 + squash_intensity * norm)))
         stretch_frames.append((f, stretch))
         squash_frames.append((f, squash))
 
-    # Force exact endpoint alignment — same "magnetism" every bake_*
-    # function in this file already uses (see bake_oscillator, bake_bounce,
-    # etc.): regardless of what the velocity-based math produced at the
-    # very first/last sample, snap it to exactly neutral (1.0 = no
-    # distortion). This is what makes it feel natural no matter how the
-    # primary curve behaves — always cleanly at rest exactly ON the
-    # keyframe, never landing a fraction off from a numerically-imperfect
-    # velocity estimate at the boundary.
+    # Belt-and-suspenders: the taper above already reaches exactly 1.0 at
+    # i=0 and i=n-1 (smoothstep(0)=0), so this is redundant in practice —
+    # kept anyway as a hard guarantee against any floating-point edge case.
     stretch_frames[0]  = (stretch_frames[0][0],  1.0)
     stretch_frames[-1] = (stretch_frames[-1][0], 1.0)
     squash_frames[0]   = (squash_frames[0][0],   1.0)

@@ -73,12 +73,6 @@ html,body{width:100%;height:100%;
 .icon-btn svg{width:13px;height:13px;transition:transform .15s cubic-bezier(.2,.8,.4,1)}
 #aa-wrap{display:flex;align-items:center;gap:4px}
 #aa-lbl{font-size:10px;color:var(--muted)}
-#aa-sw{width:28px;height:15px;background:var(--border);border-radius:8px;cursor:pointer;
-  position:relative;transition:background .2s;flex-shrink:0}
-#aa-sw.on{background:var(--accent)}
-#aa-sw::after{content:'';position:absolute;top:2px;left:2px;width:11px;height:11px;
-  border-radius:50%;background:#fff;transition:left .2s}
-#aa-sw.on::after{left:15px}
 #btn-compact{font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--r);cursor:pointer;
   border:1px solid var(--border);background:var(--overlay);color:var(--muted);font-family:inherit;transition:all .15s}
 #btn-compact:hover:not(.on){background:var(--hl-low);border-color:var(--hl-med);color:var(--text)}
@@ -306,11 +300,11 @@ body.compact #version{display:none!important}
 .cp-title{font-size:9px;font-weight:700;letter-spacing:.6px;color:var(--muted);margin-bottom:5px}
 .cp-row{display:flex;align-items:center;gap:5px;margin-bottom:4px;min-width:0}
 .cp-lbl{font-size:10px;color:var(--muted);width:52px;flex-shrink:0}
-.cp-sl{flex:1;min-width:30px;height:3px;-webkit-appearance:none;border-radius:2px;cursor:pointer;
+.cp-sl{flex:1;min-width:30px;height:6px;-webkit-appearance:none;border-radius:3px;cursor:pointer;
   background:linear-gradient(to right,var(--accent) 0%,var(--accent) var(--pct,0%),var(--overlay) var(--pct,0%),var(--overlay) 100%)}
-.cp-sl::-webkit-slider-thumb{-webkit-appearance:none;width:3px;height:14px;border-radius:1px;
-  background:var(--accent);border:none;cursor:pointer;margin-top:-5.5px}
-.cp-sl::-webkit-slider-runnable-track{height:3px;border-radius:2px}
+.cp-sl::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:16px;border-radius:3px;
+  background:var(--accent);border:none;cursor:pointer;margin-top:-5px}
+.cp-sl::-webkit-slider-runnable-track{height:6px;border-radius:3px}
 .cp-val{font-size:10px;color:var(--subtle);width:28px;flex-shrink:0;text-align:right}
 .cp-hint{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.5}
 /* Spring / elastic param labels inherit accent — no inline-style patching needed */
@@ -499,19 +493,31 @@ body.compact #version{display:none!important}
 .csel-opt.active{color:var(--accent)}
 .ss-menu{display:none;position:fixed;z-index:9999;
   background:var(--overlay);border:1px solid var(--hl-med);border-radius:var(--r);
-  min-width:190px;padding:10px;box-shadow:0 4px 12px rgba(0,0,0,.5);
-  flex-direction:column;gap:8px}
+  width:172px;padding:8px;box-shadow:0 4px 12px rgba(0,0,0,.5);
+  flex-direction:column;gap:6px}
 .ss-menu.open{display:flex}
 .ss-menu-row{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--text)}
 .ss-hint{font-size:9px;color:var(--muted);line-height:1.4}
 /* Thicker than the shared .cp-sl — the default 3px track was hard to grab precisely */
-#ss-intensity{height:8px;border-radius:4px}
-#ss-intensity::-webkit-slider-thumb{width:14px;height:18px;border-radius:3px;margin-top:-5px}
-#ss-intensity::-webkit-slider-runnable-track{height:8px;border-radius:4px}
-.ss-scrub{font-size:11px;color:var(--text);width:38px;text-align:center;flex-shrink:0;
+.ss-menu .cp-sl{height:8px;border-radius:4px}
+.ss-menu .cp-sl::-webkit-slider-thumb{width:14px;height:18px;border-radius:3px;margin-top:-5px}
+.ss-menu .cp-sl::-webkit-slider-runnable-track{height:8px;border-radius:4px}
+.ss-menu .cp-lbl{width:42px}
+.ss-scrub{font-size:11px;color:var(--text);width:34px;text-align:center;flex-shrink:0;
   cursor:ew-resize;user-select:none;border:1px solid var(--hl-med);border-radius:3px;padding:2px 0;
   background:var(--overlay)}
 .ss-scrub:hover{border-color:var(--accent)}
+#btn-squash-stretch,#btn-ss-invert{transition:all .18s cubic-bezier(.2,.8,.4,1)}
+#btn-squash-stretch:hover,#btn-ss-invert:hover{border-color:var(--accent);color:var(--accent);background:var(--hl-low)}
+#btn-squash-stretch:active,#btn-ss-invert:active{transform:scale(.97)}
+/* MDowlet toggle — rectangular track + square-ish thumb, not the iOS-pill style */
+.mtoggle{width:34px;height:19px;background:var(--overlay);border-radius:var(--r);
+  position:relative;cursor:pointer;flex-shrink:0;
+  transition:background .15s ease,border-color .15s ease;border:2px solid var(--hl-med)}
+.mtoggle.on{background:var(--accent);border-color:var(--accent)}
+.mtoggle::after{content:'';position:absolute;width:9px;height:9px;border-radius:2px;
+  background:#fff;top:3px;left:3px;transition:transform .15s ease;box-shadow:0 1px 3px rgba(0,0,0,.6)}
+.mtoggle.on::after{transform:translateX(15px);background:#000}
 /* Fix checkbox: color-scheme:dark handles the native look, accent-color sets tick color */
 .s-check input[type=checkbox]{accent-color:var(--accent);cursor:pointer;
   width:14px;height:14px;color-scheme:dark}
@@ -874,7 +880,7 @@ try {
   </div>
   <div id="aa-wrap">
     <span id="aa-lbl" data-i18n="toolbar.auto">AUTO</span>
-    <div id="aa-sw" onclick="toggleAA()"></div>
+    <div id="aa-sw" class="mtoggle" onclick="toggleAA()"></div>
   </div>
   <div style="position:relative">
     <button class="icon-btn" id="btn-panels" onclick="togglePanelMenu()" data-tip="Panels">
@@ -1157,20 +1163,20 @@ try {
 
 <div id="squash-stretch-menu" class="ss-menu">
   <div class="ss-menu-row">
-    <label class="s-check" style="display:flex;align-items:center;gap:6px;cursor:pointer">
-      <input type="checkbox" id="ss-enabled" onchange="onSquashStretchToggle()">
-      <span data-i18n="ss.enable">Enable</span>
-    </label>
+    <div class="mtoggle" id="ss-enabled" onclick="onSquashStretchToggle()"></div>
+    <span data-i18n="ss.enable">Enable</span>
   </div>
   <div class="cp-row" style="margin-bottom:0">
-    <span class="cp-lbl" data-i18n="ss.intensity">Intensity</span>
-    <input class="cp-sl" id="ss-intensity" type="range" min="0" max="300" value="100" oninput="onSquashIntensityChange()">
-    <span class="ss-scrub" id="ss-intensity-val" data-i18n-title="ss.drag_hint" title="Drag to scrub, click to type">1.0</span>
+    <span class="cp-lbl" data-i18n="ss.stretch">Stretch</span>
+    <input class="cp-sl" id="ss-stretch" type="range" min="0" max="300" value="100" oninput="onSquashStretchIntensityChange()">
+    <span class="ss-scrub" id="ss-stretch-val" title="Drag to scrub, click to type">1.0</span>
   </div>
-  <div class="ss-menu-row">
-    <button id="btn-ss-invert" class="tog" style="width:100%" onclick="onSquashInvertToggle()" data-i18n="ss.invert">INVERT AXES</button>
+  <div class="cp-row" style="margin-bottom:0">
+    <span class="cp-lbl" data-i18n="ss.squash">Squash</span>
+    <input class="cp-sl" id="ss-squash" type="range" min="0" max="300" value="100" oninput="onSquashSquashIntensityChange()">
+    <span class="ss-scrub" id="ss-squash-val" title="Drag to scrub, click to type">1.0</span>
   </div>
-  <div class="ss-hint" data-i18n="ss.hint">Derived from motion velocity — works with any curve mode. Needs the target size input already keyframed. If it stretches the wrong way, hit Invert.</div>
+  <button id="btn-ss-invert" class="tog" style="width:100%" onclick="onSquashInvertToggle()" data-i18n="ss.invert">INVERT AXES</button>
 </div>
 
 <!-- ═══════════════════ BOTTOM BAR ═══════════════════ -->
@@ -2468,6 +2474,40 @@ function updateLookup() {
     for (let i=0; i<=LN; i++)
       lookup[i] = okfActive ? evalOKF(i/LN) : evalBz(i/LN,h1[0],h1[1],h2[0],h2[1]);
   }
+  _updateSquashStretchPreview();
+}
+
+// Mirrors core/curve_engine.py's derive_squash_stretch() exactly (velocity
+// from the baked curve, normalized to peak, independent stretch/squash
+// intensities, smoothstep taper near both ends so it settles instead of
+// snapping) — but against the live `lookup[]` table instead of real Fusion
+// frames, purely so the preview panel can show what will actually be
+// applied without a round-trip to Python.
+let _ssStretchLU = null, _ssSquashLU = null;
+function _updateSquashStretchPreview() {
+  const n = lookup.length;
+  const vel = new Array(n);
+  for (let i = 0; i < n; i++) {
+    if (i === 0)        vel[i] = (lookup[1]-lookup[0]);
+    else if (i === n-1) vel[i] = (lookup[n-1]-lookup[n-2]);
+    else                vel[i] = (lookup[i+1]-lookup[i-1]) / 2;
+  }
+  let peak = 0;
+  for (let i = 0; i < n; i++) peak = Math.max(peak, Math.abs(vel[i]));
+  const stretchI = ($('ss-stretch') ? parseInt($('ss-stretch').value,10)/100 : 1.0);
+  const squashI  = ($('ss-squash')  ? parseInt($('ss-squash').value,10)/100  : 1.0);
+  const easeN = Math.max(1, Math.min(Math.floor(n/2), Math.round(n*0.12)));
+  _ssStretchLU = new Array(n); _ssSquashLU = new Array(n);
+  for (let i = 0; i < n; i++) {
+    let fade = 1.0;
+    if (i < easeN) { const x = i/easeN; fade = x*x*(3-2*x); }
+    else if (i > (n-1)-easeN) { const x = ((n-1)-i)/easeN; fade = x*x*(3-2*x); }
+    const norm = peak > 1e-9 ? (Math.abs(vel[i])/peak)*fade : 0;
+    _ssStretchLU[i] = Math.max(0.15, Math.min(4, 1 + stretchI*norm));
+    _ssSquashLU[i]  = Math.max(0.15, Math.min(4, 1/(1 + squashI*norm)));
+  }
+  _ssStretchLU[0]=_ssStretchLU[n-1]=1.0;
+  _ssSquashLU[0]=_ssSquashLU[n-1]=1.0;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2996,7 +3036,7 @@ function startAnim() {
     const fwd = el < ANIM_DUR;
     const t   = fwd ? el/ANIM_DUR : (el-ANIM_DUR)/ANIM_DUR;
     const idx = Math.min(Math.floor(Math.max(0,Math.min(1,t))*LN), LN);
-    setCubes(fwd ? lookup[idx] : 1-lookup[idx]);
+    setCubes(fwd ? lookup[idx] : 1-lookup[idx], fwd ? idx : LN-idx);
   }
   _animRaf = requestAnimationFrame(_loop);
 }
@@ -3010,7 +3050,7 @@ function _initPreview() {
   _pvCtx=cv.getContext('2d'); _pvCtx.setTransform(dpr,0,0,dpr,0,0);
 }
 function _cacheBoxSize() { const cv=$('prev-canvas'); if(cv&&cv.offsetWidth>0)_initPreview(); }
-function setCubes(v) {
+function setCubes(v, idx) {
   if (!_pvCtx||!_pvW) return;
   const W=_pvW, H=W, col=MODE_COLORS[mode]||'#9ccfd8';
   const vc=Math.max(-.6,Math.min(1.5,v));
@@ -3019,21 +3059,43 @@ function setCubes(v) {
   const fz=Math.max(4,Math.round(W*0.036));
   _pvCtx.font=`500 ${fz}px Monaspace,monospace`; _pvCtx.textBaseline='top'; _pvCtx.fillStyle=col+'66'; _pvCtx.textAlign='left';
   _pvCtx.fillText('Position X',4,4); _pvCtx.fillText('Position Y',half+4,4);
-  _pvCtx.fillText('Rotation',4,half+4); _pvCtx.fillText('Scale',half+4,half+4);
-  const shape=(cx,cy,sz,rot=0)=>{
+  _pvCtx.fillText('Rotation',4,half+4);
+  _pvCtx.fillText(_squashStretchPreviewActive() ? 'Squash & Stretch' : 'Scale', half+4, half+4);
+  const shape=(cx,cy,szX,rot=0,szY=null)=>{
+    if (szY===null) szY=szX;
+    const sx=szX, sy=szY;
     _pvCtx.save(); _pvCtx.translate(cx,cy); _pvCtx.rotate(rot); _pvCtx.fillStyle=col; _pvCtx.beginPath();
-    if      (_pvShape==='circle')  { _pvCtx.arc(0,0,sz/2,0,Math.PI*2); }
-    else if (_pvShape==='diamond') { _pvCtx.moveTo(0,-sz/2);_pvCtx.lineTo(sz/2,0);_pvCtx.lineTo(0,sz/2);_pvCtx.lineTo(-sz/2,0);_pvCtx.closePath(); }
-    else if (_pvShape==='pill')    { const pw=sz*1.6,ph=sz*.65,pr=ph/2; _pvCtx.roundRect(-pw/2,-ph/2,pw,ph,pr); }
-    else                           { _pvCtx.roundRect(-sz/2,-sz/2,sz,sz,Math.round(sz*0.2)); }
+    if (_pvShape==='circle') {
+      _pvCtx.save(); _pvCtx.scale(sx/Math.max(sx,sy), sy/Math.max(sx,sy));
+      _pvCtx.arc(0,0,Math.max(sx,sy)/2,0,Math.PI*2);
+      _pvCtx.restore();
+    }
+    else if (_pvShape==='diamond') { _pvCtx.moveTo(0,-sy/2);_pvCtx.lineTo(sx/2,0);_pvCtx.lineTo(0,sy/2);_pvCtx.lineTo(-sx/2,0);_pvCtx.closePath(); }
+    else if (_pvShape==='pill')    { const pw=sx*1.6,ph=sy*.65,pr=Math.min(pw,ph)/2; _pvCtx.roundRect(-pw/2,-ph/2,pw,ph,pr); }
+    else                           { _pvCtx.roundRect(-sx/2,-sy/2,sx,sy,Math.round(Math.min(sx,sy)*0.2)); }
     _pvCtx.fill(); _pvCtx.restore();
   };
   shape(pad+cs/2+vc*range,        half/2,         cs);
   shape(half+half/2,               half-pad-cs/2-vc*range, cs);
   shape(half/2,                    half+half/2,    cs, vc*Math.PI*2);
-  shape(half+half/2,               half+half/2,    cs*Math.max(0.08,0.25+vc*0.55));
+  if (_squashStretchPreviewActive() && idx != null && _ssStretchLU && _ssSquashLU) {
+    const i = Math.max(0, Math.min(_ssStretchLU.length-1, idx));
+    let sx = _ssStretchLU[i], sy = _ssSquashLU[i];
+    if (typeof _squashInvertOn === 'function' && _squashInvertOn()) { const t=sx; sx=sy; sy=t; }
+    shape(half+half/2, half+half/2, cs*sx, 0, cs*sy);
+  } else {
+    shape(half+half/2,             half+half/2,    cs*Math.max(0.08,0.25+vc*0.55));
+  }
   _pvCtx.strokeStyle=col+'18'; _pvCtx.lineWidth=1; _pvCtx.beginPath();
   _pvCtx.moveTo(half,0); _pvCtx.lineTo(half,H); _pvCtx.moveTo(0,half); _pvCtx.lineTo(W,half); _pvCtx.stroke();
+}
+function _squashStretchPreviewActive() {
+  const t = document.getElementById('ss-enabled');
+  return !!(t && t.classList.contains('on'));
+}
+function _squashInvertOn() {
+  const b = document.getElementById('btn-ss-invert');
+  return !!(b && b.classList.contains('on'));
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4233,7 +4295,9 @@ document.addEventListener('click', (e) => {
   }
 });
 function onSquashStretchToggle() {
-  const enabled = $('ss-enabled').checked;
+  const tog = $('ss-enabled');
+  tog.classList.toggle('on');
+  const enabled = tog.classList.contains('on');
   $('btn-squash-stretch').classList.toggle('on', enabled);
   if (backend && backend.set_squash_stretch_enabled) {
     try { backend.set_squash_stretch_enabled(enabled); } catch (e) {}
@@ -4247,29 +4311,33 @@ function onSquashInvertToggle() {
     try { backend.set_squash_invert(on); } catch (e) {}
   }
 }
-function _setSquashIntensity(v) {
+function _setScrubValue(sliderId, valId, v, backendFn) {
   v = Math.max(0, Math.min(3, v));
-  $('ss-intensity').value = Math.round(v * 100);
-  _updateSliderFill('ss-intensity', 0, 300, v * 100);
-  $('ss-intensity-val').textContent = v.toFixed(2);
-  if (backend && backend.set_squash_intensity) {
-    try { backend.set_squash_intensity(v); } catch (e) {}
+  $(sliderId).value = Math.round(v * 100);
+  _updateSliderFill(sliderId, 0, 300, v * 100);
+  $(valId).textContent = v.toFixed(2);
+  if (backend && backend[backendFn]) {
+    try { backend[backendFn](v); } catch (e) {}
   }
+  if (typeof _updateSquashStretchPreview === 'function') _updateSquashStretchPreview();
 }
-function onSquashIntensityChange() {
-  _setSquashIntensity(parseInt($('ss-intensity').value, 10) / 100);
+function onSquashStretchIntensityChange() {
+  _setScrubValue('ss-stretch', 'ss-stretch-val', parseInt($('ss-stretch').value, 10) / 100, 'set_squash_stretch_intensity');
 }
-// Draggable scrub counter: click-drag horizontally to change the value
+function onSquashSquashIntensityChange() {
+  _setScrubValue('ss-squash', 'ss-squash-val', parseInt($('ss-squash').value, 10) / 100, 'set_squash_squash_intensity');
+}
+// Draggable scrub counters: click-drag horizontally to change the value
 // (common DCC-app pattern), or click without dragging to type an exact
-// number via the existing name-dialog.
-(function () {
+// number via the existing name-dialog. Shared by both intensity controls.
+function _makeScrubCounter(valId, sliderId, backendFn) {
   let dragStartX = null, dragStartV = 0, moved = false;
-  const el = document.getElementById('ss-intensity-val');
+  const el = document.getElementById(valId);
   if (!el) return;
   el.addEventListener('mousedown', (e) => {
     e.preventDefault();
     dragStartX = e.clientX;
-    dragStartV = parseInt($('ss-intensity').value, 10) / 100;
+    dragStartV = parseInt($(sliderId).value, 10) / 100;
     moved = false;
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
@@ -4277,20 +4345,21 @@ function onSquashIntensityChange() {
   function onMove(e) {
     const dx = e.clientX - dragStartX;
     if (Math.abs(dx) > 2) moved = true;
-    // ~150px drag = a full 0..3 sweep — matches the slider's own feel
-    _setSquashIntensity(dragStartV + dx / 50);
+    _setScrubValue(sliderId, valId, dragStartV + dx / 50, backendFn);   // ~150px = full 0..3 sweep
   }
   function onUp() {
     document.removeEventListener('mousemove', onMove);
     document.removeEventListener('mouseup', onUp);
     if (!moved) {
-      showDlg('Intensity (0-3):', (parseInt($('ss-intensity').value, 10) / 100).toFixed(2), v => {
+      showDlg('Value (0-3):', (parseInt($(sliderId).value, 10) / 100).toFixed(2), v => {
         const n = parseFloat(v);
-        if (!isNaN(n)) _setSquashIntensity(n);
+        if (!isNaN(n)) _setScrubValue(sliderId, valId, n, backendFn);
       });
     }
   }
-})();
+}
+_makeScrubCounter('ss-stretch-val', 'ss-stretch', 'set_squash_stretch_intensity');
+_makeScrubCounter('ss-squash-val', 'ss-squash', 'set_squash_squash_intensity');
 function cselPopulate(wrapperId, options, currentValue) {
   // options: array of {value, text}
   const wrap = $(wrapperId); if (!wrap) return;

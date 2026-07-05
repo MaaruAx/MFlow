@@ -221,7 +221,8 @@ class Backend(QObject):
         # small popup to enable it and set intensity per apply, rather
         # than a persistent global switch like Auto-apply.
         self._squash_stretch_enabled = bool(self._settings.get("squash_stretch_enabled", False))
-        self._squash_intensity = float(self._settings.get("squash_intensity", 1.0))
+        self._squash_stretch_intensity = float(self._settings.get("squash_stretch_intensity", 1.0))
+        self._squash_squash_intensity  = float(self._settings.get("squash_squash_intensity", 1.0))
         self._squash_invert = False  # swaps which axis gets stretch vs squash
         self._python_scan_cache = None  # cached result of scan_pythons()
         self._python_scan_time  = 0.0   # epoch when cache was last filled
@@ -1616,12 +1617,20 @@ class Backend(QObject):
         log.info("[SquashStretch] %s", "enabled" if enabled else "disabled")
 
     @Slot(float)
-    def set_squash_intensity(self, value: float):
+    def set_squash_stretch_intensity(self, value: float):
         try:
             value = float(value)
         except (TypeError, ValueError):
             return
-        self._squash_intensity = max(0.0, min(3.0, value))
+        self._squash_stretch_intensity = max(0.0, min(3.0, value))
+
+    @Slot(float)
+    def set_squash_squash_intensity(self, value: float):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return
+        self._squash_squash_intensity = max(0.0, min(3.0, value))
 
     @Slot(bool)
     def set_squash_invert(self, inverted: bool):
@@ -2063,7 +2072,9 @@ class Backend(QObject):
         if not frames:
             return False, "Could not derive a curve to base squash & stretch on"
 
-        stretch_frames, squash_frames = derive_squash_stretch(frames, intensity=self._squash_intensity)
+        stretch_frames, squash_frames = derive_squash_stretch(
+            frames, stretch_intensity=self._squash_stretch_intensity,
+            squash_intensity=self._squash_squash_intensity)
         if self._squash_invert:
             stretch_frames, squash_frames = squash_frames, stretch_frames
         t_start, t_end = frames[0][0], frames[-1][0]
