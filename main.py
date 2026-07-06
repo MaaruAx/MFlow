@@ -4,12 +4,36 @@ Run: python main.py
 """
 import sys, os, json, traceback, logging, faulthandler
 
+# ── Multiprocessing child detection ──────────────────────────────────────────
+# On Windows, the "spawn" start method (used by core.resolve_connection's
+# probe_resolve_connection) always re-executes this file in the child
+# process to rebuild enough of the namespace to unpickle the target
+# function — this happens regardless of the if __name__=="__main__" guard
+# further down, which only skips re-running main(), not this module's
+# top-level statements.
+#
+# IMPORTANT: multiprocessing.parent_process() is NOT usable here — it's
+# only populated by BaseProcess._bootstrap(), which runs AFTER
+# multiprocessing.spawn.prepare() has already re-executed this file via
+# runpy.run_path(main_path, run_name="__mp_main__"). At the point this
+# module-level code runs in the child, parent_process() still reports None,
+# so a check based on it silently never triggers — confirmed the hard way:
+# every probe kept opening its own handle onto the shared mflow.log and
+# crash.log (crash.log in "w" mode, truncating it) despite that earlier
+# guard, because it always evaluated to "not a child" even inside a child.
+#
+# __name__ == "__mp_main__" is set synchronously by that same run_path()
+# call, before a single line of this module executes — this is the
+# officially correct signal for exactly this situation.
+_IS_MP_CHILD = (__name__ == "__mp_main__")
+
 # ── Faulthandler: catches C++ crashes (WebEngine, Resolve DLL) ───────────────
 _LOG_DIR = os.path.join(os.path.expanduser("~"), ".mflow")
 os.makedirs(_LOG_DIR, exist_ok=True)
 _CRASH_LOG = os.path.join(_LOG_DIR, "crash.log")
-_crash_f = open(_CRASH_LOG, "w", encoding="utf-8")
-faulthandler.enable(_crash_f)
+if not _IS_MP_CHILD:
+    _crash_f = open(_CRASH_LOG, "w", encoding="utf-8")
+    faulthandler.enable(_crash_f)
 
 # ── OrderedDict shim: fusionscript DLL expects it in builtins on Python 3.10+ ─
 import builtins
@@ -22,16 +46,46 @@ _LOG_DIR = os.path.join(os.path.expanduser("~"), ".mflow")
 os.makedirs(_LOG_DIR, exist_ok=True)
 _LOG_PATH = os.path.join(_LOG_DIR, "mflow.log")
 
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(_LOG_PATH, encoding="utf-8"),
-        logging.StreamHandler(sys.stdout),
-    ]
-)
+if _IS_MP_CHILD:
+    # This is a probe worker, not the real app — it must never open its own
+    # handle onto mflow.log (the parent process already owns that file, and
+    # sharing it was the direct cause of the logging-corruption crash this
+    # guard exists to prevent). Instead it gets its OWN file, keyed by PID,
+    # so every diagnostic line survives somewhere on disk without any two
+    # processes ever touching the same handle.
+    _PROBE_LOG_PATH = os.path.join(_LOG_DIR, f"probe_{os.getpid()}.log")
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [PID:%(process)d] [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler(_PROBE_LOG_PATH, encoding="utf-8"),
+            logging.StreamHandler(sys.stdout),
+        ],
+    )
+else:
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [PID:%(process)d] [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler(_LOG_PATH, encoding="utf-8"),
+            logging.StreamHandler(sys.stdout),
+        ]
+    )
 log = logging.getLogger("mflow")
-log.info("MFlow starting — Python %s — %s", sys.version.split()[0], sys.platform)
+if not _IS_MP_CHILD:
+    log.info("MFlow starting — Python %s — %s", sys.version.split()[0], sys.platform)
+    # Diagnostic probe logs are per-PID and only meant to survive long enough
+    # to be inspected after a repro — clear last session's before this one
+    # writes new ones, so ~/.mflow doesn't grow unbounded over time.
+    try:
+        import glob
+        for _old in glob.glob(os.path.join(_LOG_DIR, "probe_*.log")):
+            try:
+                os.remove(_old)
+            except OSError:
+                pass
+    except Exception as _e:
+        log.debug("Could not clean up old probe logs: %s", _e)
 
 # ── Make uncaught exceptions visible instead of silently closing ──────────────
 def _excepthook(exc_type, exc_value, exc_tb):
@@ -420,6 +474,7 @@ class MFlowWindow(QMainWindow):
         closeEvent entirely and could leave the native close button looking
         like it does nothing. Closing must never be blockable by an
         internal error."""
+        log.info("[Close-PY] closeEvent entered — native close signal received by Qt")
         log.info("Closing MFlow")
         try:
             self._unregister_global_hotkey()

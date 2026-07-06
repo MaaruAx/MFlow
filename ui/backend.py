@@ -146,6 +146,15 @@ class Backend(QObject):
         self._comp     = comp
         self._resolve  = resolve  # stored from startup or reconnect
         self._fu       = None    # cached Fusion scripting object
+        # Free mode: Resolve injects 'app' directly into MFlow_Free.py at
+        # script-launch time (see MFlow_Free.py) — there is no scriptapp()
+        # call anywhere in that path, so we never obtain a `resolve` object
+        # at all, only `fusion_app`. That injected reference is a one-time
+        # snapshot for this script run; there is no documented API to
+        # re-request a fresh one later. Studio mode always obtains BOTH via
+        # get_resolve()/get_comp() at startup, so this combination
+        # (fusion_app present, resolve absent) only ever happens in Free.
+        self._is_free_mode = (fusion_app is not None and resolve is None)
         # Cache _fu immediately if resolve is available at startup
         if resolve:
             try:
@@ -394,6 +403,31 @@ class Backend(QObject):
 
     @Slot(str)
     def reconnect(self, custom_path="", _max_attempts=3):
+        if self._is_free_mode:
+            # First, the cheap and safe check: is the object Resolve handed
+            # us at launch still answering? If so, there is nothing to
+            # reconnect — report success immediately without touching the
+            # external scriptapp() path at all (which risks handing back a
+            # SEPARATE Fusion object than the one this session was built on
+            # if it succeeds, silently desyncing anything already holding
+            # the original reference).
+            try:
+                still_alive = self._fusion_app is not None and self._fusion_app.CurrentComp is not None
+            except Exception:
+                still_alive = False
+            if still_alive:
+                self.connection_changed.emit(True, "Connected (Free)")
+                return
+            # The injected reference is gone. Unlike Studio, we don't know
+            # for certain the external scriptapp() path is meaningless here
+            # — Resolve's own embedded interpreter runs in-process with
+            # Resolve itself, so it may not be gated by the "External
+            # scripting" preference the way a truly external process is.
+            # Fall through to the normal attempt below as a best-effort; if
+            # it also fails, the message afterward tells the user the
+            # honest fallback (relaunch from Scripts > Comp).
+            log.info("[Connect] Free mode: injected fusion_app is stale, "
+                     "attempting external reconnect as a best-effort fallback")
         if self._reconnecting:
             # BUG FIX: this used to just `return` here — completely silent.
             # JS's doReconnect() already optimistically shows "Connecting…"
@@ -481,14 +515,21 @@ class Backend(QObject):
                         # QRunnable thread has no event loop and silently drops).
                         _self._apply_comp_sig.emit(comp)
                     else:
-                        log.warning("[Connect] All attempts failed. "
-                                    "Ensure DaVinci Resolve is open and:\n"
-                                    "  Preferences > System > General > "
-                                    "External scripting using = Local")
-                        _self._conn_changed_sig.emit(
-                            False,
-                            "Not connected \u2014 open Resolve and set "
-                            "Preferences > General > External scripting: Local")
+                        if _self._is_free_mode:
+                            log.warning("[Connect] All attempts failed (Free mode fallback).")
+                            _self._conn_changed_sig.emit(
+                                False,
+                                "Couldn't get a fresh connection. Close this window and "
+                                "run Scripts > Comp > MFlow_Free again from Resolve.")
+                        else:
+                            log.warning("[Connect] All attempts failed. "
+                                        "Ensure DaVinci Resolve is open and:\n"
+                                        "  Preferences > System > General > "
+                                        "External scripting using = Local")
+                            _self._conn_changed_sig.emit(
+                                False,
+                                "Not connected \u2014 open Resolve and set "
+                                "Preferences > General > External scripting: Local")
                 except Exception as exc:
                     log.error("[Connect] Exception: %s", exc, exc_info=True)
                     _self._conn_changed_sig.emit(False, f"Connect error: {exc}")
@@ -702,22 +743,61 @@ class Backend(QObject):
         if self._watcher:
             self._watcher.set_focused(focused)
 
+    def _set_always_on_top_native(self, widget, enabled: bool) -> bool:
+        """Toggles topmost via the Win32 SetWindowPos API instead of Qt's
+        setWindowFlags(). On Windows, setWindowFlags() destroys and
+        recreates the widget's native HWND to apply the new window style —
+        this is a real, confirmed cause of two separate symptoms: the
+        taskbar icon silently disappearing (the freshly recreated HWND
+        doesn't reliably keep the taskbar-visible extended style) and a
+        general risk of anything bound to the OLD HWND (the global hotkey
+        registration, native event filters) being silently orphaned.
+        SetWindowPos changes z-order on the SAME HWND, in place — no
+        destroy, no recreate, none of that risk. Returns True on success so
+        the caller can fall back to the old behavior if this ever fails.
+        """
+        if sys.platform != "win32":
+            return False
+        try:
+            import ctypes
+            hwnd = int(widget.winId())
+            HWND_TOPMOST, HWND_NOTOPMOST = -1, -2
+            SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE = 0x0002, 0x0001, 0x0010
+            insert_after = HWND_TOPMOST if enabled else HWND_NOTOPMOST
+            ok = ctypes.windll.user32.SetWindowPos(
+                hwnd, insert_after, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            )
+            return bool(ok)
+        except Exception as e:
+            log.warning("[AOT-PY] Native SetWindowPos failed: %s", e)
+            return False
+
     @Slot(bool)
     def set_always_on_top(self, enabled: bool):
         from PySide6.QtCore import Qt
         flag = Qt.WindowType.WindowStaysOnTopHint
-        # Main window
-        flags = self._win.windowFlags()
-        log.info("[AOT-PY] set_always_on_top(%s) — flags before=%s", enabled, flags)
-        if enabled: flags |= flag
-        else: flags &= ~flag
-        self._win.setWindowFlags(flags)
-        self._win.show()
-        log.info("[AOT-PY] set_always_on_top(%s) — flags after=%s (native frame, "
-                 "no decoration hints stripped)", enabled, self._win.windowFlags())
+
+        if self._set_always_on_top_native(self._win, enabled):
+            log.info("[AOT-PY] set_always_on_top(%s) via SetWindowPos — no HWND recreation", enabled)
+        else:
+            # Fallback for non-Windows platforms or if the native call
+            # itself failed — same behavior this always had, kept only as
+            # a safety net now that the native path is the default.
+            flags = self._win.windowFlags()
+            log.info("[AOT-PY] set_always_on_top(%s) — flags before=%s", enabled, flags)
+            if enabled: flags |= flag
+            else: flags &= ~flag
+            self._win.setWindowFlags(flags)
+            self._win.show()
+            log.info("[AOT-PY] set_always_on_top(%s) — flags after=%s (native frame, "
+                     "no decoration hints stripped)", enabled, self._win.windowFlags())
+
         # All dock windows
         for dlg in getattr(self, '_dock_windows', {}).values():
             if dlg and dlg.isVisible():
+                if self._set_always_on_top_native(dlg, enabled):
+                    continue
                 f = dlg.windowFlags()
                 if enabled: f |= flag
                 else: f &= ~flag
