@@ -34,10 +34,18 @@
 ;   dialog (Abort/Retry/Ignore). Choosing "Ignore" skips just that file and
 ;   continues installing everything else selected (Resolve integration is
 ;   embedded, so it never depends on this download at all).
+; - The standalone .zip is verified against a SHA-256 (native "Hash:"
+;   parameter, added in Inno Setup 6.5+) computed by build_mflow.bat at
+;   build time. If the downloaded bytes don't match — corruption in
+;   transit, or the R2 object having been tampered with after publishing —
+;   Setup treats it the same as a failed download (Abort/Retry/Ignore),
+;   it will NOT silently install a mismatched file. The same hash is also
+;   shown to the user on the Ready page so they can compare it by hand
+;   against the value published in the release's changelog.
 
-#define MyAppVersion "2.6.0"
+#define MyAppVersion "2.5.1"
 #define MyAppArch "x64"
-; ReleaseTag is the display/filename form ("v2.6.0") — the bare MyAppVersion
+; ReleaseTag is the display/filename form ("v2.5.1") — the bare MyAppVersion
 ; (no "v") is what stays in AppVersion below, since that's what Windows'
 ; internal file/product versioning expects in plain X.Y.Z(.W) form.
 #define ReleaseTag "v" + MyAppVersion
@@ -112,7 +120,7 @@ Name: "{userappdata}\MFlow\language"; Flags: uninsneveruninstall
 ; Downloaded from R2 and extracted directly by Setup — no [Code] needed.
 ; DestName's .zip extension is how Setup knows which archive format to use.
 Source: "{#StandaloneZipURL}"; DestDir: "{app}"; DestName: "{#StandaloneZipName}"; \
-    ExternalSize: {#StandaloneExternalSize}; Tasks: standalone; \
+    ExternalSize: {#StandaloneExternalSize}; Hash: "{#StandaloneSHA256}"; Tasks: standalone; \
     Flags: external download extractarchive ignoreversion recursesubdirs createallsubdirs
 
 ; ── Resolve bridge source → %APPDATA%\MFlow ─────────────────────────────────
@@ -151,16 +159,48 @@ Type: filesandordirs; Name: "{app}"
 
 [Code]
 
-// Appends the exact file (with version) that will be downloaded to the
-// Ready page's summary, so the user sees it before clicking Install.
+// Full transparency on the Ready page: what gets downloaded (and from
+// where), its SHA-256 for manual comparison against the published
+// changelog, and a plain-language account of what each selected component
+// actually touches on disk. Nothing here is required for the install to
+// work — it's purely so the user isn't taking anything on faith.
 function UpdateReadyMemo(Space, NewLine, MemoUserInfoInfo, MemoDirInfo, MemoTypeInfo,
   MemoComponentsInfo, MemoGroupInfo, MemoTasksInfo: String): String;
 begin
   Result := MemoDirInfo + NewLine + NewLine + MemoTasksInfo;
+
   if IsTaskSelected('standalone') then
-    Result := Result + NewLine + NewLine + 'Will download:' + NewLine +
+  begin
+    Result := Result + NewLine + NewLine +
+      'Standalone download:' + NewLine +
       Space + '{#StandaloneZipName}' + NewLine +
-      Space + 'from {#R2BaseURL}';
+      Space + 'Source: Cloudflare R2 (' + '{#R2BaseURL}' + '), a public' + NewLine +
+      Space + 'object storage/CDN service — plain HTTPS, no login or token.' + NewLine +
+      Space + 'SHA-256: {#StandaloneSHA256}' + NewLine +
+      Space + '(Setup verifies this automatically; compare it yourself' + NewLine +
+      Space + 'against the value published in this version''s changelog' + NewLine +
+      Space + 'if you want independent confirmation.)' + NewLine +
+      Space + 'Extracted to the install folder you chose above.';
+  end;
+
+  if IsTaskSelected('studio') or IsTaskSelected('free') then
+  begin
+    Result := Result + NewLine + NewLine + 'DaVinci Resolve integration will:';
+    Result := Result + NewLine + Space +
+      'Copy MFlow''s source files to %APPDATA%\MFlow (plain .py/.json/.html,' + NewLine +
+      Space + 'not an executable).';
+    if IsTaskSelected('studio') then
+      Result := Result + NewLine + Space +
+        'Copy MFlow.lua into ...\Fusion\Scripts\Utility (Resolve''s own' + NewLine +
+        Space + 'script folder) — this is what makes it appear under' + NewLine +
+        Space + 'Workspace > Scripts > MFlow.';
+    if IsTaskSelected('free') then
+      Result := Result + NewLine + Space +
+        'Copy MFlow_Free.py into ...\Fusion\Scripts\Comp — this is what' + NewLine +
+        Space + 'makes it appear under the Fusion page''s Comp > Scripts menu.';
+    Result := Result + NewLine + Space +
+      'No registry changes, no other folders touched.';
+  end;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
