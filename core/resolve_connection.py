@@ -76,6 +76,74 @@ def _run_with_timeout(fn, args=(), timeout=6.0, name="worker"):
     return box["value"], None, False
 
 
+def _diagnose_scriptapp_failure(log, dvr_module, fsp):
+    """Gathers every piece of evidence that could explain why scriptapp()
+    returned None, without guessing at a cause — just facts, one per line,
+    so a real root cause can be read off the log instead of inferred.
+    Every probe here is independently wrapped; a failure in one diagnostic
+    must never prevent the rest from running or hide the real error.
+    """
+    log.warning("[get_resolve] ── Diagnostics start ──────────────────────")
+
+    try:
+        import struct
+        bits = struct.calcsize("P") * 8
+        log.warning("[get_resolve] Python: %s (%d-bit) at %s", sys.version.split()[0], bits, sys.executable)
+    except Exception as e:
+        log.warning("[get_resolve] Could not determine Python bitness: %s", e)
+
+    try:
+        if dvr_module is not None:
+            log.warning("[get_resolve] DaVinciResolveScript module file: %s", getattr(dvr_module, "__file__", "(unknown)"))
+        else:
+            log.warning("[get_resolve] DaVinciResolveScript module: not imported")
+    except Exception as e:
+        log.warning("[get_resolve] Could not inspect DaVinciResolveScript module: %s", e)
+
+    try:
+        if fsp and os.path.isfile(fsp):
+            st = os.stat(fsp)
+            log.warning("[get_resolve] fusionscript.dll: %s (%d bytes, mtime %s)",
+                        fsp, st.st_size, time.ctime(st.st_mtime))
+        else:
+            log.warning("[get_resolve] fusionscript.dll not found at expected path: %s", fsp)
+    except Exception as e:
+        log.warning("[get_resolve] Could not stat fusionscript.dll: %s", e)
+
+    for var in ("RESOLVE_SCRIPT_API", "RESOLVE_SCRIPT_LIB", "PYTHONPATH"):
+        log.warning("[get_resolve] env %s = %s", var, os.environ.get(var, "(unset)"))
+
+    try:
+        if sys.platform == "win32":
+            import subprocess
+            out = subprocess.run(
+                ["tasklist", "/FI", "IMAGENAME eq Resolve.exe", "/FO", "CSV", "/NH"],
+                capture_output=True, text=True, timeout=5,
+            )
+            running = "Resolve.exe" in (out.stdout or "")
+            log.warning("[get_resolve] Resolve.exe process running: %s", running)
+            if running:
+                log.warning("[get_resolve] tasklist output: %s", out.stdout.strip())
+        else:
+            log.warning("[get_resolve] Process-running check skipped (non-Windows)")
+    except Exception as e:
+        log.warning("[get_resolve] Could not check Resolve.exe process list: %s", e)
+
+    # NOTE: deliberately NOT retrying scriptapp() here. The very first call
+    # already measured ~4s to return None (see the [get_resolve] duration
+    # log right before this block) — a second call costs just as much and
+    # would push this diagnostic pass past the probe's own timeout, getting
+    # the whole process SIGTERM'd before any of this ever reaches the parent.
+    # A ~4s delay-before-None is itself the most useful signal we have: an
+    # instantly-rejected connection (preference truly off) returns near
+    # immediately, so several seconds strongly suggests a real handshake
+    # attempt (pipe/socket) that is timing out, not a clean "disabled"
+    # rejection — consistent with the scripting preference having been
+    # toggled without Resolve being restarted afterward.
+
+    log.warning("[get_resolve] ── Diagnostics end ────────────────────────")
+
+
 def get_resolve(custom_path: str = ""):
     """
     Obtain the Resolve scripting object, handling multiple-Python-version conflicts.
@@ -129,17 +197,21 @@ def get_resolve(custom_path: str = ""):
             log.debug("[get_resolve] Path does not exist: %s", p)
 
     # Method 1: DaVinciResolveScript module (preferred)
+    _dvr_ref = None
     try:
         import DaVinciResolveScript as _dvr  # noqa
+        _dvr_ref = _dvr
         log.info("[get_resolve] DaVinciResolveScript imported OK")
+        _t0 = time.monotonic()
         r = _dvr.scriptapp("Resolve")
+        _elapsed = time.monotonic() - _t0
         if r:
-            log.info("[get_resolve] scriptapp('Resolve') returned object — connected")
+            log.info("[get_resolve] scriptapp('Resolve') returned object in %.2fs — connected", _elapsed)
             return r
-        log.warning("[get_resolve] scriptapp('Resolve') returned None — "
+        log.warning("[get_resolve] scriptapp('Resolve') returned None after %.2fs — "
                     "Resolve is not running OR External Scripting is not set to Local.\n"
                     "  Fix: DaVinci Resolve > Preferences > System > General > "
-                    "External scripting using = Local")
+                    "External scripting using = Local", _elapsed)
     except ImportError as e:
         log.warning("[get_resolve] DaVinciResolveScript import failed: %s", e)
         log.warning("[get_resolve] Searched paths: %s", search_paths)
@@ -164,6 +236,7 @@ def get_resolve(custom_path: str = ""):
         except Exception as e:
             log.warning("[get_resolve] fusionscript fallback failed: %s", e)
 
+    _diagnose_scriptapp_failure(log, _dvr_ref, fsp)
     log.warning("[get_resolve] All methods failed — returning None")
     return None
 

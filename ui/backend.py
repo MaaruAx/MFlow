@@ -449,7 +449,7 @@ class Backend(QObject):
                         # GIL while stuck, that freezes every thread in the
                         # process including the main Qt event loop — this
                         # was NOT just a "leak one thread pool slot" risk).
-                        if not probe_resolve_connection(cp, timeout=6.0):
+                        if not probe_resolve_connection(cp, timeout=9.0):
                             log.warning("[Connect] Attempt %d — probe found Resolve "
                                         "unresponsive, skipping real attempt", attempt + 1)
                             continue
