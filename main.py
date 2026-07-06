@@ -470,18 +470,19 @@ def main():
     if sys.platform == "win32":
         try:
             import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MFlow.MFlow.2.6.0")
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("MFlow.MFlow.2.5.0")
         except Exception as e:
             log.debug("[Taskbar] Could not set AppUserModelID: %s", e)
 
     app = QApplication(sys.argv)
     app.setApplicationName("MFlow")
-    app.setApplicationVersion("2.6.0")
+    app.setApplicationVersion("2.5.0")
     app.setWindowIcon(QIcon(_resource("MFlow.ico")))
 
     comp = None
     try:
-        from core.resolve_connection import get_resolve_with_timeout, get_comp_with_timeout
+        from core.resolve_connection import (probe_resolve_connection,
+                                              get_resolve_with_timeout, get_comp_with_timeout)
         from core.platform_config import settings_file
         custom = ""
         try:
@@ -489,15 +490,25 @@ def main():
                 custom = json.load(f).get("dvr_path", "")
         except Exception:
             pass
-        # Bounded: guarantees the window shows within ~6s even if Resolve's
-        # scripting bridge is dead/hung — see get_resolve_with_timeout().
-        resolve = get_resolve_with_timeout(custom, timeout=6.0)
+        # Two layers of defense against a hung Resolve scripting bridge:
+        #  1. probe_resolve_connection() tests the waters in a genuinely
+        #     separate OS process first — if IT hangs, it gets forcibly
+        #     killed, which is guaranteed to work regardless of what's
+        #     stuck inside (unlike a thread timeout — see that function's
+        #     docstring for why a thread-based guard alone isn't enough).
+        #  2. Only once the probe confirms Resolve is currently responsive
+        #     do we attempt the real connection, still under the
+        #     thread-based timeout as a secondary safety net for the small
+        #     window between the probe and this call.
+        resolve = None
+        if probe_resolve_connection(custom, timeout=6.0):
+            resolve = get_resolve_with_timeout(custom, timeout=6.0)
         if resolve:
             comp = get_comp_with_timeout(resolve, timeout=4.0)
             log.info("Connected to Resolve")
         else:
             resolve = None
-            log.info("Resolve not found — running standalone")
+            log.info("Resolve not found or unresponsive — running standalone")
     except Exception as e:
         log.warning("Resolve connection error: %s", e)
         resolve = None
@@ -505,6 +516,22 @@ def main():
     try:
         win = MFlowWindow(comp=comp, resolve=resolve)
         win.show()
+
+        def _on_app_state_changed(state):
+            # ApplicationActive = MFlow is the focused window; anything else
+            # (Inactive/Suspended/Hidden) means focus moved elsewhere — most
+            # commonly the user working in Resolve's own viewport. Wrapped
+            # in try/except since this fires often and must never be able
+            # to take the app down.
+            try:
+                active = (state == Qt.ApplicationState.ApplicationActive)
+                if hasattr(win, "_backend") and win._backend is not None:
+                    win._backend.set_window_focused(active)
+            except Exception as e:
+                log.debug("[Focus] applicationStateChanged handler failed: %s", e)
+
+        app.applicationStateChanged.connect(_on_app_state_changed)
+
         code = app.exec()
         # Clean exit — remove crash log so we don't show stale crashes next launch
         try: _crash_f.close(); os.remove(_CRASH_LOG)
@@ -518,4 +545,13 @@ def main():
 
 
 if __name__ == "__main__":
+    # REQUIRED for multiprocessing (used by core.resolve_connection's
+    # probe_resolve_connection) to work correctly once this is packaged as
+    # a PyInstaller executable. Without this, a frozen exe spawning a new
+    # "spawn"-context process can re-execute the entire app from the top in
+    # the child instead of just running the probe worker — the same class
+    # of fork-bomb bug already hit and fixed once before in MPaste. Must be
+    # the very first thing that runs, before any other code.
+    import multiprocessing
+    multiprocessing.freeze_support()
     main()

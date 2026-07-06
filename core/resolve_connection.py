@@ -212,6 +212,80 @@ def get_comp_with_timeout(resolve, timeout: float = 4.0):
     return value
 
 
+def _probe_worker(custom_path, queue):
+    """Runs in a genuinely separate OS process (see probe_resolve_connection
+    for why). Only ever used to test whether get_resolve() currently
+    responds — the resolve object it obtains is a native handle tied to
+    THIS process and cannot be sent back across the process boundary, so
+    this just reports success/failure. If it reports success, the caller
+    then makes its OWN get_resolve() call directly, now with much higher
+    confidence it won't hang."""
+    try:
+        r = get_resolve(custom_path)
+        queue.put(("ok", bool(r)))
+    except Exception as e:
+        queue.put(("error", str(e)))
+
+
+def probe_resolve_connection(custom_path: str = "", timeout: float = 6.0) -> bool:
+    """Tests whether get_resolve() currently responds, using a real separate
+    process instead of a thread.
+
+    Why this exists: get_resolve_with_timeout() (the thread-based guard)
+    turned out to be insufficient in the field — confirmed by a real hang
+    that outlasted its timeout and required force-killing the app. The
+    likely cause: if the native fusionscript call blocks on its IPC wait
+    WITHOUT releasing Python's GIL, every thread in the process freezes
+    with it — including the thread that was supposed to be enforcing the
+    timeout, since the GIL itself becomes unavailable to it. A thread
+    timeout cannot recover from that under any circumstances; the call
+    truly never returns control to Python.
+
+    A separate OS process has its own GIL entirely. If it hangs, this
+    function's terminate()/kill() is a real, unconditional OS-level kill —
+    it works regardless of what the child is stuck doing internally, no
+    cooperation from the stuck code required.
+
+    Returns True only if the probe process cleanly reported success within
+    `timeout` seconds. On any failure, timeout, or even a problem with the
+    probing mechanism itself, this fails CLOSED (returns False) — for a
+    standalone install, "occasionally slower to notice Resolve is running"
+    is a far better trade than "occasionally hangs the whole app again"."""
+    log = logging.getLogger("mflow")
+    try:
+        import multiprocessing
+        ctx = multiprocessing.get_context("spawn")
+        q = ctx.Queue()
+        p = ctx.Process(target=_probe_worker, args=(custom_path, q), daemon=True)
+        p.start()
+        p.join(timeout)
+        if p.is_alive():
+            log.warning("[get_resolve] Probe process unresponsive after %.1fs — "
+                        "terminating it and continuing in standalone mode.", timeout)
+            try:
+                p.terminate()
+                p.join(2.0)
+                if p.is_alive():
+                    p.kill()
+                    p.join(1.0)
+            except Exception as e:
+                log.debug("[get_resolve] Could not terminate probe process cleanly: %s", e)
+            return False
+        if not q.empty():
+            kind, val = q.get()
+            if kind == "ok":
+                return bool(val)
+            log.warning("[get_resolve] Probe process reported an error: %s", val)
+            return False
+        log.warning("[get_resolve] Probe process exited without a result (exit code %s)",
+                    p.exitcode)
+        return False
+    except Exception as e:
+        log.warning("[get_resolve] Connection probe unavailable (%s) — "
+                    "skipping real attempt this launch, staying standalone.", e)
+        return False
+
+
 # ── Resolve process liveness check ────────────────────────────────────────────
 # Best-effort, deliberately cheap: the DaVinci scripting bridge can hang
 # indefinitely on a call into a dead/closing Resolve process rather than
@@ -349,6 +423,18 @@ class ResolveWatcher(QObject):
         self._interacting_timeout = QTimer(self)
         self._interacting_timeout.setSingleShot(True)
         self._interacting_timeout.timeout.connect(self._force_clear_interacting)
+
+        # Set false while the MFlow window doesn't have OS-level focus (the
+        # user is working in Resolve's own viewport, or any other app).
+        # _poll() skips its body while this is false — same ~150-240ms
+        # ActiveTool cost as above, just spent continuously in the
+        # background for no benefit while nobody is even looking at MFlow.
+        # Defaults True so nothing changes until main.py starts reporting
+        # real focus state via QApplication.applicationStateChanged.
+        # Deliberately independent of the manual Ctrl+R global hotkey path
+        # (Backend.scan_comp()) — that one must keep working regardless of
+        # focus, since "works without window focus" is its whole purpose.
+        self._focused = True
 
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._poll)
@@ -527,8 +613,16 @@ class ResolveWatcher(QObject):
                 "[Watcher] interacting flag force-cleared after timeout (missed mouseup?)")
             self._interacting = False
 
+    def set_focused(self, focused: bool):
+        """Called from main.py's QApplication.applicationStateChanged
+        handler. Pausing polling while MFlow isn't the active window means
+        no ActiveTool/GetUndoStack cost is paid at all while the user is
+        working in Resolve's own viewport — that cost was previously being
+        spent continuously for a UI nobody was even looking at."""
+        self._focused = bool(focused)
+
     def _poll(self):
-        if self._interacting:
+        if self._interacting or not self._focused:
             return
         _t0 = time.perf_counter()
         _t_active = _t_undo = _t_scan = None

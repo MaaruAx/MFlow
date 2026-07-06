@@ -841,7 +841,7 @@ try {
 <div id="titlebar">
   <span id="appname"><span id="nm">M</span><span id="nf">Flow</span></span>
   <span class="badge" id="badge-fluid" data-i18n="badge.fluid">FLUID</span>
-  <span id="version">v2.6.0</span>
+  <span id="version">v2.5.0</span>
   <div class="spacer"></div>
   <div id="conn-row">
     <div id="conn-dot"></div>
@@ -4102,7 +4102,22 @@ function applyThemeJSON(data) {
   requestAnimationFrame(()=>{ _refreshThemeColors(); _refreshNodeColors(); setMode(mode); scheduleDraw(); });
 }
 function renderThemeOptions(themes) {
-  const opts = [{value:'',text:'Default'}].concat(themes.map(t=>({value:t.name,text:t.name})));
+  // BUG FIX: this used to build {value: t.name, ...} — the theme's
+  // internal DISPLAY name — and send THAT to backend.load_theme(). But
+  // load_theme() looks up a file by filename/key, and save_theme() writes
+  // the file under a SANITIZED name while storing the original, unsanitized
+  // name inside the JSON's own "name" field. Any theme whose name contains
+  // characters save_theme() strips (anything outside alnum/space/_/-, e.g.
+  // "My Theme!") ends up with filename "My Theme.json" but internal
+  // name "My Theme!" — so selecting it, or restoring it from settings.json
+  // on next launch, sent "My Theme!" to load_theme(), which looked for
+  // "My Theme!.json", found nothing, and silently failed. Bundled themes
+  // happened to never hit this (their names never used special characters),
+  // which is why it looked intermittent — "breaks after each update" for
+  // custom themes, never for the built-in ones. The filename/key is what
+  // must round-trip through the dropdown and into settings.json, with the
+  // display name used only for the visible label.
+  const opts = [{value:'',text:'Default'}].concat(themes.map(t=>({value:t.filename,text:t.name})));
   const cur = $('s-theme') ? $('s-theme').value : '';
   cselPopulate('s-theme-wrap', opts, cur||'');
 }

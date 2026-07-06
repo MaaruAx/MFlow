@@ -693,6 +693,15 @@ class Backend(QObject):
         if self._watcher:
             self._watcher.set_interacting(active)
 
+    def set_window_focused(self, focused: bool):
+        """Called from main.py's QApplication.applicationStateChanged
+        handler (not a JS-facing Slot — this is a pure OS/Qt-level concern).
+        Pauses polling while MFlow isn't the active window. Deliberately
+        does NOT affect the global Ctrl+R hotkey path (scan_comp()), which
+        must keep working without window focus by design."""
+        if self._watcher:
+            self._watcher.set_focused(focused)
+
     @Slot(bool)
     def set_always_on_top(self, enabled: bool):
         from PySide6.QtCore import Qt
