@@ -760,23 +760,72 @@ class Backend(QObject):
             return False
         try:
             import ctypes
-            hwnd = int(widget.winId())
-            HWND_TOPMOST, HWND_NOTOPMOST = -1, -2
+            from ctypes import wintypes
+
+            # CRITICAL: without explicit argtypes, ctypes marshals plain
+            # Python ints as 32-bit c_int by default. HWND_TOPMOST (-1) and
+            # HWND_NOTOPMOST (-2) are pseudo-handles that must be passed as
+            # a full pointer-width HWND — on 64-bit Windows, a 32-bit
+            # marshaled -1 does NOT reliably sign-extend into the correct
+            # 64-bit all-ones handle the API expects, so the call fails
+            # silently (returns 0, no Python exception raised at all).
+            # This was confirmed the hard way: three separate test sessions
+            # all silently fell back to the old setWindowFlags() path with
+            # zero diagnostic output, because failure-via-return-0 wasn't
+            # even being logged before, only failure-via-exception. Setting
+            # argtypes/restype explicitly makes ctypes marshal HWND_TOPMOST
+            # correctly instead of guessing.
+            user32 = ctypes.WinDLL("user32", use_last_error=True)
+            user32.SetWindowPos.argtypes = [
+                wintypes.HWND, wintypes.HWND,
+                ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                wintypes.UINT,
+            ]
+            user32.SetWindowPos.restype = wintypes.BOOL
+
+            hwnd = wintypes.HWND(int(widget.winId()))
+            HWND_TOPMOST = wintypes.HWND(-1)
+            HWND_NOTOPMOST = wintypes.HWND(-2)
             SWP_NOMOVE, SWP_NOSIZE, SWP_NOACTIVATE = 0x0002, 0x0001, 0x0010
             insert_after = HWND_TOPMOST if enabled else HWND_NOTOPMOST
-            ok = ctypes.windll.user32.SetWindowPos(
+
+            ok = user32.SetWindowPos(
                 hwnd, insert_after, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
             )
-            return bool(ok)
+            if not ok:
+                err = ctypes.get_last_error()
+                log.warning("[AOT-PY] SetWindowPos returned 0 (failed) — "
+                            "GetLastError=%d (%s)", err, ctypes.FormatError(err))
+                return False
+            return True
         except Exception as e:
-            log.warning("[AOT-PY] Native SetWindowPos failed: %s", e)
+            log.warning("[AOT-PY] Native SetWindowPos raised: %s", e, exc_info=True)
             return False
 
     @Slot(bool)
     def set_always_on_top(self, enabled: bool):
         from PySide6.QtCore import Qt
         flag = Qt.WindowType.WindowStaysOnTopHint
+
+        # applySettingsUI() calls this unconditionally on every launch and
+        # every settings save, regardless of whether the value actually
+        # changed — meaning this was the very first native call touching
+        # the window after creation, every single time, even when there
+        # was nothing to do. Skipping the no-op case removes that as a
+        # variable entirely while we track down the taskbar icon issue,
+        # and is simply correct regardless: no reason to touch the native
+        # window at all for a state it's already in.
+        #
+        # NOTE: self._win.windowFlags() is NOT a reliable source for this —
+        # the native SetWindowPos path below never calls setWindowFlags(),
+        # so Qt's own flag bookkeeping goes stale the first time the native
+        # path is used and never reflects reality again. Track it ourselves.
+        already_on_top = getattr(self, "_is_topmost", False)
+        if already_on_top == enabled:
+            log.debug("[AOT-PY] set_always_on_top(%s) — already in that state, no-op", enabled)
+            return
+        self._is_topmost = enabled
 
         if self._set_always_on_top_native(self._win, enabled):
             log.info("[AOT-PY] set_always_on_top(%s) via SetWindowPos — no HWND recreation", enabled)
@@ -948,13 +997,26 @@ class Backend(QObject):
         for tool_name, inputs in scan_result.items():
             log.debug("[Scan]   %s: %d input(s)", tool_name, len(inputs))
         self._last_comp_scan = scan_result
-        payload = {}
-        for tool_name, inputs in scan_result.items():
-            payload[tool_name] = {
-                k: {"label": v["label"], "kf_count": v["kf_count"]}
-                for k, v in inputs.items()
-            }
-        self.comp_scan_updated.emit(json.dumps(payload))
+        try:
+            payload = {}
+            for tool_name, inputs in scan_result.items():
+                payload[tool_name] = {
+                    k: {"label": v["label"], "kf_count": v["kf_count"]}
+                    for k, v in inputs.items()
+                }
+            json_payload = json.dumps(payload)
+        except Exception as e:
+            # This is the one thing the old code could never tell us: if
+            # building or serializing the payload ever raised, the "Comp
+            # scan complete" log line above would already have printed,
+            # making a silent failure here look identical to success in
+            # the log. Never again — log it loud and explicit.
+            log.error("[Scan] Failed to build/serialize scan payload — "
+                      "comp_scan_updated was NEVER emitted: %s", e, exc_info=True)
+            return
+        self.comp_scan_updated.emit(json_payload)
+        log.info("[Scan] comp_scan_updated emitted — %d bytes, %d tool(s)",
+                 len(json_payload), len(payload))
 
     @Slot()
     def scan_comp(self):
@@ -987,6 +1049,21 @@ class Backend(QObject):
                     return fu
             except Exception as e:
                 log.debug("[Fusion] _resolve.Fusion() raised: %s", e)
+        # 1b. Free mode: the object Resolve injected directly at script
+        # launch time (see MFlow_Free.py) is a live Fusion reference that
+        # was never being tried here at all — every path above and below
+        # this one assumes an external scriptapp()-style connection, which
+        # Free never has. This was the direct cause of list_comps() and
+        # anything else routed through _get_fusion() silently failing for
+        # every Free session, regardless of whether the injected reference
+        # was still perfectly valid.
+        if self._fusion_app:
+            try:
+                _ = self._fusion_app.GetCurrentComp  # liveness check
+                self._fu = self._fusion_app
+                return self._fusion_app
+            except Exception as e:
+                log.debug("[Fusion] self._fusion_app liveness check failed: %s", e)
         # 2. Via comp object
         if self._comp:
             try:
