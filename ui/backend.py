@@ -155,6 +155,7 @@ class Backend(QObject):
         # get_resolve()/get_comp() at startup, so this combination
         # (fusion_app present, resolve absent) only ever happens in Free.
         self._is_free_mode = (fusion_app is not None and resolve is None)
+        self._js_ready = False
         # Cache _fu immediately if resolve is available at startup
         if resolve:
             try:
@@ -263,6 +264,13 @@ class Backend(QObject):
         self._emit_profiles()
         # Push saved settings so JS restores theme/auto-apply/etc on startup
         self.settings_signal.emit(json.dumps(self._settings))
+        # If a watcher already exists (normal startup path — _start_watcher()
+        # runs before JS finishes loading the page), this is the first safe
+        # moment to scan: comp_scan_updated has no buffering, so firing it
+        # any earlier is a guaranteed silent loss. See _start_watcher() for
+        # the full explanation.
+        if self._watcher is not None:
+            self.scan_comp()
         # If Resolve wasn't running when MFlow launched, keep retrying quietly
         # instead of requiring a manual click on "Connect".
         self._ensure_auto_reconnect()
@@ -946,7 +954,18 @@ class Backend(QObject):
         self._watcher.comp_changed.connect(self._on_watcher_comp_changed)
         self._watcher.start()
         # Auto-scan on every fresh watcher: startup, reconnect, and auto-follow.
-        QTimer.singleShot(600, self.scan_comp)
+        # MUST wait for js_ready() the same way _announce_connection already
+        # does — comp_scan_updated has no buffering on the QWebChannel side,
+        # so a scan that completes before JS has called connect() on it is
+        # silently lost forever, with no error anywhere. Confirmed happening
+        # in production: the very first auto-scan on a fast machine finished
+        # and emitted before "UI loaded — waiting for JS js_ready()" even
+        # printed. If JS is already listening (a reconnect well after
+        # startup, not the initial launch), scan immediately instead of
+        # waiting on a signal that already fired.
+        if self._js_ready:
+            QTimer.singleShot(0, self.scan_comp)
+        # else: js_ready() below scans once JS actually confirms it's listening.
 
     def _on_watcher_comp_changed(self):
         """Watcher's _comp_check (fingerprint) confirmed the user switched comps."""
