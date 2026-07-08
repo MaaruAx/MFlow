@@ -4,7 +4,7 @@
 
 # ◈𝐌𝐅𝐋𝐎𝐖
 
-[![Version](https://img.shields.io/badge/Version-v2.6.0-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow/releases)
+[![Version](https://img.shields.io/badge/Version-v2.6.1-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow/releases)
 [![Downloads](https://img.shields.io/endpoint?url=https://codeberg.org/MaaruAx/MFlow/raw/branch/pages/downloads.json&style=for-the-badge&labelColor=1a1a2e)](https://codeberg.org/MaaruAx/MFlow/releases)
 [![Status](https://img.shields.io/badge/Status-Stable-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow)
 
@@ -139,7 +139,7 @@ You can also build your own theme and export it as a `.json` file to share or ke
 
 **Option A — Windows Installer (recommended on Windows)**
 
-Download `MFlow-v2.6.0-x64-Setup.exe` from the [Releases page](https://codeberg.org/MaaruAx/MFlow/releases). It's a checkbox installer — pick any combination of the three components below, run it, done.
+Download `MFlow-v2.6.1-x64-Setup.exe` from the [Releases page](https://codeberg.org/MaaruAx/MFlow/releases). It's a checkbox installer — pick any combination of the three components below, run it, done.
 
 | Component                                                                                             | What it does                                                                      |
 | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
@@ -252,7 +252,7 @@ Look for `Good signature from "..."` in the output.
 sha256sum -c SHA256SUMS.txt
 
 # Windows (PowerShell)
-Get-FileHash .\MFlow-v2.6.0-x64-Setup.exe -Algorithm SHA256
+Get-FileHash .\MFlow-v2.6.1-x64-Setup.exe -Algorithm SHA256
 ```
 
 The result should match the corresponding line in `SHA256SUMS.txt` exactly.
@@ -298,4 +298,3 @@ Inspired and based on **[FFlow](https://github.com/MisonLarp/Fusion-Flow/)** by 
 <br><br>
 
 </div>
-

@@ -20,7 +20,7 @@ setlocal EnableDelayedExpansion
 :: than one key in your keyring.
 set GPG_FINGERPRINT=3B4859FFA12947974836ADB48130B8F7C0C7FAEB
 
-set MFLOW_VERSION=2.6.0
+set MFLOW_VERSION=2.6.1
 set MFLOW_ARCH=x64
 set MFLOW_TAG=v%MFLOW_VERSION%
 set ZIP_NAME=MFlow-%MFLOW_TAG%-%MFLOW_ARCH%-standalone.zip

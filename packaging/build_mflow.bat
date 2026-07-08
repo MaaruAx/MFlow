@@ -3,7 +3,7 @@ setlocal EnableDelayedExpansion
 
 :: ── Version — bump this for every release. Must match MyAppVersion in
 ::    MFlow.iss, since the installer builds the R2 download URL from it.
-set MFLOW_VERSION=2.6.0
+set MFLOW_VERSION=2.6.1
 set MFLOW_ARCH=x64
 set MFLOW_TAG=v%MFLOW_VERSION%
 set MFLOW_ZIP=MFlow-%MFLOW_TAG%-%MFLOW_ARCH%-standalone.zip

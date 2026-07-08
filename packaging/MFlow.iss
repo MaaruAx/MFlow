@@ -43,9 +43,9 @@
 ;   shown to the user on the Ready page so they can compare it by hand
 ;   against the value published in the release's changelog.
 
-#define MyAppVersion "2.5.1"
+#define MyAppVersion "2.6.1"
 #define MyAppArch "x64"
-; ReleaseTag is the display/filename form ("v2.5.1") — the bare MyAppVersion
+; ReleaseTag is the display/filename form ("v2.6.1") — the bare MyAppVersion
 ; (no "v") is what stays in AppVersion below, since that's what Windows'
 ; internal file/product versioning expects in plain X.Y.Z(.W) form.
 #define ReleaseTag "v" + MyAppVersion
