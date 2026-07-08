@@ -235,17 +235,79 @@ class MFlowWindow(QMainWindow):
         except Exception as e:
             log.debug("[Titlebar] DWM styling unavailable (older Windows?): %s", e)
 
+    def _log_taskbar_style(self, context: str):
+        """Reads the actual Win32 extended window style (GWL_EXSTYLE) and
+        owner (GW_OWNER) and logs whether WS_EX_APPWINDOW (forces a taskbar
+        entry) and WS_EX_TOOLWINDOW (hides from the taskbar) are set. This
+        is ground truth from the OS itself — unlike Qt's own windowFlags(),
+        which can go stale relative to reality (confirmed happening with
+        the native SetWindowPos always-on-top path).
+
+        IMPORTANT: EXSTYLE bits alone don't tell the whole story — a window
+        with a non-null owner (GW_OWNER) is hidden from the taskbar by
+        Windows regardless of EXSTYLE, unless WS_EX_APPWINDOW is explicitly
+        set to override that. The first repro's data ruled out the EXSTYLE
+        bits themselves (0x100/WS_EX_WINDOWEDGE, completely normal, never
+        changed) — owner is the next most likely explanation and wasn't
+        being checked at all before.
+        """
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            hwnd = int(self.winId())
+            GWL_EXSTYLE = -20
+            GW_OWNER = 4
+            WS_EX_APPWINDOW  = 0x00040000
+            WS_EX_TOOLWINDOW = 0x00000080
+            user32 = ctypes.windll.user32
+            get_style = getattr(user32, "GetWindowLongPtrW", None) or user32.GetWindowLongW
+            get_style.restype = ctypes.c_longlong if hasattr(user32, "GetWindowLongPtrW") else ctypes.c_long
+            style = get_style(hwnd, GWL_EXSTYLE)
+            owner = user32.GetWindow(ctypes.c_void_p(hwnd), GW_OWNER)
+            log.info("[Taskbar] %-28s hwnd=0x%x owner=0x%x  GWL_EXSTYLE=0x%x  "
+                     "WS_EX_APPWINDOW=%s  WS_EX_TOOLWINDOW=%s",
+                     context, hwnd, owner or 0, style & 0xFFFFFFFF,
+                     bool(style & WS_EX_APPWINDOW), bool(style & WS_EX_TOOLWINDOW))
+        except Exception as e:
+            log.debug("[Taskbar] Could not read GWL_EXSTYLE/owner at '%s': %s", context, e)
+
     def showEvent(self, event):
         super().showEvent(event)
+        self._log_taskbar_style("showEvent (fires every show, not just first)")
         if not getattr(self, "_titlebar_styled", False):
             self._titlebar_styled = True
             log.info("[AOT-PY] initial showEvent — windowFlags=%s", self.windowFlags())
             self._apply_native_titlebar_style()
+            self._log_taskbar_style("after _apply_native_titlebar_style")
+            # Also check a couple seconds later — some shell taskbar
+            # registration happens asynchronously relative to window
+            # creation, so a bit that looks fine at showEvent time could
+            # still be altered shortly after by something else entirely.
+            QTimer.singleShot(2000, lambda: self._log_taskbar_style("+2s after first show"))
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        try:
+            from PySide6.QtCore import QEvent
+            if event.type() == QEvent.Type.WindowStateChange:
+                state = "minimized" if self.isMinimized() else (
+                    "maximized" if self.isMaximized() else "normal")
+                self._log_taskbar_style(f"changeEvent WindowStateChange -> {state}")
+        except Exception as e:
+            log.debug("[Taskbar] changeEvent logging failed: %s", e)
 
     def __init__(self, comp=None, fusion_app=None, resolve=None):
         super().__init__()
         self.setWindowTitle("MFlow")
-        self.setWindowIcon(QIcon(_resource("MFlow.ico")))
+        _ico_path = _resource("MFlow.ico")
+        _ico_exists = os.path.isfile(_ico_path)
+        _icon = QIcon(_ico_path)
+        log.info("[Taskbar] MFlow.ico path=%s  exists_on_disk=%s  QIcon.isNull()=%s",
+                 _ico_path, _ico_exists, _icon.isNull())
+        self.setWindowIcon(_icon)
+        if hasattr(QApplication, "instance") and QApplication.instance():
+            QApplication.instance().setWindowIcon(_icon)
         # Native OS window frame (no FramelessWindowHint): gives us back
         # correct Snap/Aero, drop shadow, multi-monitor DPI handling, and
         # native resize/move — all of which were fighting with QWebEngineView

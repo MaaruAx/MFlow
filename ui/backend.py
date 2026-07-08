@@ -835,6 +835,9 @@ class Backend(QObject):
             return
         self._is_topmost = enabled
 
+        if hasattr(self._win, "_log_taskbar_style"):
+            self._win._log_taskbar_style(f"before set_always_on_top({enabled})")
+
         if self._set_always_on_top_native(self._win, enabled):
             log.info("[AOT-PY] set_always_on_top(%s) via SetWindowPos — no HWND recreation", enabled)
         else:
@@ -849,6 +852,9 @@ class Backend(QObject):
             self._win.show()
             log.info("[AOT-PY] set_always_on_top(%s) — flags after=%s (native frame, "
                      "no decoration hints stripped)", enabled, self._win.windowFlags())
+
+        if hasattr(self._win, "_log_taskbar_style"):
+            self._win._log_taskbar_style(f"after set_always_on_top({enabled})")
 
         # All dock windows
         for dlg in getattr(self, '_dock_windows', {}).values():
