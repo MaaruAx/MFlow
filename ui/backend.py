@@ -14,7 +14,7 @@ import logging
 log = logging.getLogger("mflow")
 from core.platform_config import settings_file, themes_dir, bundled_themes_dir, language_dir, win_subprocess_kwargs
 from core.resolve_connection import warmup_fusion_api
-from core.curve_engine    import (apply_bezier, apply_baked, apply_steps,
+from core.curve_engine    import (apply_bezier, apply_baked, apply_steps_kf,
                                    apply_overframe, bake_oscillator,
                                    bake_elastic_penner, bake_elastic_out,
                                    bake_bounce, bake_catenary, bake_pulse,
@@ -188,6 +188,8 @@ class Backend(QObject):
         self._bounce_gamma = 4.0
         self._bounce_omega = 6.0
         self._bounce_dir   = "ceiling"  # 'ceiling' | 'floor'
+        self._steps_n          = 8
+        self._steps_from_start = False  # False='jump-end' (CSS default), True='jump-start'
         self._catenary_a   = 0.8
         self._catenary_reverse = False
         self._pulse_omega1 = 8.0
@@ -1439,6 +1441,8 @@ class Backend(QObject):
         self._res_omega    = float(d.get("res_omega",    self._res_omega))
         self._res_omega0   = float(d.get("res_omega0",   self._res_omega0))
         self._res_reverse  = bool(d.get("res_reverse",   self._res_reverse))
+        self._steps_n          = int(d.get("steps_n",          self._steps_n))
+        self._steps_from_start = bool(d.get("steps_from_start", self._steps_from_start))
         if self._auto_apply and self._comp:
             self._auto_timer.start(280)   # debounce 280 ms
         # Notify dock windows so they can mirror the main window's current curve
@@ -2297,6 +2301,14 @@ class Backend(QObject):
         if not r: return False
         t0, v0, t1, v1 = r
 
+        if mode == "steps":
+            # Special-cased like easing/overframe above: true flat plateaus
+            # with hard jumps can't be represented as a sampled frame array
+            # fed through the generic apply_baked() — see apply_steps_kf's
+            # own docstring for why.
+            return apply_steps_kf(spline, t0, v0, t1, v1,
+                                  n_steps=self._steps_n,
+                                  from_start=self._steps_from_start)
         if mode == "elastic":
             if self._el_direction == "out":
                 frames = bake_elastic_out(t0, v0, t1, v1, fps,
