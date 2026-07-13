@@ -841,7 +841,7 @@ try {
 <div id="titlebar">
   <span id="appname"><span id="nm">M</span><span id="nf">Flow</span></span>
   <span class="badge" id="badge-fluid" data-i18n="badge.fluid">FLUID</span>
-  <span id="version">v2.6.1</span>
+  <span id="version">v2.5.0</span>
   <div class="spacer"></div>
   <div id="conn-row">
     <div id="conn-dot"></div>
@@ -864,6 +864,7 @@ try {
       <button class="dd-item" data-mode="pulse"     onclick="setMode('pulse');closeExtrasModeDD()"     data-i18n="toolbar.pulse">PULSE</button>
       <button class="dd-item" data-mode="noise"     onclick="setMode('noise');closeExtrasModeDD()"     data-i18n="toolbar.noise">NOISE</button>
       <button class="dd-item" data-mode="resonance" onclick="setMode('resonance');closeExtrasModeDD()" data-i18n="toolbar.resonance">RESONANCE</button>
+      <button class="dd-item" data-mode="steps"     onclick="setMode('steps');closeExtrasModeDD()"     data-i18n="toolbar.steps">STEPS</button>
     </div>
   </div>
   <div class="spacer"></div>
@@ -1137,6 +1138,19 @@ try {
           <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
             <button class="tog on" id="btn-resdir-in"  onclick="setResReverse(false)" data-i18n="cp.elastic_in">← IN</button>
             <button class="tog"    id="btn-resdir-out" onclick="setResReverse(true)"  data-i18n="cp.elastic_out">OUT →</button>
+          </div>
+        </div>
+
+        <div id="cp-steps" style="display:none">
+          <div class="cp-hint" data-i18n="cp.steps_hint">discrete plateaus — jump-end holds then jumps, jump-start jumps then holds</div>
+          <div class="cp-row" style="margin-top:6px">
+            <span class="cp-lbl" data-i18n="cp.step_count">steps</span>
+            <input class="cp-sl" id="sl-stn" type="range" min="1" max="32" value="8" oninput="onStepsSlider()">
+            <span class="cp-val" id="vl-stn">8</span>
+          </div>
+          <div class="cp-row" style="justify-content:center;gap:6px;margin-top:4px">
+            <button class="tog on" id="btn-stjump-end"   onclick="setStepsFromStart(false)" data-i18n="cp.jump_end">JUMP-END</button>
+            <button class="tog"    id="btn-stjump-start" onclick="setStepsFromStart(true)"  data-i18n="cp.jump_start">JUMP-START</button>
           </div>
         </div>
 
@@ -1678,6 +1692,8 @@ let elDirection   = 'in';    // 'in' | 'out'
 let bounceGamma   = 4.0;
 let bounceOmega   = 11.0;
 let bounceDir     = 'floor'; // 'ceiling' | 'floor'
+let stepsN          = 8;
+let stepsFromStart  = false; // false='jump-end' (CSS default), true='jump-start'
 let catA          = 0.8;
 let catReverse     = false;
 let pulseOmega1   = 8.0;
@@ -1968,7 +1984,7 @@ function updateStatus() {
 // ═══════════════════════════════════════════════════════════════
 // § 8. MODE & LIBRARY
 // ═══════════════════════════════════════════════════════════════
-const EXTRAS_MODES = ['catenary','pulse','noise','resonance'];
+const EXTRAS_MODES = ['catenary','pulse','noise','resonance','steps'];
 
 function toggleExtrasModeDD() {
   const m = $('extras-mode-menu');
@@ -1993,8 +2009,9 @@ function isCatenary()  { return mode === 'catenary';  }
 function isPulse()     { return mode === 'pulse';     }
 function isNoise()     { return mode === 'noise';     }
 function isResonance() { return mode === 'resonance'; }
+function isSteps()     { return mode === 'steps';     }
 function isPhysics()   { return isSpring() || isElastic(); }
-function isNewBaked()  { return isBounce() || isCatenary() || isPulse() || isNoise() || isResonance(); }
+function isNewBaked()  { return isBounce() || isCatenary() || isPulse() || isNoise() || isResonance() || isSteps(); }
 function hasNoHandles(){ return isPhysics() || isNewBaked(); }
 
 function hexToRgb(hex) {
@@ -2024,7 +2041,7 @@ function setMode(m) {
   // Sync library pill (class only — colors come from CSS var(--accent))
   if (!_syncingModeLib) {
     _syncingModeLib = true;
-    const libMap = {easing:'easing',spring:'spring',elastic:'elastic',overframe:'overframe',bounce:'bounce',catenary:'catenary',pulse:'pulse',noise:'noise',resonance:'resonance'};
+    const libMap = {easing:'easing',spring:'spring',elastic:'elastic',overframe:'overframe',bounce:'bounce',catenary:'catenary',pulse:'pulse',noise:'noise',resonance:'resonance',steps:'steps'};
     if (libMap[m] && library !== libMap[m]) {
       library = libMap[m];
       if (backend) backend.load_library(libMap[m]);
@@ -2037,7 +2054,7 @@ function setMode(m) {
   // Show/hide curve param panels
   const spr = $('cp-spring'), ela = $('cp-elastic'), non = $('cp-none');
   const bnc = $('cp-bounce'), cat = $('cp-catenary'), pls = $('cp-pulse'),
-        nse = $('cp-noise'),  res = $('cp-resonance');
+        nse = $('cp-noise'),  res = $('cp-resonance'), stp = $('cp-steps');
   if (spr) spr.style.display = isSpring()    ? '' : 'none';
   if (ela) ela.style.display = isElastic()   ? '' : 'none';
   if (bnc) bnc.style.display = isBounce()    ? '' : 'none';
@@ -2045,9 +2062,10 @@ function setMode(m) {
   if (pls) pls.style.display = isPulse()     ? '' : 'none';
   if (nse) nse.style.display = isNoise()     ? '' : 'none';
   if (res) res.style.display = isResonance() ? '' : 'none';
+  if (stp) stp.style.display = isSteps()     ? '' : 'none';
   if (non) non.style.display = (hasNoHandles()) ? 'none' : '';
   // Animate the newly revealed control panel
-  const _acp=[spr,ela,bnc,cat,pls,nse,res].find(p=>p&&p.style.display!=='none');
+  const _acp=[spr,ela,bnc,cat,pls,nse,res,stp].find(p=>p&&p.style.display!=='none');
   if(_acp){_acp.classList.remove('cp-fadein');requestAnimationFrame(()=>_acp.classList.add('cp-fadein'));}
   // Apply mode palette (hl-med / hl-low tint)
   // hl vars are always restored from _CSS_DEFAULTS — they are user-customizable
@@ -2193,7 +2211,8 @@ function pushState() {
       catenary_a:catA, catenary_reverse:catReverse,
       pulse_omega1:pulseOmega1, pulse_omega2:pulseOmega2, pulse_n:pulseN, pulse_reverse:pulseReverse,
       noise_freq:noiseFreq, noise_amp:noiseAmp, noise_seed:noiseSeed, noise_reverse:noiseReverse,
-      res_gamma:resGamma, res_omega:resOmega, res_omega0:resOmega0, res_reverse:resReverse
+      res_gamma:resGamma, res_omega:resOmega, res_omega0:resOmega0, res_reverse:resReverse,
+      steps_n:stepsN, steps_from_start:stepsFromStart
     }));
   }, 80);
 }
@@ -2387,6 +2406,17 @@ function evalCatenaryJs(t, a) {
   const num=Math.cosh(t/a)-1, den=Math.cosh(1/a)-1;
   return Math.abs(den)<1e-12 ? t : Math.max(0,Math.min(1,num/den));
 }
+// Exact port of core/curve_engine.py's eval_steps() — CSS steps()/Anime.js
+// steps(n, fromStart) compatible. Keep bit-identical with the Python side;
+// see that function's docstring for the jump-start/jump-end semantics.
+function evalStepsJs(tn, nSteps, fromStart) {
+  if (nSteps < 1) nSteps = 1;
+  if (tn <= 0) return fromStart ? (1/nSteps) : 0;
+  if (tn >= 1) return 1;
+  let idx = Math.floor(tn * nSteps);
+  if (fromStart) idx = Math.min(idx + 1, nSteps);
+  return idx / nSteps;
+}
 function _mulberry32(seed) {
   return function() {
     seed=(seed+0x6D2B79F5)|0;
@@ -2470,6 +2500,8 @@ function updateLookup() {
     const rmin=Math.min(...raw), rmax=Math.max(...raw), rng=(rmax-rmin)||1;
     for (let i=0; i<=LN; i++) lookup[i]=(raw[i]-rmin)/rng;
     if (resReverse) lookup = lookup.slice().reverse().map(v=>1-v);
+  } else if (isSteps()) {
+    for (let i=0; i<=LN; i++) lookup[i] = evalStepsJs(i/LN, stepsN, stepsFromStart);
   } else {
     for (let i=0; i<=LN; i++)
       lookup[i] = okfActive ? evalOKF(i/LN) : evalBz(i/LN,h1[0],h1[1],h2[0],h2[1]);
@@ -2565,6 +2597,7 @@ function drawCurve() {
   else if (isPulse())     drawPulseCurve(col);
   else if (isNoise())     drawNoiseCurve(col);
   else if (isResonance()) drawResonanceCurve(col);
+  else if (isSteps())     drawStepsCurve(col);
   else                    drawBezierCurve(col);
 }
 let _rafDrawPending = false;
@@ -2673,6 +2706,28 @@ function drawResonanceCurve(col) {
   const gh=resGammaPos(), oh=resOmegaPos();
   drawHandleGuide(gh.x,gh.y,'y',col); drawHandleGuide(oh.x,oh.y,'x',col);
   drawCapsule(gh.x,gh.y,'y',col,'damp'); drawCapsule(oh.x,oh.y,'x',col,'drive');
+}
+function drawStepsCurve(col) {
+  const n = Math.max(1, stepsN);
+  ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.beginPath();
+  let first = true;
+  for (let k = 0; k < n; k++) {
+    const tStart = k / n, tEnd = (k + 1) / n;
+    const levelIdx = stepsFromStart ? Math.min(k + 1, n) : k;
+    const v = levelIdx / n;
+    const p0 = toPx(tStart, v), p1 = toPx(tEnd, v);
+    if (first) { ctx.moveTo(p0.x, p0.y); first = false; } else { ctx.lineTo(p0.x, p0.y); }
+    ctx.lineTo(p1.x, p1.y);
+  }
+  const pEnd = toPx(1, 1);
+  ctx.lineTo(pEnd.x, pEnd.y);
+  ctx.stroke();
+  // Dots at every jump boundary so the discrete levels read clearly at a glance
+  ctx.fillStyle = col;
+  for (let k = 0; k <= n; k++) {
+    const p = toPx(k / n, evalStepsJs(k / n, n, stepsFromStart));
+    ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+  }
 }
 function drawBezierCurve(col) {
   const p0=toPx(0,0), p1=toPx(1,1), h1p=toPx(...h1), h2p=toPx(...h2);
@@ -2888,6 +2943,20 @@ function syncBounceSliders() {
   if(btnF) btnF.classList.toggle('on', bounceDir==='floor');
 }
 function setBounceDir(d) { bounceDir=d; syncBounceSliders(); pushState(); }
+
+function onStepsSlider() {
+  stepsN = parseInt($('sl-stn').value, 10);
+  syncStepsSliders(); pushState();
+}
+function syncStepsSliders() {
+  $('sl-stn').value = stepsN;
+  $('vl-stn').textContent = stepsN;
+  _updateSliderFill('sl-stn', 1, 32, stepsN);
+  const btnE=$('btn-stjump-end'), btnS=$('btn-stjump-start');
+  if(btnE) btnE.classList.toggle('on', !stepsFromStart);
+  if(btnS) btnS.classList.toggle('on', stepsFromStart);
+}
+function setStepsFromStart(v) { stepsFromStart=v; syncStepsSliders(); pushState(); }
 
 function onCatenarySlider() {
   catA = $('sl-cata').value / 100;
@@ -3216,6 +3285,7 @@ function selectPreset(idx) {
   if (isPulse()   && p.params) { if(p.params.omega1!=null)pulseOmega1=p.params.omega1; if(p.params.omega2!=null)pulseOmega2=p.params.omega2; if(p.params.n!=null)pulseN=p.params.n; if(p.params.reverse!=null)pulseReverse=!!p.params.reverse; syncPulseSliders(); }
   if (isNoise()   && p.params) { if(p.params.freq!=null)noiseFreq=p.params.freq; if(p.params.amp!=null)noiseAmp=p.params.amp; if(p.params.seed!=null)noiseSeed=p.params.seed; if(p.params.reverse!=null)noiseReverse=!!p.params.reverse; syncNoiseSliders(); }
   if (isResonance()&&p.params) { if(p.params.gamma!=null)resGamma=p.params.gamma; if(p.params.omega!=null)resOmega=p.params.omega; if(p.params.omega0!=null)resOmega0=p.params.omega0; if(p.params.reverse!=null)resReverse=!!p.params.reverse; syncResSliders(); }
+  if (isSteps()    && p.params) { if(p.params.n_steps!=null)stepsN=p.params.n_steps; if(p.params.from_start!=null)stepsFromStart=!!p.params.from_start; syncStepsSliders(); }
   setLibrary(p.library||'easing'); pushState();
   document.querySelectorAll('.pcard').forEach(c => {
     const ci=+c.dataset.idx, active=ci===idx, pc=MODE_COLORS[(allPresets[ci]||{}).library]||'#26233a';
@@ -3239,6 +3309,7 @@ function saveCurrentPreset() {
     if (isPulse())     p.params={omega1:pulseOmega1, omega2:pulseOmega2, n:pulseN, reverse:pulseReverse};
     if (isNoise())     p.params={freq:noiseFreq, amp:noiseAmp, seed:noiseSeed, reverse:noiseReverse};
     if (isResonance()) p.params={gamma:resGamma, omega:resOmega, omega0:resOmega0, reverse:resReverse};
+    if (isSteps())      p.params={n_steps:stepsN, from_start:stepsFromStart};
     console.log('[Preset-Save-JS] calling backend.save_preset name='+n+' library='+mode);
     backend.save_preset(JSON.stringify(p));
   });
@@ -4062,6 +4133,7 @@ function resetColors() {
 // § 26. THEME SYSTEM
 // ═══════════════════════════════════════════════════════════════
 function applyThemeJSON(data) {
+  console.log('[Theme] applyThemeJSON start — name=' + (data && data.name));
   _activeTheme = data.name || 'custom';
   Object.entries(data.colors||{}).forEach(([k,v])=>{
     const vn='--'+k.replace(/_/g,'-');
@@ -4099,7 +4171,8 @@ function applyThemeJSON(data) {
     Object.entries(data.interface_colors).forEach(([k,v])=>{ document.body.style.setProperty('--'+k,v); _CSS_DEFAULTS['--'+k]=v; });
   }
   ['base','surface','overlay','border','text','muted','hl-low','hl-med','hl-high'].forEach(k=>{ const v=_readCSSColor('--'+k); if(v){const sw=$('sw-cc-'+k);if(sw)sw.style.background=v; const sc=$('sc-cc-'+k);if(sc)sc.value=v;} });
-  requestAnimationFrame(()=>{ _refreshThemeColors(); _refreshNodeColors(); setMode(mode); scheduleDraw(); });
+  requestAnimationFrame(()=>{ _refreshThemeColors(); _refreshNodeColors(); setMode(mode); scheduleDraw(); console.log('[Theme] applyThemeJSON rAF work finished — name=' + (data && data.name)); });
+  console.log('[Theme] applyThemeJSON returning (rAF queued) — name=' + (data && data.name));
 }
 function renderThemeOptions(themes) {
   // BUG FIX: this used to build {value: t.name, ...} — the theme's
@@ -4122,7 +4195,7 @@ function renderThemeOptions(themes) {
   cselPopulate('s-theme-wrap', opts, cur||'');
 }
 function loadThemesFromFolder()    { if(!backend)return; try{if(backend.list_themes)backend.list_themes();}catch(e){} }
-function applySelectedTheme(val)   { if(!val){_activeTheme='';applyTheme('');setMode(mode);return;} if(backend&&backend.load_theme){try{backend.load_theme(val);}catch(e){applyTheme(val);}} }
+function applySelectedTheme(val)   { console.log('[Theme] applySelectedTheme called — val=' + val); if(!val){_activeTheme='';applyTheme('');setMode(mode);return;} if(backend&&backend.load_theme){try{backend.load_theme(val);}catch(e){applyTheme(val);}} }
 
 // ═══════════════════════════════════════════════════════════════
 // § 27. PYTHON LIST
