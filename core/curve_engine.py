@@ -986,25 +986,85 @@ def _anchor_value(spline, t, kf_entry):
     return _kf_scalar(kf_entry) or 0.0
 
 
-def apply_steps(spline, n_steps, position="end") -> bool:
-    """Create step-function keyframes by placing near-adjacent keyframes."""
-    r = _get_kf_range(spline)
-    if not r:
+def eval_steps(tn: float, n_steps: int = 8, from_start: bool = False) -> float:
+    """CSS steps()/Anime.js-compatible step easing, normalized to [0,1].
+
+    Divides the range into n_steps equal plateaus.
+    - from_start=False (default; CSS 'jump-end'): each plateau holds the
+      PREVIOUS level and only jumps once its interval fully ends. Starts at
+      exactly 0, only reaches 1 at tn=1.
+    - from_start=True (CSS 'jump-start'): jumps to the NEXT level immediately
+      at the start of each interval. Never sits at 0 — jumps to 1/n_steps
+      the instant tn leaves 0, matching Anime.js's steps(n, true).
+
+    Matches Anime.js's steps(n, fromStart) exactly — verified against its
+    published source rather than approximated from memory (see chat).
+    """
+    if n_steps < 1:
+        n_steps = 1
+    if tn <= 0:
+        return (1.0 / n_steps) if from_start else 0.0
+    if tn >= 1:
+        return 1.0
+    idx = math.floor(tn * n_steps)
+    if from_start:
+        idx = min(idx + 1, n_steps)
+    return idx / n_steps
+
+
+def bake_steps(t0, v0, t1, v1, fps, n_steps=8, from_start=False):
+    """One sample per frame using eval_steps — same signature/shape as every
+    other bake_* function, used for the live canvas preview and anywhere
+    else a plain sampled array is wanted. NOT used to write to Fusion —
+    see apply_steps_kf for that; writing one keyframe per frame here would
+    make Fusion's bezier interpolation draw a fine staircase-of-ramps
+    instead of true flat plateaus with hard jumps.
+    """
+    n = max(1, round((t1 - t0) * fps))
+    result = []
+    for i in range(n + 1):
+        tn = i / n
+        vn = eval_steps(tn, n_steps, from_start)
+        result.append((t0 + tn * (t1 - t0), v0 + vn * (v1 - v0)))
+    return result
+
+
+def apply_steps_kf(spline, t0, v0, t1, v1, n_steps=8, from_start=False) -> bool:
+    """Writes TRUE discrete step keyframes onto a live Fusion spline.
+
+    There is no native 'constant/hold' per-keyframe interpolation flag
+    available through this BezierSpline API, so a hard jump is faked the
+    only reliable way available: each of the n_steps plateaus gets a
+    matching PAIR of keyframes — one at the start of its span, one an
+    epsilon before the next jump — both holding the identical value, so
+    Fusion's interpolation between them stays flat. The next pair then
+    jumps to the next level almost instantly. Endpoints are still anchored
+    exactly to v0/v1 like every other mode.
+    """
+    if n_steps < 1:
         return False
-    t0, v0, t1, v1 = r
-    dt = (t1-t0)/n_steps
-    dv = (v1-v0)/n_steps
-    new_kf = {}
-    for i in range(n_steps+1):
-        t = t0 + i*dt
-        v = v0 + i*dv
-        new_kf[t] = v
-        if i < n_steps and position == "start":
-            new_kf[t + 1e-4] = v0 + (i+1)*dv
+    span = t1 - t0
+    if span <= 0:
+        return False
+    # Never large enough to eat into the next plateau even with n_steps=1.
+    eps = min(0.05, span / max(1, n_steps) / 4.0)
+    new_kf = {t0: v0}
+    for k in range(n_steps):
+        level_idx = (k + 1) if from_start else k
+        level_v = v0 + (v1 - v0) * (level_idx / n_steps)
+        seg_start = t0 + span * k / n_steps
+        seg_end = t0 + span * (k + 1) / n_steps
+        new_kf[seg_start] = level_v
+        new_kf[seg_end - eps] = level_v
+    new_kf[t1] = v1
+    log.warning(f"[MFlow] apply_steps_kf: n_steps={n_steps} from_start={from_start}"
+          f"  t={t0:.1f}→{t1:.1f}  v={v0:.3f}→{v1:.3f}  eps={eps:.4f}  kf_count={len(new_kf)}")
     try:
         spline.SetKeyFrames(new_kf)
+        log.warning(f"[MFlow] apply_steps_kf: SetKeyFrames OK — {len(new_kf)} keyframes written")
         return True
-    except Exception:
+    except Exception as e:
+        log.warning("[MFlow] apply_steps_kf: SetKeyFrames FAILED: %s", e)
         return False
 
 
