@@ -4,9 +4,9 @@
 
 # ◈𝐌𝐅𝐋𝐎𝐖
 
-[![Version](https://img.shields.io/badge/Version-v2.6.1-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow/releases)
+[![Version](https://img.shields.io/badge/Version-v2.6.1-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://codeberg.org/MaaruAx/MFlow/releases)
 [![Downloads](https://img.shields.io/endpoint?url=https://codeberg.org/MaaruAx/MFlow/raw/branch/pages/downloads.json&style=for-the-badge&labelColor=1a1a2e)](https://codeberg.org/MaaruAx/MFlow/releases)
-[![Status](https://img.shields.io/badge/Status-Stable-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://github.com/MaaruAX/MFlow)
+[![Status](https://img.shields.io/badge/Status-Stable-c4a7e7?style=for-the-badge&labelColor=1a1a2e)](https://codeberg.org/MaaruAx/MFlow)
 
 ![free](https://img.shields.io/badge/Works_on_FREE_Resolve-1a1a2e?style=for-the-badge&labelColor=1a1a2e)
 
