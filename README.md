@@ -208,7 +208,7 @@ python uninstall.py
 
 > **Trouble connecting?** Join our Discord Server below. Provide your active operating system, host python version, and console outputs for immediate setup assistance.
 
-[![discord](https://img.shields.io/badge/Join_the_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dvZ9nvN79Y)
+[![discord](https://img.shields.io/badge/Join_the_Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/N5fTEDumSu)
 
 <br>
 
@@ -289,7 +289,7 @@ Inspired and based on **[FFlow](https://github.com/MisonLarp/Fusion-Flow/)** by 
 
 ![oss](https://img.shields.io/badge/Free_&_Open_Source-26233a?style=for-the-badge)
 &nbsp;
-[![discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/dvZ9nvN79Y)
+[![discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/N5fTEDumSu)
 &nbsp;
 [![releases](https://img.shields.io/badge/Releases-eb6f92?style=for-the-badge)](https://codeberg.org/MaaruAx/MFlow/releases)
 
