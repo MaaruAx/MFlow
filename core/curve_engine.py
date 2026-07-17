@@ -1202,3 +1202,276 @@ def apply_overframe(spline, h1: list, h2: list, of_points: list, kf_from: int = 
 
     log.warning(f"[MFlow] apply_overframe: handles {handles_ok}/{handles_expected}  → DONE")
     return True
+
+
+# ── Labs: blend up to 3 curve modes into one ───────────────────────────────────
+# Every bake_* function above already shares the same contract:
+# (t0, v0, t1, v1, fps, **params) -> [(frame, value), ...], one sample per
+# frame. That shared contract is what makes blending possible without any
+# new curve math at all — bake each slot independently over the identical
+# range (guaranteeing identical sample counts/frame positions), then combine
+# by weighted average. _LABS_DISPATCH below is the only new code: a lookup
+# from mode name to "how do I call that mode's bake_* with Labs-supplied
+# params", kept in one place so adding a mode to Labs later is a one-line change.
+
+def _labs_bake_easing(t0, v0, t1, v1, fps, p):
+    h1 = p.get("h1", [0.42, 0.0]); h2 = p.get("h2", [0.58, 1.0])
+    n = max(1, round((t1 - t0) * fps))
+    return [(t0 + i/n*(t1-t0), v0 + (v1-v0)*eval_bezier(i/n, h1, h2)) for i in range(n+1)]
+
+_LABS_DISPATCH = {
+    "easing":    _labs_bake_easing,
+    "spring":    lambda t0,v0,t1,v1,fps,p: bake_oscillator(t0,v0,t1,v1,fps,
+                    zeta=p.get("zeta",0.3), omega_n=p.get("omega_n",8.0)),
+    "elastic":   lambda t0,v0,t1,v1,fps,p: (bake_elastic_out if p.get("direction","out")=="out" else bake_elastic_penner)(
+                    t0,v0,t1,v1,fps, amplitude=p.get("amplitude",1.0),
+                    period=p.get("period",0.3), flip_to_mid=p.get("flip_to_mid",False)),
+    "bounce":    lambda t0,v0,t1,v1,fps,p: bake_bounce(t0,v0,t1,v1,fps,
+                    gamma=p.get("gamma",4.0), omega=p.get("omega",6.0),
+                    flipped=(p.get("direction","ceiling")=="floor")),
+    "catenary":  lambda t0,v0,t1,v1,fps,p: bake_catenary(t0,v0,t1,v1,fps,
+                    a=p.get("a",0.8), reverse=p.get("reverse",False)),
+    "pulse":     lambda t0,v0,t1,v1,fps,p: bake_pulse(t0,v0,t1,v1,fps,
+                    omega1=p.get("omega1",8.0), omega2=p.get("omega2",2.0),
+                    n=p.get("n",4.0), reverse=p.get("reverse",False)),
+    "noise":     lambda t0,v0,t1,v1,fps,p: bake_noise(t0,v0,t1,v1,fps,
+                    freq=p.get("freq",2.0), amp=p.get("amp",0.5),
+                    seed=p.get("seed",42), reverse=p.get("reverse",False)),
+    "resonance": lambda t0,v0,t1,v1,fps,p: bake_resonance(t0,v0,t1,v1,fps,
+                    gamma=p.get("gamma",2.0), omega=p.get("omega",8.0),
+                    omega0=p.get("omega0",8.0), reverse=p.get("reverse",False)),
+    "steps":     lambda t0,v0,t1,v1,fps,p: bake_steps(t0,v0,t1,v1,fps,
+                    n_steps=p.get("n_steps",8), from_start=p.get("from_start",False)),
+}
+
+
+def bake_labs_slot(mode_name, t0, v0, t1, v1, fps, params=None):
+    """Bake a single Labs slot by mode name. Returns [] for an unknown or
+    empty (disabled) slot rather than raising — a slot with no mode picked
+    is a normal, expected state (e.g. only 2 of 3 slots in use), not an error."""
+    fn = _LABS_DISPATCH.get(mode_name)
+    if fn is None:
+        return []
+    try:
+        return fn(t0, v0, t1, v1, fps, params or {})
+    except Exception as e:
+        log.warning("[MFlow] bake_labs_slot: '%s' raised: %s", mode_name, e)
+        return []
+
+
+def _resample_to_frames(baked, target_frames):
+    """Linearly interpolates a dense [(frame,value),...] array (e.g.
+    bake_spring's fps-resolution Euler steps) onto an explicit list of
+    target frame numbers. If baked is already exactly at those frames
+    (the common case — bounce/catenary/pulse/noise/resonance/steps all
+    sample one point per real frame already), this is a no-op in effect,
+    just re-expressed as a lookup instead of a copy.
+    """
+    if not baked:
+        return []
+    xs = [f for f, _ in baked]
+    ys = [v for _, v in baked]
+    out = []
+    j = 0
+    for tf in target_frames:
+        while j < len(xs) - 2 and xs[j + 1] < tf:
+            j += 1
+        x0, x1 = xs[j], xs[min(j + 1, len(xs) - 1)]
+        y0, y1 = ys[j], ys[min(j + 1, len(xs) - 1)]
+        if x1 == x0:
+            out.append((tf, y0))
+        else:
+            frac = (tf - x0) / (x1 - x0)
+            frac = max(0.0, min(1.0, frac))
+            out.append((tf, y0 + (y1 - y0) * frac))
+    return out
+
+
+def blend_baked(slot_bakes: list, weights: list, t0: float, t1: float,
+                 v0: float, v1: float):
+    """Combines up to 3 already-baked [(frame,value),...] arrays via
+    weighted average, after first resampling every slot onto the SAME
+    explicit grid of real frame numbers — see _resample_to_frames. This
+    cannot assume the inputs already share sample positions: bake_spring
+    (and any future physics-integrator mode) samples at fps-resolution
+    dt-steps for numerical accuracy, while every closed-form mode
+    (bounce/catenary/pulse/noise/resonance/steps) samples once per real
+    frame via _oversample — confirmed different lengths for the same
+    t0/t1/fps in testing, which would have silently corrupted or dropped
+    slots under a naive zip().
+
+    Weights are normalized so they don't need to sum to 1 — Labs lets each
+    slot go 0-200% independently for deliberately extreme blends, and this
+    function makes that safe regardless. Endpoints are re-anchored exactly
+    to v0/v1 no matter what the weighted values landed on, matching the
+    anchoring convention every other mode already follows.
+    """
+    active = [(frames, w) for frames, w in zip(slot_bakes, weights) if frames and w > 0]
+    if not active:
+        return []
+    total_w = sum(w for _, w in active)
+    if total_w <= 0:
+        return []
+    n_frames = max(1, round(t1 - t0))
+    target_frames = [t0 + i for i in range(n_frames + 1)]
+    resampled = [(_resample_to_frames(frames, target_frames), w) for frames, w in active]
+    result = []
+    for i, tf in enumerate(target_frames):
+        v = sum(frames[i][1] * w for frames, w in resampled) / total_w
+        result.append((tf, v))
+    if result:
+        result[0]  = (result[0][0],  v0)
+        result[-1] = (result[-1][0], v1)
+    return result
+
+
+# ── "labs" (sequential): 3 consecutive time segments, each its own shape ──────
+# Unlike "???" (weighted blend of the SAME time range), this concatenates
+# segments end-to-end — each owns its own slice of time and its own slice of
+# value, and the join points are shared so there is never a jump between
+# segments. Reuses bake_labs_slot for curve-mode segments; the "flat"
+# wildcard segment (hand-placed keyframes) gets its own baker below.
+
+def bake_flat_segment(t0, v0, t1, v1, fps, keyframes=None, anchor_end=True):
+    """keyframes: optional list of {"t":0..1, "v":0..1, "h1":[x,y], "h2":[x,y]}
+    in the segment's OWN local space (t=0 at seg start, t=1 at seg end; same
+    for v). h1/h2 are optional per-keyframe outgoing/incoming bezier handles
+    in the same local-segment space; omitting both on a pair gives a
+    straight line between them, which is how a flat/held section is made —
+    two keyframes at the same v with no handles.
+
+    anchor_end controls whether the LAST sample gets force-set to v1, same
+    as every other bake_* function does by default. concat_labs_segments
+    passes anchor_end=False for a non-final flat segment: a hold is defined
+    by the user's own keyframes, not by whatever value the segment was
+    theoretically assigned to reach — forcing it there would silently
+    override an intentional flat hold with a jump nobody asked for.
+    """
+    span_t = t1 - t0
+    span_v = v1 - v0
+    n = max(1, round(span_t))
+    if not keyframes or len(keyframes) < 2:
+        kfs = [{"t": 0.0, "v": 0.0}, {"t": 1.0, "v": 1.0}]
+    else:
+        kfs = sorted(keyframes, key=lambda k: k.get("t", 0.0))
+        if kfs[0].get("t", 0.0) > 1e-9:
+            kfs = [{"t": 0.0, "v": kfs[0].get("v", 0.0)}] + kfs
+        if kfs[-1].get("t", 1.0) < 1.0 - 1e-9:
+            kfs = kfs + [{"t": 1.0, "v": kfs[-1].get("v", 1.0)}]
+    result = []
+    for i in range(n + 1):
+        tn = i / n
+        seg_i = len(kfs) - 2
+        for j in range(len(kfs) - 1):
+            if kfs[j]["t"] <= tn <= kfs[j+1]["t"]:
+                seg_i = j
+                break
+        k0, k1 = kfs[seg_i], kfs[seg_i+1]
+        dt = k1["t"] - k0["t"]
+        local = 0.0 if dt <= 1e-9 else max(0.0, min(1.0, (tn - k0["t"]) / dt))
+        h_out = k0.get("h_out")
+        h_in = k1.get("h_in")
+        shape = eval_bezier(local, h_out or [0.0, 0.0], h_in or [1.0, 1.0]) if (h_out or h_in) else local
+        v_local = k0["v"] + (k1["v"] - k0["v"]) * shape
+        result.append((t0 + tn * span_t, v0 + v_local * span_v))
+    if result:
+        result[0] = (result[0][0], v0)
+        if anchor_end:
+            result[-1] = (result[-1][0], v1)
+    return result
+
+
+def bake_labs_segment(segment, t0, v0, t1, v1, fps, anchor_end=True):
+    """Dispatches one segment to bake_flat_segment (kind='flat') or
+    bake_labs_slot (kind='curve', any of the 9 regular modes) — returns []
+    on a genuinely empty/misconfigured segment rather than raising, since a
+    segment with no mode picked yet is a normal mid-edit state, not an error.
+    Curve-mode segments always anchor both ends (that's their whole design —
+    always span exactly v0 to v1); anchor_end only affects 'flat' segments.
+    """
+    if not isinstance(segment, dict):
+        return []
+    kind = segment.get("kind", "curve")
+    try:
+        if kind == "flat":
+            return bake_flat_segment(t0, v0, t1, v1, fps, segment.get("keyframes"),
+                                     anchor_end=anchor_end)
+        mode_name = segment.get("mode")
+        if not mode_name:
+            return []
+        return bake_labs_slot(mode_name, t0, v0, t1, v1, fps, segment.get("params", {}))
+    except Exception as e:
+        log.warning("[MFlow] bake_labs_segment: kind='%s' raised: %s", kind, e)
+        return []
+
+
+def concat_labs_segments(segments, t0, v0, t1, v1, fps,
+                          time_bounds=None, value_bounds=None, reverse_out=False):
+    """Bakes up to 3 segments over their own consecutive sub-ranges of
+    [t0,t1]/[v0,v1] and concatenates them into one continuous array — no
+    blending, no averaging, just a relay hand-off. time_bounds/value_bounds
+    are optional explicit fraction lists of len(segments)+1 (default: equal
+    thirds for both) so a future UI can drag the join points without this
+    function changing at all.
+
+    Continuity is enforced by construction, not by hoping the numbers line
+    up: each segment's real ENTRY value is whatever the previous segment
+    actually produced as its last sample — never the theoretical
+    value_bounds target — so a 'flat' segment that legitimately holds
+    somewhere other than its assigned target still hands off correctly to
+    whatever comes next. Only curve-mode segments (and the final segment,
+    always) are forced to their assigned target value, since reaching a
+    target is their whole design; a flat hold is defined by its own
+    keyframes and must not be silently overridden.
+
+    reverse_out=True applies the standard easeIn/easeOut reflection —
+    v_out(t) = v0+v1-v_in(t1-t) — turning an "entrance" recipe into an
+    "exit" one (or back) without rebuilding the segments, matching how
+    ease-in/ease-out are mathematical mirror images of each other, not two
+    independently-authored shapes.
+    """
+    segments = [s for s in (segments or []) if isinstance(s, dict)][:3]
+    if not segments:
+        return []
+    n_segs = len(segments)
+    if not time_bounds or len(time_bounds) != n_segs + 1:
+        time_bounds = [i / n_segs for i in range(n_segs + 1)]
+    if not value_bounds or len(value_bounds) != n_segs + 1:
+        value_bounds = [i / n_segs for i in range(n_segs + 1)]
+    span_t = t1 - t0
+    span_v = v1 - v0
+    result = []
+    running_v0 = v0
+    for i, seg in enumerate(segments):
+        seg_t0 = t0 + time_bounds[i]   * span_t
+        seg_t1 = t0 + time_bounds[i+1] * span_t
+        if seg_t1 <= seg_t0:
+            continue
+        is_last = (i == n_segs - 1)
+        target_v1 = v1 if is_last else (v0 + value_bounds[i+1] * span_v)
+        kind = seg.get("kind", "curve")
+        anchor_end = True if (kind != "flat" or is_last) else False
+        baked = bake_labs_segment(seg, seg_t0, running_v0, seg_t1, target_v1, fps,
+                                  anchor_end=anchor_end)
+        if not baked:
+            continue
+        if result and abs(baked[0][0] - result[-1][0]) < 1e-6:
+            baked = baked[1:]
+        if baked:
+            running_v0 = baked[-1][1]
+        result.extend(baked)
+    if not result:
+        return []
+    result[0]  = (result[0][0],  v0)
+    result[-1] = (result[-1][0], v1)
+    if reverse_out:
+        n = len(result)
+        frames = [f for f, _ in result]
+        mirrored = []
+        for i in range(n):
+            v_in = result[n - 1 - i][1]
+            mirrored.append((frames[i], v0 + v1 - v_in))
+        result = mirrored
+        result[0]  = (result[0][0],  v0)
+        result[-1] = (result[-1][0], v1)
+    return result

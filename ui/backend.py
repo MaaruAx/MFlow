@@ -19,6 +19,7 @@ from core.curve_engine    import (apply_bezier, apply_baked, apply_steps_kf,
                                    bake_elastic_penner, bake_elastic_out,
                                    bake_bounce, bake_catenary, bake_pulse,
                                    bake_noise, bake_resonance, OverframePoint,
+                                   bake_labs_slot, blend_baked, concat_labs_segments,
                                    _numeric_times, derive_squash_stretch,
                                    eval_bezier)
 
@@ -190,6 +191,23 @@ class Backend(QObject):
         self._bounce_dir   = "ceiling"  # 'ceiling' | 'floor'
         self._steps_n          = 8
         self._steps_from_start = False  # False='jump-end' (CSS default), True='jump-start'
+        # "???" mode: up to 3 independently-weighted curve-mode slots blended
+        # together — see blend_baked() in curve_engine.py. weight is 0-200
+        # (percent-like, doesn't need to sum to 100 — blend_baked normalizes).
+        # 'params' holds each slot's OWN mode-specific params (e.g. a bounce
+        # slot's gamma/omega), independent of whatever the main panel's
+        # bounce sliders currently show.
+        self._qqq_slots = [
+            {"mode": "bounce", "weight": 100, "params": {}},
+            {"mode": "easing", "weight": 100, "params": {}},
+            {"mode": "spring", "weight": 100, "params": {}},
+        ]
+        self._seq_segments = [
+            {"kind": "curve", "mode": "easing", "params": {}},
+            {"kind": "flat",  "mode": None, "params": {}, "keyframes": []},
+            {"kind": "curve", "mode": "spring", "params": {}},
+        ]
+        self._seq_reverse_out = False
         self._catenary_a   = 0.8
         self._catenary_reverse = False
         self._pulse_omega1 = 8.0
@@ -1443,6 +1461,64 @@ class Backend(QObject):
         self._res_reverse  = bool(d.get("res_reverse",   self._res_reverse))
         self._steps_n          = int(d.get("steps_n",          self._steps_n))
         self._steps_from_start = bool(d.get("steps_from_start", self._steps_from_start))
+        if "qqq_slots" in d and isinstance(d["qqq_slots"], list):
+            # Defensive: this arrives as arbitrary JSON from JS, never trust
+            # its shape blindly — fall back to the existing slot on anything
+            # malformed rather than letting one bad slot corrupt the rest.
+            new_slots = []
+            for i in range(3):
+                old = self._qqq_slots[i] if i < len(self._qqq_slots) else {"mode": None, "weight": 0, "params": {}}
+                try:
+                    raw = d["qqq_slots"][i] if i < len(d["qqq_slots"]) else {}
+                    new_slots.append({
+                        "mode":   raw.get("mode", old["mode"]),
+                        "weight": float(raw.get("weight", old["weight"])),
+                        "params": raw.get("params", old["params"]) if isinstance(raw.get("params"), dict) else old["params"],
+                    })
+                except Exception as e:
+                    log.warning("[MFlow] qqq_slots[%d] malformed, keeping previous: %s", i, e)
+                    new_slots.append(old)
+            self._qqq_slots = new_slots
+        if "seq_segments" in d and isinstance(d["seq_segments"], list):
+            new_segs = []
+            for i in range(3):
+                old = self._seq_segments[i] if i < len(self._seq_segments) else \
+                    {"kind": "curve", "mode": None, "params": {}, "keyframes": []}
+                try:
+                    raw = d["seq_segments"][i] if i < len(d["seq_segments"]) else {}
+                    kind = raw.get("kind", old["kind"])
+                    if kind not in ("curve", "flat"):
+                        kind = old["kind"]
+                    params = raw.get("params", old["params"])
+                    if not isinstance(params, dict):
+                        params = old["params"]
+                    kfs = raw.get("keyframes", old.get("keyframes", []))
+                    if not isinstance(kfs, list):
+                        kfs = old.get("keyframes", [])
+                    kfs_clean = []
+                    for kf in kfs:
+                        if not isinstance(kf, dict):
+                            continue
+                        try:
+                            entry = {"t": float(kf.get("t", 0.0)), "v": float(kf.get("v", 0.0))}
+                            if isinstance(kf.get("h_in"), list) and len(kf["h_in"]) == 2:
+                                entry["h_in"] = [float(kf["h_in"][0]), float(kf["h_in"][1])]
+                            if isinstance(kf.get("h_out"), list) and len(kf["h_out"]) == 2:
+                                entry["h_out"] = [float(kf["h_out"][0]), float(kf["h_out"][1])]
+                            kfs_clean.append(entry)
+                        except Exception:
+                            continue
+                    new_segs.append({
+                        "kind": kind,
+                        "mode": raw.get("mode", old["mode"]),
+                        "params": params,
+                        "keyframes": kfs_clean,
+                    })
+                except Exception as e:
+                    log.warning("[MFlow] seq_segments[%d] malformed, keeping previous: %s", i, e)
+                    new_segs.append(old)
+            self._seq_segments = new_segs
+        self._seq_reverse_out = bool(d.get("seq_reverse_out", self._seq_reverse_out))
         if self._auto_apply and self._comp:
             self._auto_timer.start(280)   # debounce 280 ms
         # Notify dock windows so they can mirror the main window's current curve
@@ -2309,6 +2385,31 @@ class Backend(QObject):
             return apply_steps_kf(spline, t0, v0, t1, v1,
                                   n_steps=self._steps_n,
                                   from_start=self._steps_from_start)
+        if mode == "???":
+            slot_bakes = []
+            weights = []
+            for slot in self._qqq_slots:
+                slot_mode = slot.get("mode")
+                weight = float(slot.get("weight", 0))
+                if not slot_mode or weight <= 0:
+                    slot_bakes.append([])
+                    weights.append(0.0)
+                    continue
+                slot_bakes.append(bake_labs_slot(slot_mode, t0, v0, t1, v1, fps,
+                                                 slot.get("params", {})))
+                weights.append(weight)
+            blended = blend_baked(slot_bakes, weights, t0, t1, v0, v1)
+            if not blended:
+                log.warning("[MFlow] \"???\": no active slots (all empty/zero-weight) — nothing to apply")
+                return False
+            return apply_baked(spline, blended, t_start=t0, t_end=t1)
+        if mode == "labs":
+            frames = concat_labs_segments(self._seq_segments, t0, v0, t1, v1, fps,
+                                          reverse_out=self._seq_reverse_out)
+            if not frames:
+                log.warning("[MFlow] labs: no usable segments — nothing to apply")
+                return False
+            return apply_baked(spline, frames, t_start=t0, t_end=t1)
         if mode == "elastic":
             if self._el_direction == "out":
                 frames = bake_elastic_out(t0, v0, t1, v1, fps,
