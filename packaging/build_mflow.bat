@@ -145,34 +145,38 @@ if "%STANDALONE_SHA256%"=="" (
     echo #define StandaloneExternalSize %STANDALONE_SIZE%
     echo #define StandaloneSHA256 "%STANDALONE_SHA256%"
 )
-echo        version.iss generated ^(%STANDALONE_SIZE% bytes, sha256 %STANDALONE_SHA256%^).
+> "release\%MFLOW_TAG%-build-summary.txt" (
+    echo MFlow %MFLOW_TAG% - build summary
+    echo.
+    echo Zip file:     %MFLOW_ZIP%
+    echo Size:         %STANDALONE_SIZE% bytes
+    echo SHA-256:      %STANDALONE_SHA256%
+    echo.
+    echo Paste the SHA-256 above into this version's changelog/release notes.
+)
 
-:: ── Publish this same hash in this version's changelog/release notes ───────
-echo.
-echo  ============================================
-echo   SHA-256 of release\%MFLOW_ZIP%:
-echo   %STANDALONE_SHA256%
-echo.
-echo   Copy it into this version's changelog/release notes.
-echo  ============================================
+echo        version.iss generated.
 
-:: ── Result ───────────────────────────────────────────────────────────────────
 echo.
 echo  ============================================
-echo   Build succeeded.
+echo   BUILD SUMMARY
+echo  ============================================
+echo   Version   : %MFLOW_TAG%  ^(%MFLOW_ARCH%^)
+echo   Zip       : release\%MFLOW_ZIP%
+echo   Size      : %STANDALONE_SIZE% bytes
+echo   SHA-256   : %STANDALONE_SHA256%
+echo   Summary   : release\%MFLOW_TAG%-build-summary.txt
+echo  ============================================
 echo.
-echo   Executable folder: dist\MFlow\MFlow.exe
-echo   Zip for R2:         release\%MFLOW_ZIP%
-echo   version.iss:        ready for MFlow.iss
-echo.
-echo   Next steps:
-echo     1. Upload release\%MFLOW_ZIP% to R2
-echo        (see upload_to_r2.bat)
-echo     2. Confirm MFLOW_VERSION and MFLOW_ARCH above match
-echo        MyAppVersion and MyAppArch in MFlow.iss
-echo     3. Publish the SHA-256 above in this version's changelog
-echo     4. Open MFlow.iss with Inno Setup 6 (6.4+) and compile the installer
-echo     5. Run sign_release.bat to produce SHA256SUMS.txt + GPG signature
+echo  ============================================
+echo   NEXT STEPS
+echo  ============================================
+echo   1. Upload release\%MFLOW_ZIP% to R2 (see upload_to_r2.bat)
+echo   2. Confirm MFLOW_VERSION / MFLOW_ARCH above match
+echo      MyAppVersion / MyAppArch in MFlow.iss
+echo   3. Publish the SHA-256 above in this version's changelog
+echo   4. Open MFlow.iss with Inno Setup 6 (6.4+) and compile the installer
+echo   5. Run sign_release.bat to produce SHA256SUMS.txt + GPG signature
 echo  ============================================
 echo.
 pause

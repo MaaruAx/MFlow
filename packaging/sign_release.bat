@@ -95,17 +95,38 @@ if errorlevel 1 (
     pause & exit /b 1
 )
 
+> "RELEASE_NOTES_%MFLOW_TAG%.txt" (
+    echo MFlow %MFLOW_TAG% - release checksums
+    echo.
+    echo SHA256 ^(%ZIP_NAME%^): %ZIP_HASH%
+    echo SHA256 ^(%EXE_NAME%^): %EXE_HASH%
+)
+
 echo.
 echo  ============================================
-echo   Done. Upload these files alongside the release on Codeberg:
-echo     - %ZIP_PATH%
-echo     - %EXE_PATH%
-echo     - SHA256SUMS.txt
-echo     - SHA256SUMS.txt.asc
+echo   HASHES
+echo  ============================================
+echo   %ZIP_NAME%
+echo     %ZIP_HASH%
 echo.
-echo   In this version's changelog, paste:
-echo     SHA256 (%ZIP_NAME%): %ZIP_HASH%
-echo     SHA256 (%EXE_NAME%): %EXE_HASH%
+echo   %EXE_NAME%
+echo     %EXE_HASH%
+echo  ============================================
+echo.
+echo  ============================================
+echo   UPLOAD TO CODEBERG
+echo  ============================================
+echo   - %ZIP_PATH%
+echo   - %EXE_PATH%
+echo   - SHA256SUMS.txt
+echo   - SHA256SUMS.txt.asc
+echo  ============================================
+echo.
+echo  ============================================
+echo   CHANGELOG TEXT  (also saved to RELEASE_NOTES_%MFLOW_TAG%.txt)
+echo  ============================================
+echo   SHA256 (%ZIP_NAME%): %ZIP_HASH%
+echo   SHA256 (%EXE_NAME%): %EXE_HASH%
 echo  ============================================
 echo.
 pause
