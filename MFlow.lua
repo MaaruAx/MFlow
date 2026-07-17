@@ -98,16 +98,59 @@ if not python_exe then
 end
 
 -- ── Launch ────────────────────────────────────────────────────────────────────
-local cmd
+-- Windows note: os.execute() always routes through cmd.exe (Lua's system()
+-- wrapper). Resolve/Fusion has no console of its own, so Windows must
+-- allocate one for that cmd.exe process regardless of what runs inside it —
+-- that transient console is what briefly flashes on screen. Using pythonw.exe
+-- avoids a SECOND console for the Python process itself, but does nothing
+-- about the first one. The fix is to hand the actual launch to wscript.exe
+-- (a GUI-subsystem executable, never allocates a console) via a throwaway
+-- VBScript, and have cmd.exe's only job be to start that and return
+-- immediately — its own console then exists for a negligible fraction of a
+-- second instead of the multi-second flash a slower/blocking launch causes.
 if is_win then
-    -- Use pythonw.exe if available (no console window) — improves UX
-    local pyw = python_exe:gsub("python%.exe$", "pythonw.exe")
+    local pyw = python_exe
+    if pyw:match("python%.exe$") then
+        pyw = pyw:gsub("python%.exe$", "pythonw.exe")
+    elseif pyw == "python" then
+        pyw = "pythonw"
+    end
     local tf2 = io.open(pyw, "r")
-    if tf2 then tf2:close(); python_exe = pyw end
-    cmd = string.format('start "" /B "%s" "%s"', python_exe, main_py)
-else
-    cmd = string.format('"%s" "%s" > /tmp/mflow.log 2>&1 &', python_exe, main_py)
-end
+    if tf2 then
+        tf2:close()
+        python_exe = pyw
+    elseif pyw == "pythonw" then
+        -- Bare command (PATH-resolved) can't be probed with io.open; trust
+        -- it and let the launch itself fail safely if it doesn't exist.
+        python_exe = pyw
+    end
 
-print("[MFlow] Launching: " .. cmd)
-os.execute(cmd)
+    local function vbs_escape(s)
+        return s:gsub('"', '""')
+    end
+
+    local vbs_path = os.getenv("TEMP") or os.getenv("TMP") or "."
+    vbs_path = vbs_path .. sep .. "mflow_launch_" .. tostring(os.time()) .. ".vbs"
+
+    local vbs = io.open(vbs_path, "w")
+    if vbs then
+        local run_cmd = string.format('"%s" "%s"', vbs_escape(python_exe), vbs_escape(main_py))
+        vbs:write('Set MFlowShell = CreateObject("WScript.Shell")\r\n')
+        vbs:write('MFlowShell.Run "' .. run_cmd .. '", 0, False\r\n')
+        vbs:close()
+
+        print("[MFlow] Launching via: " .. python_exe)
+        os.execute(string.format('wscript.exe //B //Nologo "%s"', vbs_path))
+    else
+        -- Fallback: VBS could not be written (e.g. read-only TEMP) — still
+        -- attempt a direct launch rather than silently doing nothing, even
+        -- though this reintroduces the brief console flash.
+        local cmd = string.format('start "" /B "%s" "%s"', python_exe, main_py)
+        print("[MFlow] VBS launcher unavailable, falling back to: " .. cmd)
+        os.execute(cmd)
+    end
+else
+    local cmd = string.format('"%s" "%s" > /tmp/mflow.log 2>&1 &', python_exe, main_py)
+    print("[MFlow] Launching: " .. cmd)
+    os.execute(cmd)
+end
