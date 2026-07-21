@@ -207,7 +207,7 @@ body.compact #version{display:none!important}
 }
 /* ── Animation utilities ── */
 @keyframes menuIn  {from{opacity:0;transform:translateY(-5px) scale(.97)}to{opacity:1;transform:none}}
-@keyframes cpFadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+@keyframes cpFadeIn{from{opacity:0;margin-top:4px}to{opacity:1;margin-top:0}}
 .menu-anim{animation:menuIn .17s cubic-bezier(.2,.8,.4,1) both}
 .cp-fadein {animation:cpFadeIn .18s cubic-bezier(.2,.8,.4,1) both}
 .card-wrap{flex:1;min-height:0;position:relative;overflow:hidden}
@@ -5087,7 +5087,7 @@ document.addEventListener('click', e => {
     document.querySelectorAll('.csel-list.open').forEach(l => l.classList.remove('open'));
   }
 }, true);
-</script></script>
+</script>
 
 <!-- HSV Color Picker (must be after </script> but before 
 <!-- ── Welcome / Help overlay ─────────────────────────────────────────────── -->
