@@ -3,13 +3,80 @@ MFlow installer - python install.py
 Works on Windows, macOS, Linux.
 Never crashes - every error is caught, explained, and continues.
 """
-import subprocess, sys, os, shutil, platform, glob, json, time
+import subprocess, sys, os, shutil, platform, glob, json, time, traceback
 
 MFLOW_VERSION = "2.6.1"
 HERE   = os.path.dirname(os.path.abspath(__file__))
 PLAT   = platform.system()
 ARCH   = platform.machine()
 PY_VER = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+
+# -- Persistent install logging: tee stdout into a session file + mflow.log ---
+_LOG_DIR = os.path.join(os.path.expanduser("~"), ".mflow")
+_SESSIONS_DIR = os.path.join(_LOG_DIR, "sessions")
+_MONOLITHIC_LOG = os.path.join(_LOG_DIR, "mflow.log")
+_MAX_INSTALL_SESSIONS = 10
+
+def _prune_old_files(directory, pattern, keep):
+    try:
+        found = sorted(glob.glob(os.path.join(directory, pattern)),
+                        key=os.path.getmtime, reverse=True)
+    except OSError:
+        return
+    for stale in found[keep:]:
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
+
+class _TeeStream:
+    """Duplicates everything printed to stdout into the given file paths, in
+    addition to the real console. Buffers partial writes (print(..., end=' '))
+    until a full line is available so timestamps stay one-per-line."""
+    def __init__(self, original, paths):
+        self._original = original
+        self._paths = [p for p in paths if p]
+        self._buf = ""
+
+    def write(self, s):
+        self._original.write(s)
+        self._buf += s
+        while "\n" in self._buf:
+            line, self._buf = self._buf.split("\n", 1)
+            self._append(line)
+        return len(s)
+
+    def flush(self):
+        self._original.flush()
+        if self._buf.strip():
+            self._append(self._buf)
+            self._buf = ""
+
+    def _append(self, line):
+        if not line.strip():
+            return
+        stamp = time.strftime("%Y-%m-%d %H:%M:%S")
+        text = f"{stamp} [PID:{os.getpid()}] [INSTALLER] {line}\n"
+        for path in self._paths:
+            try:
+                with open(path, "a", encoding="utf-8") as f:
+                    f.write(text)
+            except OSError:
+                pass
+
+def _enable_install_logging():
+    """Best-effort: installer must keep working even if logging setup fails."""
+    try:
+        os.makedirs(_SESSIONS_DIR, exist_ok=True)
+        _prune_old_files(_SESSIONS_DIR, "install_*.log", _MAX_INSTALL_SESSIONS - 1)
+        stamp = time.strftime("%Y%m%d_%H%M%S")
+        session_log = os.path.join(_SESSIONS_DIR, f"install_{stamp}_{os.getpid()}.log")
+        sys.stdout = _TeeStream(sys.stdout, [session_log, _MONOLITHIC_LOG])
+        return session_log
+    except Exception:
+        return None
+
+_INSTALL_SESSION_LOG = _enable_install_logging()
 
 # -- Resolve Scripts paths per platform ---------------------------------------
 SCRIPTS_UTILITY = {
@@ -178,23 +245,51 @@ def copy_tree(src, dst):
 def find_scripts_dir():
     dirs = SCRIPTS_UTILITY.get(PLAT, [])
     for d in dirs:
-        if os.path.isdir(d): return d
-    # Create first candidate
+        exists = os.path.isdir(d)
+        log(f"Utility candidate: {d}  exists={exists}", "probe")
+        if exists:
+            return d
     first = dirs[0] if dirs else None
     if first:
         _, err = safe(os.makedirs, first, exist_ok=True)
-        if not err: return first
+        if not err:
+            log(f"Created: {first}", "probe")
+            return first
+        log(f"Could not create {first}: {err}", "probe")
     return None
 
 def find_scripts_comp():
     dirs = SCRIPTS_COMP.get(PLAT, [])
     for d in dirs:
-        if os.path.isdir(d): return d
+        exists = os.path.isdir(d)
+        log(f"Comp candidate: {d}  exists={exists}", "probe")
+        if exists:
+            return d
     first = dirs[0] if dirs else None
     if first:
         _, err = safe(os.makedirs, first, exist_ok=True)
-        if not err: return first
+        if not err:
+            log(f"Created: {first}", "probe")
+            return first
+        log(f"Could not create {first}: {err}", "probe")
     return None
+
+def _copy_verdict(dst, expected_size=None):
+    """Copy2 raising nothing is not proof the file is actually usable on
+    disk (AV quarantine, redirected/virtualized folders, sync-tool races).
+    Re-stat the destination and say so plainly instead of trusting the lack
+    of an exception."""
+    if not os.path.isfile(dst):
+        log(f"  VERIFY FAILED — {dst} does not exist after copy", "ERR")
+        return "(missing after copy!)"
+    size = os.path.getsize(dst)
+    if size == 0:
+        log(f"  VERIFY FAILED — {dst} is 0 bytes after copy", "ERR")
+        return "(0 bytes!)"
+    if expected_size is not None and size != expected_size:
+        log(f"  VERIFY MISMATCH — {dst} is {size}B, source was {expected_size}B", "ERR")
+        return f"({size}B, expected {expected_size}B)"
+    return f"({size}B)"
 
 def write_python_path(python_exe, location):
     try:
@@ -223,6 +318,10 @@ def main():
     _plat_display = {"Windows": "Windows", "Darwin": "macOS", "Linux": "Linux"}.get(PLAT, PLAT)
     print(f"  Platform: {_plat_display} ({ARCH})   Python: {PY_VER}")
     print(f"  App code:  {INSTALL_DIR}")
+    if _INSTALL_SESSION_LOG:
+        print(f"  Log:       {_INSTALL_SESSION_LOG}")
+    else:
+        print("  Log:       (could not open install log — continuing without it)")
     try:
         sys.path.insert(0, HERE)
         from core.platform_config import app_data_dir as _adir
@@ -472,9 +571,10 @@ def main():
                 if not os.path.isfile(src):
                     src = os.path.join(HERE, fname)
                 if os.path.isfile(src):
-                    _, err = safe(shutil.copy2, src, os.path.join(scripts_utility, fname))
+                    dst = os.path.join(scripts_utility, fname)
+                    _, err = safe(shutil.copy2, src, dst)
                     if err: log(f"  Cannot copy {fname}: {err}", "WARN")
-                    else:   log(f"  OK  {fname}")
+                    else:   log(f"  OK  {fname}  {_copy_verdict(dst)}")
             write_mflow_path(install_dir, scripts_utility)
         else:
             log("Could not find or create Scripts/Utility — copy MFlow.lua manually", "WARN")
@@ -498,9 +598,10 @@ def main():
                 if not os.path.isfile(src):
                     src = os.path.join(HERE, fname)
                 if os.path.isfile(src):
-                    _, err = safe(shutil.copy2, src, os.path.join(scripts_comp, fname))
+                    dst = os.path.join(scripts_comp, fname)
+                    _, err = safe(shutil.copy2, src, dst)
                     if err: log(f"  Cannot copy {fname}: {err}", "WARN")
-                    else:   log(f"  OK  {fname}")
+                    else:   log(f"  OK  {fname}  {_copy_verdict(dst, os.path.getsize(src))}")
                 else:
                     log(f"  Not found: {fname}", "WARN")
             write_mflow_path(install_dir, scripts_comp)
@@ -527,11 +628,14 @@ def main():
     if install_free:
         print("  Free   (Fusion pg): Scripts > Comp > MFlow_Free")
     print()
-    print(f"  Log:      {os.path.join(os.path.expanduser('~'), '.mflow', 'mflow.log')}")
+    print(f"  Log:      {_MONOLITHIC_LOG}")
+    if _INSTALL_SESSION_LOG:
+        print(f"  Session:  {_INSTALL_SESSION_LOG}")
     print()
     print("  Run standalone:  python main.py")
     print()
     sep("=")
+    sys.stdout.flush()
     input("Press Enter to close...")
 
 if __name__ == "__main__":
@@ -540,7 +644,12 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nCancelled.")
     except Exception as e:
-        import traceback
         print(f"\n[FATAL] Unexpected error: {e}")
-        traceback.print_exc()
+        print(traceback.format_exc())
+        sys.stdout.flush()
         input("\nPress Enter to close...")
+    finally:
+        try:
+            sys.stdout.flush()
+        except Exception:
+            pass

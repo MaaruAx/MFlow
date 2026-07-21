@@ -159,6 +159,93 @@ Type: filesandordirs; Name: "{app}"
 
 [Code]
 
+var
+  SessionId: String;
+  MonolithicLogPath: String;
+  SessionLogPath: String;
+
+const
+  MaxInstallSessionLogs = 10;
+
+function LogTimestamp(): String;
+begin
+  Result := GetDateTimeString('yyyy-mm-dd hh:nn:ss', '-', ':');
+end;
+
+// Filenames are "<prefix>_yyyymmdd_hhnnss.log" — lexicographic sort on that
+// suffix is identical to chronological order, so no date parsing needed.
+procedure PruneOldInstallLogs(SessionsDir, Pattern: String);
+var
+  FindRec: TFindRec;
+  Names: TStringList;
+begin
+  Names := TStringList.Create;
+  try
+    if FindFirst(SessionsDir + '\' + Pattern, FindRec) then
+    begin
+      try
+        repeat
+          Names.Add(FindRec.Name);
+        until not FindNext(FindRec);
+      finally
+        FindClose(FindRec);
+      end;
+    end;
+    Names.Sort;
+    while Names.Count > MaxInstallSessionLogs - 1 do
+    begin
+      DeleteFile(SessionsDir + '\' + Names[0]);
+      Names.Delete(0);
+    end;
+  finally
+    Names.Free;
+  end;
+end;
+
+// Best-effort: a logging failure must never stop the installer. Both
+// SaveStringToFile and ForceDirectories fail silently (return False, no
+// script exception), so no extra guarding is needed here.
+procedure AppendInstallLog(Msg: String);
+var
+  Line: String;
+begin
+  Line := LogTimestamp() + ' [PID:iss] [INSTALLER] ' + Msg + #13#10;
+  SaveStringToFile(MonolithicLogPath, Line, True);
+  SaveStringToFile(SessionLogPath, Line, True);
+end;
+
+function InitializeSetup(): Boolean;
+var
+  LogDir, SessionsDir: String;
+begin
+  Result := True;
+  SessionId := GetDateTimeString('yyyymmdd_hhnnss', #0, #0);
+  LogDir := ExpandConstant('{%USERPROFILE%}\.mflow');
+  SessionsDir := LogDir + '\sessions';
+  ForceDirectories(SessionsDir);
+  PruneOldInstallLogs(SessionsDir, 'install_iss_*.log');
+  MonolithicLogPath := LogDir + '\mflow.log';
+  SessionLogPath := SessionsDir + '\install_iss_' + SessionId + '.log';
+  AppendInstallLog('=== INSTALLER SESSION START (Inno Setup) — MFlow {#MyAppVersion} ===');
+end;
+
+// The uninstaller is a separate compiled executable — InitializeSetup above
+// never runs for it, so the log path globals need their own setup here.
+function InitializeUninstall(): Boolean;
+var
+  LogDir, SessionsDir: String;
+begin
+  Result := True;
+  SessionId := GetDateTimeString('yyyymmdd_hhnnss', #0, #0);
+  LogDir := ExpandConstant('{%USERPROFILE%}\.mflow');
+  SessionsDir := LogDir + '\sessions';
+  ForceDirectories(SessionsDir);
+  PruneOldInstallLogs(SessionsDir, 'uninstall_iss_*.log');
+  MonolithicLogPath := LogDir + '\mflow.log';
+  SessionLogPath := SessionsDir + '\uninstall_iss_' + SessionId + '.log';
+  AppendInstallLog('=== UNINSTALLER SESSION START (Inno Setup) — MFlow {#MyAppVersion} ===');
+end;
+
 // Full transparency on the Ready page: what gets downloaded (and from
 // where), its SHA-256 for manual comparison against the published
 // changelog, and a plain-language account of what each selected component
@@ -210,6 +297,10 @@ begin
   // they may legitimately just want to re-run one specific step later.
   if CurPageID = wpSelectTasks then
   begin
+    AppendInstallLog('Tasks selected: standalone=' + IntToStr(Ord(IsTaskSelected('standalone'))) +
+      ' studio=' + IntToStr(Ord(IsTaskSelected('studio'))) +
+      ' free=' + IntToStr(Ord(IsTaskSelected('free'))) +
+      ' desktopicon=' + IntToStr(Ord(IsTaskSelected('desktopicon'))));
     if (not IsTaskSelected('standalone')) and (not IsTaskSelected('studio')) and (not IsTaskSelected('free')) then
     begin
       if MsgBox('No components are selected, so this installer will not install anything.' + #13#10 +
@@ -224,32 +315,56 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   DataDir, UtilityDir, CompDir: String;
+  UtilityDirExisted, CompDirExisted: Boolean;
 begin
   if CurStep = ssPostInstall then
   begin
     DataDir := ExpandConstant('{userappdata}\MFlow');
+    AppendInstallLog('ssPostInstall — DataDir=' + DataDir);
 
     // Studio bridge (Utility — any page, launches MFlow.lua → python main.py)
     if IsTaskSelected('studio') then
     begin
       UtilityDir := ExpandConstant('{userappdata}\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility');
-      if DirExists(UtilityDir) then
+      UtilityDirExisted := DirExists(UtilityDir);
+      AppendInstallLog('Studio: UtilityDir=' + UtilityDir + ' exists=' + IntToStr(Ord(UtilityDirExisted)));
+      if UtilityDirExisted then
       begin
-        FileCopy(DataDir + '\MFlow.lua',       UtilityDir + '\MFlow.lua',       False);
-        SaveStringToFile(UtilityDir + '\mflow_path.txt', DataDir, False);
-      end;
+        if FileCopy(DataDir + '\MFlow.lua', UtilityDir + '\MFlow.lua', False) then
+          AppendInstallLog('Studio: copied MFlow.lua OK')
+        else
+          AppendInstallLog('Studio: FileCopy MFlow.lua FAILED');
+        if SaveStringToFile(UtilityDir + '\mflow_path.txt', DataDir, False) then
+          AppendInstallLog('Studio: wrote mflow_path.txt OK')
+        else
+          AppendInstallLog('Studio: write mflow_path.txt FAILED');
+      end
+      else
+        AppendInstallLog('Studio: SKIPPED — UtilityDir did not exist, nothing copied');
     end;
 
     // Free bridge (Comp — Fusion page only, Resolve injects app directly)
     if IsTaskSelected('free') then
     begin
       CompDir := ExpandConstant('{userappdata}\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Comp');
-      if DirExists(CompDir) then
+      CompDirExisted := DirExists(CompDir);
+      AppendInstallLog('Free: CompDir=' + CompDir + ' exists=' + IntToStr(Ord(CompDirExisted)));
+      if CompDirExisted then
       begin
-        FileCopy(DataDir + '\MFlow_Free.py',   CompDir + '\MFlow_Free.py',      False);
-        SaveStringToFile(CompDir + '\mflow_path.txt', DataDir, False);
-      end;
+        if FileCopy(DataDir + '\MFlow_Free.py', CompDir + '\MFlow_Free.py', False) then
+          AppendInstallLog('Free: copied MFlow_Free.py OK')
+        else
+          AppendInstallLog('Free: FileCopy MFlow_Free.py FAILED');
+        if SaveStringToFile(CompDir + '\mflow_path.txt', DataDir, False) then
+          AppendInstallLog('Free: wrote mflow_path.txt OK')
+        else
+          AppendInstallLog('Free: write mflow_path.txt FAILED');
+      end
+      else
+        AppendInstallLog('Free: SKIPPED — CompDir did not exist, nothing copied');
     end;
+
+    AppendInstallLog('=== INSTALLER SESSION END ===');
   end;
 end;
 
@@ -261,6 +376,7 @@ var
 begin
   if CurUninstallStep = usPostUninstall then
   begin
+    AppendInstallLog('=== UNINSTALL START ===');
     // Remove bridge files from Resolve's Scripts folders
     DeleteFile(ExpandConstant('{userappdata}\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility\MFlow.lua'));
     DeleteFile(ExpandConstant('{userappdata}\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility\mflow_path.txt'));
@@ -278,8 +394,12 @@ begin
         'Do you want to delete it as well?',
         mbConfirmation, MB_YESNO) = IDYES then
       begin
+        AppendInstallLog('User data ERASED at ' + DataDir);
         DelTree(DataDir, True, True, True);
-      end;
+      end
+      else
+        AppendInstallLog('User data kept at ' + DataDir);
     end;
+    AppendInstallLog('=== UNINSTALL END ===');
   end;
 end;

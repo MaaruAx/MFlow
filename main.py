@@ -2,7 +2,7 @@
 MFlow — entry point.
 Run: python main.py
 """
-import sys, os, json, traceback, logging, faulthandler
+import sys, os, json, traceback, logging, faulthandler, glob, time
 
 # ── Multiprocessing child detection ──────────────────────────────────────────
 # On Windows, the "spawn" start method (used by core.resolve_connection's
@@ -27,11 +27,39 @@ import sys, os, json, traceback, logging, faulthandler
 # officially correct signal for exactly this situation.
 _IS_MP_CHILD = (__name__ == "__mp_main__")
 
-# ── Faulthandler: catches C++ crashes (WebEngine, Resolve DLL) ───────────────
+# ── Session id: shared with any spawned probe child via env var ──────────────
 _LOG_DIR = os.path.join(os.path.expanduser("~"), ".mflow")
-os.makedirs(_LOG_DIR, exist_ok=True)
-_CRASH_LOG = os.path.join(_LOG_DIR, "crash.log")
+_SESSIONS_DIR = os.path.join(_LOG_DIR, "sessions")
+os.makedirs(_SESSIONS_DIR, exist_ok=True)
+
+if _IS_MP_CHILD:
+    _SESSION_ID = os.environ.get("MFLOW_SESSION_ID") or f"unknown_{os.getpid()}"
+else:
+    _SESSION_ID = f"{time.strftime('%Y%m%d_%H%M%S')}_{os.getpid()}"
+    os.environ["MFLOW_SESSION_ID"] = _SESSION_ID
+
+_MAX_SESSION_FILES = 20
+_MAX_PROBE_FILES = 20
+_MAX_CRASH_FILES = 10
+_LOG_ROTATE_BYTES = 5_000_000
+_LOG_ROTATE_BACKUPS = 5
+
+def _prune_old_files(directory, pattern, keep):
+    try:
+        found = sorted(glob.glob(os.path.join(directory, pattern)),
+                        key=os.path.getmtime, reverse=True)
+    except OSError:
+        return
+    for stale in found[keep:]:
+        try:
+            os.remove(stale)
+        except OSError:
+            pass
+
+# ── Faulthandler: catches C++ crashes (WebEngine, Resolve DLL) ───────────────
+_CRASH_LOG = os.path.join(_LOG_DIR, f"crash_{_SESSION_ID}.log")
 if not _IS_MP_CHILD:
+    _prune_old_files(_LOG_DIR, "crash_*.log", _MAX_CRASH_FILES - 1)
     _crash_f = open(_CRASH_LOG, "w", encoding="utf-8")
     faulthandler.enable(_crash_f)
 
@@ -41,51 +69,44 @@ from collections import OrderedDict as _OD
 if not hasattr(builtins, "OrderedDict"):
     builtins.OrderedDict = _OD
 
-# ── Logging: always write to file + stderr so the terminal always has output ──
-_LOG_DIR = os.path.join(os.path.expanduser("~"), ".mflow")
-os.makedirs(_LOG_DIR, exist_ok=True)
+# ── Logging: rotating monolithic log + one file per session + stdout ─────────
 _LOG_PATH = os.path.join(_LOG_DIR, "mflow.log")
+_SESSION_LOG_PATH = os.path.join(_SESSIONS_DIR, f"session_{_SESSION_ID}.log")
+_LOG_FORMAT = "%(asctime)s [SID:%(session_id)s] [PID:%(process)d] [%(levelname)s] %(message)s"
+
+class _SessionIdFilter(logging.Filter):
+    def filter(self, record):
+        record.session_id = _SESSION_ID
+        return True
 
 if _IS_MP_CHILD:
-    # This is a probe worker, not the real app — it must never open its own
-    # handle onto mflow.log (the parent process already owns that file, and
-    # sharing it was the direct cause of the logging-corruption crash this
-    # guard exists to prevent). Instead it gets its OWN file, keyed by PID,
-    # so every diagnostic line survives somewhere on disk without any two
-    # processes ever touching the same handle.
+    # Never opens mflow.log directly — a shared handle across processes was
+    # the direct cause of a prior logging-corruption crash. Own file, keyed
+    # by PID, tagged with the parent's session id for correlation.
     _PROBE_LOG_PATH = os.path.join(_LOG_DIR, f"probe_{os.getpid()}.log")
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s [PID:%(process)d] [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(_PROBE_LOG_PATH, encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ],
-    )
+    _handlers = [
+        logging.FileHandler(_PROBE_LOG_PATH, encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ]
 else:
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s [PID:%(process)d] [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler(_LOG_PATH, encoding="utf-8"),
-            logging.StreamHandler(sys.stdout),
-        ]
-    )
+    from logging.handlers import RotatingFileHandler
+    _prune_old_files(_SESSIONS_DIR, "session_*.log", _MAX_SESSION_FILES - 1)
+    _prune_old_files(_LOG_DIR, "probe_*.log", _MAX_PROBE_FILES)
+    _handlers = [
+        RotatingFileHandler(_LOG_PATH, maxBytes=_LOG_ROTATE_BYTES,
+                             backupCount=_LOG_ROTATE_BACKUPS, encoding="utf-8"),
+        logging.FileHandler(_SESSION_LOG_PATH, encoding="utf-8"),
+        logging.StreamHandler(sys.stdout),
+    ]
+
+for _h in _handlers:
+    _h.addFilter(_SessionIdFilter())
+
+logging.basicConfig(level=logging.DEBUG, format=_LOG_FORMAT, handlers=_handlers, force=True)
 log = logging.getLogger("mflow")
 if not _IS_MP_CHILD:
-    log.info("MFlow starting — Python %s — %s", sys.version.split()[0], sys.platform)
-    # Diagnostic probe logs are per-PID and only meant to survive long enough
-    # to be inspected after a repro — clear last session's before this one
-    # writes new ones, so ~/.mflow doesn't grow unbounded over time.
-    try:
-        import glob
-        for _old in glob.glob(os.path.join(_LOG_DIR, "probe_*.log")):
-            try:
-                os.remove(_old)
-            except OSError:
-                pass
-    except Exception as _e:
-        log.debug("Could not clean up old probe logs: %s", _e)
+    log.info("=== SESSION START sid=%s — Python %s — %s — session_log=%s ===",
+              _SESSION_ID, sys.version.split()[0], sys.platform, _SESSION_LOG_PATH)
 
 # ── Make uncaught exceptions visible instead of silently closing ──────────────
 def _excepthook(exc_type, exc_value, exc_tb):
@@ -650,6 +671,7 @@ def main():
         app.applicationStateChanged.connect(_on_app_state_changed)
 
         code = app.exec()
+        log.info("=== SESSION END sid=%s exit_code=%s ===", _SESSION_ID, code)
         # Clean exit — remove crash log so we don't show stale crashes next launch
         try: _crash_f.close(); os.remove(_CRASH_LOG)
         except Exception: pass

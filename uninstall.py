@@ -3,7 +3,7 @@ MFlow uninstaller — python uninstall.py
 Removes MFlow files from all installed locations.
 Preserves: settings.json, profiles.json, presets/ (your data).
 """
-import os, sys, shutil, platform
+import os, sys, shutil, platform, glob
 
 PLAT = platform.system()
 ARCH = platform.machine()
@@ -214,13 +214,26 @@ def main():
     else:
         print(f"  Not found: {DATA_DIR}")
 
-    # ── Log file ──────────────────────────────────────────────────────────
+    # ── Log files ───────────────────────────────────────────────────────────
+    # Covers everything main.py / install.py / MFlow.iss can write under
+    # ~/.mflow/: the rotating monolithic log and its backups, per-session
+    # files, probe crash-diagnostic files, and faulthandler crash dumps.
     log_dir = os.path.join(os.path.expanduser("~"), ".mflow")
-    log_file = os.path.join(log_dir, "mflow.log")
-    if os.path.isfile(log_file):
-        yn = input("\nRemove log file (~/.mflow/mflow.log)? [y/N]: ").strip().lower()
+    sessions_dir = os.path.join(log_dir, "sessions")
+    log_patterns = ["mflow.log", "mflow.log.*", "probe_*.log", "crash_*.log"]
+    has_logs = os.path.isdir(log_dir) and (
+        any(glob.glob(os.path.join(log_dir, p)) for p in log_patterns)
+        or os.path.isdir(sessions_dir)
+    )
+    if has_logs:
+        yn = input("\nRemove diagnostic logs (~/.mflow/ — mflow.log, session/probe/"
+                    "crash logs, install logs)? [y/N]: ").strip().lower()
         if yn == "y":
-            remove_file(log_file)
+            for pattern in log_patterns:
+                for f in glob.glob(os.path.join(log_dir, pattern)):
+                    remove_file(f)
+            if os.path.isdir(sessions_dir):
+                remove_dir(sessions_dir)
             try:
                 if not os.listdir(log_dir): os.rmdir(log_dir)
             except Exception: pass
